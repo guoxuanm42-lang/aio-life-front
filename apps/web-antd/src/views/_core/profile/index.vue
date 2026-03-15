@@ -9,6 +9,7 @@ import ProfileNotificationSetting from './notification-setting.vue';
 import ProfilePasswordSetting from './password-setting.vue';
 import UserBindSetting from './user-bind.vue';
 import ApiKeySetting from './api-key-setting.vue';
+import LLMSetting from './llm-setting.vue';
 
 const userStore = useUserStore();
 
@@ -31,6 +32,10 @@ const tabs = ref([
     label: 'API Key',
     value: 'api-key',
   },
+  {
+    label: '大模型配置',
+    value: 'llm',
+  },
   // {
   //   label: '新消息提醒',
   //   value: 'notice',
@@ -49,6 +54,7 @@ const tabs = ref([
       <UserBindSetting v-if="tabsValue === 'bind'" />
       <ProfilePasswordSetting v-if="tabsValue === 'password'" />
       <ApiKeySetting v-if="tabsValue === 'api-key'" />
+      <LLMSetting v-if="tabsValue === 'llm'" />
       <ProfileNotificationSetting v-if="tabsValue === 'notice'" />
     </template>
   </Profile>
