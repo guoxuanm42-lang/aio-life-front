@@ -12,7 +12,7 @@ import { EditOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getByDictType } from '#/api/core/common';
-import { deleteBatch, query } from '#/api/core/exerciseRecord';
+import { deleteBatch, query, getStatistics } from '#/api/core/exerciseRecord';
 
 import FormDrawerDemo from './form-drawer.vue';
 
@@ -55,43 +55,82 @@ const getExerciseTypeLabel = (value: string) => {
   return option ? option.label : String(value);
 };
 
-// 计算月份统计数据
+// 计算月份统计数据（按运动类型分类，同一天同一类型多次记录算作一次）
 const monthlyStats = computed(() => {
-  const monthlyData: Record<string, number> = {};
+  // 使用Set来去重同一天同一类型的记录
+  const dailyUniqueExercises = new Map<string, Set<string>>();
 
   tableData.value.forEach((row) => {
     if (row.exerciseDate) {
       try {
-        // 解析日期，提取年月
-        const date = new Date(row.exerciseDate);
-        if (!isNaN(date.getTime())) {
-          const year = date.getFullYear();
-          const month = date.getMonth() + 1;
-          const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+        // 使用日期和运动类型组合作为唯一键
+        const dateTypeKey = `${row.exerciseDate}_${row.exerciseTypeId}`;
 
-          if (!monthlyData[monthKey]) {
-            monthlyData[monthKey] = 0;
-          }
-          monthlyData[monthKey] += 1;
+        // 如果还没有这个组合，则添加到集合中
+        if (!dailyUniqueExercises.has(dateTypeKey)) {
+          dailyUniqueExercises.set(dateTypeKey, new Set());
         }
+        // 将记录ID添加到该日期类型组合的集合中
+        dailyUniqueExercises.get(dateTypeKey)?.add(row.id);
       } catch (error) {
         console.warn('日期解析失败:', row.exerciseDate, error);
       }
     }
   });
+
+  // 按月份和类型统计
+  const monthlyData: Record<string, Record<string, number>> = {};
+
+  // 遍历去重后的数据进行统计
+  dailyUniqueExercises.forEach((ids, dateTypeKey) => {
+    const [dateStr, typeId] = dateTypeKey.split('_');
+    const date = new Date(dateStr);
+
+    if (!isNaN(date.getTime())) {
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+      const monthKey = `${year}-${month.toString().padStart(2, '0')}`;
+
+      // 获取运动类型标签
+      const typeLabel = getExerciseTypeLabel(typeId);
+
+      // 初始化月份和类型的计数器
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = {};
+      }
+
+      // 同一天同一类型算作一次
+      if (!monthlyData[monthKey][typeLabel]) {
+        monthlyData[monthKey][typeLabel] = 0;
+      }
+      monthlyData[monthKey][typeLabel] += 1;
+    }
+  });
+
   return monthlyData;
 });
 
-// 计算运动类型统计数据
+// 计算运动类型统计数据（去重：同一天同一类型算一次）
 const exerciseTypeStats = computed(() => {
-  const typeData: Record<string, number> = {};
+  // 使用Set来去重同一天同一类型的记录
+  const uniqueExercises = new Map<string, Set<string>>();
 
   tableData.value.forEach((row) => {
-    const typeLabel = getExerciseTypeLabel(row.exerciseTypeId);
-    if (!typeData[typeLabel]) {
-      typeData[typeLabel] = 0;
+    if (row.exerciseDate && row.exerciseTypeId) {
+      const dateTypeKey = `${row.exerciseDate}_${row.exerciseTypeId}`;
+      const typeLabel = getExerciseTypeLabel(row.exerciseTypeId);
+
+      if (!uniqueExercises.has(typeLabel)) {
+        uniqueExercises.set(typeLabel, new Set());
+      }
+      uniqueExercises.get(typeLabel)?.add(dateTypeKey);
     }
-    typeData[typeLabel] += 1;
+  });
+
+  // 转换为统计数据
+  const typeData: Record<string, number> = {};
+  uniqueExercises.forEach((dates, typeLabel) => {
+    typeData[typeLabel] = dates.size;
   });
 
   const result = Object.entries(typeData).map(([name, value]) => ({
@@ -101,9 +140,44 @@ const exerciseTypeStats = computed(() => {
   return result;
 });
 
-// 计算总运动次数
+// 计算总运动次数（去重：同一天同一类型算一次）
 const totalExercise = computed(() => {
-  return tableData.value.length;
+  const uniqueExercises = new Set<string>();
+
+  tableData.value.forEach((row) => {
+    if (row.exerciseDate && row.exerciseTypeId) {
+      // 使用日期和运动类型组合作为唯一键
+      const uniqueKey = `${row.exerciseDate}_${row.exerciseTypeId}`;
+      uniqueExercises.add(uniqueKey);
+    }
+  });
+
+  return uniqueExercises.size;
+});
+
+// 计算每日运动统计（按类型去重）
+const dailyStats = computed(() => {
+  const dailyData: Record<string, Set<string>> = {}; // 日期 -> 运动类型集合
+
+  tableData.value.forEach((row) => {
+    if (row.exerciseDate && row.exerciseTypeId) {
+      const date = row.exerciseDate;
+      const typeLabel = getExerciseTypeLabel(row.exerciseTypeId);
+
+      if (!dailyData[date]) {
+        dailyData[date] = new Set();
+      }
+      dailyData[date].add(typeLabel);
+    }
+  });
+
+  // 转换为每个日期的运动类型数量
+  const result: Record<string, number> = {};
+  Object.keys(dailyData).forEach(date => {
+    result[date] = dailyData[date].size;
+  });
+
+  return result;
 });
 
 // 更新图表
@@ -117,7 +191,74 @@ const updateCharts = () => {
     return;
   }
 
-  // 渲染柱状图
+  // 获取所有唯一的运动类型
+  const allTypes = Array.from(new Set(
+    Object.values(monthlyData).flatMap(month => Object.keys(month))
+  ));
+
+  // 准备柱状图数据，按类型分组
+  const monthKeys = Object.keys(monthlyData).sort();
+
+  // 计算每月总计
+  const monthlyTotals = monthKeys.map(monthKey => {
+    let total = 0;
+    Object.values(monthlyData[monthKey]).forEach(count => {
+      total += count;
+    });
+    return total;
+  });
+
+  const seriesData = allTypes.map(type => {
+    return {
+      name: type,
+      type: 'bar',
+      stack: '总量', // 堆叠显示
+      data: monthKeys.map(monthKey => {
+        return monthlyData[monthKey][type] || 0;
+      }),
+      label: {
+        show: true,
+        position: 'insideTop',
+        formatter: (params: any) => {
+          return params.value > 0 ? params.value : '';
+        },
+        fontSize: 10,
+        color: '#fff'
+      },
+      emphasis: {
+        focus: 'series'
+      }
+    };
+  });
+
+  // 添加一个系列显示每月总数（放在柱子顶部）
+  seriesData.push({
+    name: '本月合计',
+    type: 'bar',
+    data: monthlyTotals,
+    barGap: '-100%', // 覆盖在柱子顶部
+    z: 10,
+    label: {
+      show: true,
+      position: 'top',
+      formatter: (params: any) => {
+        return params.value > 0 ? `${params.value}` : '';
+      },
+      fontSize: 12,
+      color: '#666',
+    },
+    itemStyle: {
+      color: 'transparent', // 透明柱子，只显示label
+    },
+    emphasis: {
+      disabled: true,
+    }
+  });
+
+  // 计算总运动次数
+  const grandTotal = monthlyTotals.reduce((sum, val) => sum + val, 0);
+
+  // 渲染柱状图（按类型分类显示）
   renderLineChart({
     tooltip: {
       trigger: 'axis',
@@ -125,51 +266,86 @@ const updateCharts = () => {
         type: 'shadow',
       },
       formatter: (params: any) => {
-        const data = params[0];
-        return `${data.name}<br/>运动次数: ${data.value}`;
+        const month = params[0].name;
+        let result = `<div style="font-weight:bold;margin-bottom:5px;">${month}</div>`;
+        let total = 0;
+        // 按值排序，大的显示在前面
+        const sortedParams = [...params].sort((a, b) => b.value - a.value);
+        sortedParams.forEach((item: any) => {
+          if (item.value > 0) {
+            result += `<div style="display:flex;align-items:center;gap:4px;">
+              <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};"></span>
+              <span style="flex:1;">${item.seriesName}:</span>
+              <span style="font-weight:bold;">${item.value}次</span>
+            </div>`;
+            total += item.value;
+          }
+        });
+        result += `<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px;font-weight:bold;">
+          本月合计: ${total}次
+        </div>`;
+        return result;
       },
     },
+    legend: {
+      data: allTypes,
+      top: '5%',
+      type: 'scroll',
+      orient: 'horizontal'
+    },
+    // 添加数据缩放功能
+    dataZoom: monthKeys.length > 6 ? [
+      {
+        type: 'slider',
+        show: true,
+        start: 0,
+        end: 100,
+        height: 20,
+        bottom: 10,
+        borderColor: 'transparent',
+        backgroundColor: '#f5f5f5',
+        fillerColor: 'rgba(78, 205, 196, 0.2)',
+        handleStyle: {
+          color: '#4ecdc4'
+        },
+        textStyle: {
+          color: '#666'
+        }
+      },
+      {
+        type: 'inside',
+        start: 0,
+        end: 100
+      }
+    ] : undefined,
     grid: {
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: monthKeys.length > 6 ? 40 : 10,
+      top: 60,
       containLabel: true,
     },
     xAxis: {
       type: 'category',
-      data: Object.keys(monthlyData).sort(),
+      data: monthKeys,
       axisLabel: {
         rotate: 45,
-        interval: isMobile.value ? 0 : 'auto', // 手机端强制显示所有标签
+        interval: isMobile.value ? 0 : 'auto',
       }
     },
     yAxis: {
       type: 'value',
+      name: '运动次数',
       axisLabel: {
         formatter: '{value}次'
+      },
+      splitLine: {
+        lineStyle: {
+          type: 'dashed'
+        }
       }
     },
-    series: [{
-      name: '月度运动次数',
-      type: 'bar',
-      barWidth: '60%',
-      data: Object.keys(monthlyData).sort().map(key => monthlyData[key]),
-      itemStyle: {
-        color: '#4ecdc4'
-      },
-      emphasis: {
-        itemStyle: {
-          color: '#26a69a'
-        }
-      },
-      label: {
-        show: true,
-        position: 'top',
-        formatter: (params: any) => {
-          return `${params.value}次`;
-        }
-      }
-    }]
+    series: seriesData
   });
 
   // 渲染饼图
@@ -233,11 +409,48 @@ watch(isMobile, () => {
 // 在组件挂载时加载值集数据
 onMounted(() => {
   loadExerciseTypes();
+  // 加载统计数据用于统计图表
+  loadStatisticsData();
   // 延迟调整列显隐，确保 Grid 已初始化
   setTimeout(() => {
     updateColumnsVisibility();
   }, 500);
 });
+
+// 加载统计数据用于统计图表（带默认时间限制）
+const loadStatisticsData = async () => {
+  try {
+    // 使用新的 statistics 接口获取统计数据用于统计，默认限制时间为最近一年
+    const result = await getStatistics({});
+    if (result) {
+      tableData.value = result;
+      // 更新图表
+      nextTick(() => {
+        updateCharts();
+      });
+    }
+  } catch (error) {
+    console.error('加载运动统计数据失败:', error);
+  }
+};
+
+// 监听筛选条件变化，重新加载统计图表数据
+const reloadStatsData = async (formValues: any) => {
+  try {
+    // 处理查询条件
+    const processedCondition = processQueryCondition(formValues);
+    const result = await getStatistics(processedCondition);
+    if (result) {
+      tableData.value = result;
+      // 更新图表
+      nextTick(() => {
+        updateCharts();
+      });
+    }
+  } catch (error) {
+    console.error('加载筛选后的统计数据失败:', error);
+  }
+};
 
 // 模态框相关
 const modalVisible = ref(false);
@@ -417,15 +630,9 @@ const gridOptions: VxeGridProps<RowType> = {
 
         // 确保数据格式正确
         if (result && result.items) {
-          // 保存表格数据用于图表统计
-          tableData.value = result.items;
-
-          // 立即更新图表
-          nextTick(() => {
-            updateCharts();
-          });
-        } else {
-          tableData.value = [];
+          // 表格显示分页数据
+          // 同时调用 getStatistics 获取统计数据用于统计图表
+          await reloadStatsData(formValues);
         }
 
         return result;
