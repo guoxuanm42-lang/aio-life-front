@@ -272,7 +272,8 @@ const updateCharts = () => {
         // 按值排序，大的显示在前面
         const sortedParams = [...params].sort((a, b) => b.value - a.value);
         sortedParams.forEach((item: any) => {
-          if (item.value > 0) {
+          // 排除本月合计这个透明系列
+          if (item.seriesName !== '本月合计' && item.value > 0) {
             result += `<div style="display:flex;align-items:center;gap:4px;">
               <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${item.color};"></span>
               <span style="flex:1;">${item.seriesName}:</span>
