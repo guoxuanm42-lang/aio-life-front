@@ -138,22 +138,6 @@ const getMonthlySeriesData = () => {
     };
   });
 
-  // 添加总收入在最前面
-  // series.unshift({
-  //   name: '总收入',
-  //   type: 'bar',
-  //   barWidth: 40,
-  //   label: {
-  //     show: false,
-  //     position: 'top', // 字显示在上方
-  //     formatter: () => '',
-  //   },
-  //   emphasis: {
-  //     focus: 'series',
-  //   },
-  //   data: getMonthlyTotalIncome(),
-  // });
-
   return series;
 };
 
@@ -242,7 +226,13 @@ const getSeriesData = () => {
   const incomeTypes = getIncomeTypes();
   const years = getYears().map((year) => year);
 
-  const series: any[] = incomeTypes.map((type) => {
+  // 计算每年的总收入
+  const yearlyTotals = getTotalIncome();
+
+  const series: any[] = [];
+
+  // 添加收入类型系列（堆叠）
+  incomeTypes.forEach((type) => {
     const data = years.map((year) => {
       const yearData = filteredData.value.find((item) => item.year === year);
       if (yearData) {
@@ -252,45 +242,49 @@ const getSeriesData = () => {
       return 0;
     });
 
-    return {
+    series.push({
       name: type,
       type: 'bar',
       stack: 'income',
-      barWidth: 15, // 限制柱子宽度
-      barMaxWidth: 30,
-      barGap: '0%', // 柱子之间的间距
+      barWidth: 40,
+      barMaxWidth: 60,
+      barGap: '20%',
       emphasis: {
         focus: 'series',
       },
       label: {
         show: false,
-        position: 'right',
-        formatter: (params: any) => {
-          // 计算百分比
-          const yearIndex = params.dataIndex;
-          const total = getTotalIncome()[yearIndex] || 0;
-          const value = params.value || 0;
-          const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
-          return `${percentage}%`;
-        }
       },
       data,
-    };
+    });
   });
 
-  // 添加总收入在最前面
-  series.unshift({
-    name: '总收入',
+  // 添加一个独立系列显示总数（不堆叠）
+  series.push({
+    name: '年度合计',
     type: 'bar',
-    barWidth: 30,
+    stack: '', // 不堆叠
+    data: yearlyTotals,
+    barWidth: 40,
+    barMaxWidth: 60,
+    barGap: '-100%', // 与堆叠柱子重合
+    z: 10,
     label: {
       show: true,
-      position: 'top', // 字显示在上方
+      position: 'top',
+      formatter: (params: any) => {
+        return params.value > 0 ? formatCurrency(params.value) : '';
+      },
+      fontSize: 12,
+      color: '#333',
+      fontWeight: 'bold'
+    },
+    itemStyle: {
+      color: 'rgba(0,0,0,0)' // 完全透明
     },
     emphasis: {
-      focus: 'series',
-    },
-    data: getTotalIncome(),
+      disabled: true
+    }
   });
 
   return series;
@@ -328,22 +322,24 @@ const updateCharts = () => {
         let tooltip = `${params[0].name}<br/>`;
         let total = 0;
 
-        // 计算该年份的总收入
+        // 计算该年份的总收入（排除年度合计这个透明系列）
         params.forEach((item: any) => {
-          if (item.seriesName !== '总收入') {
+          if (item.seriesName !== '年度合计') {
             total += item.value || 0;
           }
         });
 
         // 显示各项的金额和百分比
         params.forEach((item: any) => {
-          if (item.seriesName !== '总收入' && item.value > 0) {
+          if (item.seriesName !== '年度合计' && item.value > 0) {
             const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
             tooltip += `${item.marker} ${item.seriesName}: ${item.value} (${percentage}%)<br/>`;
           }
         });
 
-        tooltip += `总计: ${total.toFixed(2)}`;
+        tooltip += `<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px;font-weight:bold;">
+          年度合计: ${formatCurrency(total)}
+        </div>`;
         return tooltip;
       },
     },
@@ -353,6 +349,11 @@ const updateCharts = () => {
       left: 'center',
       padding: isMobile.value ? [0, 0, 0, 0] : [5, 5, 5, 5],
       itemGap: isMobile.value ? 8 : 10,
+      // 排除年度合计这个透明系列
+      formatter: (name: string) => {
+        if (name === '年度合计') return '';
+        return name;
+      },
     },
     xAxis: [
       {

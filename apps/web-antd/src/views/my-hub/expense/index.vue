@@ -162,8 +162,12 @@ const getTotalExpenseByYear = computed(() => {
 const getBarChartSeries = computed(() => {
   const types = getAllExpenseTypes.value;
   const years = getYears.value;
+  const yearlyTotals = getTotalExpenseByYear.value;
 
-  const series = types.map((type) => {
+  const series: any[] = [];
+
+  // 添加支出类型系列（堆叠）
+  types.forEach((type) => {
     const data = years.map((year) => {
       const yearData = filteredExpData.value.find((item) => item.year === year);
       if (yearData) {
@@ -173,33 +177,48 @@ const getBarChartSeries = computed(() => {
       return 0;
     });
 
-    return {
+    series.push({
       name: type,
       type: 'bar',
-      barWidth: 10,
-      barGap: '0%', // 柱子之间的间距
+      barWidth: 40,
+      barGap: '20%',
       stack: 'expense',
       emphasis: {
         focus: 'series',
       },
+      label: {
+        show: false,
+      },
       data,
-    };
+    });
   });
 
-  // 添加总支出在最前面
-  series.unshift({
-    name: '总支出',
+  // 添加一个独立系列显示总数（不堆叠）
+  series.push({
+    name: '年度合计',
     type: 'bar',
-    barWidth: 30,
+    stack: '',
+    data: yearlyTotals,
+    barWidth: 40,
+    barGap: '-100%',
+    z: 10,
     label: {
       show: true,
       position: 'top',
+      formatter: (params: any) => {
+        return params.value > 0 ? formatCurrency(params.value) : '';
+      },
+      fontSize: 12,
+      color: '#333',
+      fontWeight: 'bold'
+    },
+    itemStyle: {
+      color: 'rgba(0,0,0,0)'
     },
     emphasis: {
-      focus: 'series',
-    },
-    data: getTotalExpenseByYear.value,
-  } as any);
+      disabled: true
+    }
+  });
 
   return series;
 });
@@ -369,22 +388,24 @@ const updateCharts = async () => {
         let tooltip = `${params[0].name}<br/>`;
         let total = 0;
 
-        // 计算该年份的总支出
+        // 计算该年份的总支出（排除年度合计这个透明系列）
         params.forEach((item: any) => {
-          if (item.seriesName !== '总支出') {
+          if (item.seriesName !== '年度合计') {
             total += item.value || 0;
           }
         });
 
         // 显示各项的金额和百分比
         params.forEach((item: any) => {
-          if (item.seriesName !== '总支出' && item.value > 0) {
+          if (item.seriesName !== '年度合计' && item.value > 0) {
             const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
             tooltip += `${item.marker} ${item.seriesName}: ${formatCurrency(item.value)} (${percentage}%)<br/>`;
           }
         });
 
-        tooltip += `总计: ${formatCurrency(total)}`;
+        tooltip += `<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px;font-weight:bold;">
+          年度合计: ${formatCurrency(total)}
+        </div>`;
         return tooltip;
       },
     },
@@ -394,6 +415,10 @@ const updateCharts = async () => {
       left: 'center',
       padding: isMobile.value ? [0, 0, 0, 0] : [5, 5, 5, 5],
       itemGap: isMobile.value ? 8 : 10,
+      formatter: (name: string) => {
+        if (name === '年度合计') return '';
+        return name;
+      },
     },
     grid: {
       left: '3%',
