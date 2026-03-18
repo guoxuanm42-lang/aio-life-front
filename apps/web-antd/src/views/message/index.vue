@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Message } from '#/api/core/message';
 
-import { computed, onMounted, ref, watch, nextTick } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, nextTick } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 
 import { usePreferences } from '@vben/preferences';
@@ -19,6 +19,14 @@ import {
   chatWithLLMApi,
   summarizeTimeRecordsApi,
   chatWithLLMStreamApi,
+  getChatSessionsApi,
+  createChatSessionApi,
+  deleteChatSessionApi,
+  getChatHistoryApi,
+  updateChatSessionApi,
+  clearChatHistoryApi,
+  type ChatSession,
+  type ChatMessage as AIChatMessage,
 } from '#/api/core/llm';
 
 import { marked } from 'marked';
@@ -27,6 +35,7 @@ import { getUserBasicInfoApi } from '#/api/core/user';
 
 import ChatWindow from './components/ChatWindow.vue';
 import ConversationList from './components/ConversationList.vue';
+import ChatSessionList from './components/ChatSessionList.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -35,7 +44,8 @@ const { isMobile } = usePreferences();
 
 const messages = ref<Message[]>([]);
 const loading = ref(false);
-const activeMenu = ref('my-messages');
+const sendingMessage = ref(false);
+const activeMenu = ref(route.query.conversationId ? 'ai-chat' : 'my-messages');
 const tempConversation = ref<any>(null);
 
 // Menu items
@@ -44,15 +54,123 @@ const menuItems = [
   { key: 'ai-chat', label: 'AI 对话', icon: 'ant-design:robot-outlined' },
 ];
 
+const handleMenuClick = (key: string) => {
+  activeMenu.value = key;
+  if (key === 'ai-chat') {
+    // Keep conversationId if already in URL, otherwise clear userId
+    router.push({ query: { ...route.query, userId: undefined } });
+  } else {
+    // Clear conversationId when switching back to messages
+    router.push({ query: { ...route.query, conversationId: undefined } });
+  }
+};
+
 // AI chat state
 const isAIChat = computed(() => activeMenu.value === 'ai-chat');
+const aiSessions = ref<ChatSession[]>([]);
+const selectedConversationId = ref<string | undefined>(route.query.conversationId as string);
+const aiChatMessages = ref<AIChatMessage[]>([]);
 const aiChatLoading = ref(false);
-const aiChatMessages = ref<Message[]>([]);
 const aiChatInput = ref('');
 const aiChatContext = ref('');
 const streamingContent = ref('');
 const isStreaming = ref(false);
 const summarizeLoading = ref(false);
+
+const fetchAISessions = async () => {
+  try {
+    aiSessions.value = await getChatSessionsApi();
+    if (aiSessions.value.length > 0 && !selectedConversationId.value) {
+      handleSelectSession(aiSessions.value[0]?.id as string);
+    }
+  } catch (error) {
+    console.error('Failed to fetch AI sessions:', error);
+  }
+};
+
+const handleSelectSession = (conversationId: string) => {
+  router.push({ query: { ...route.query, conversationId, userId: undefined } });
+};
+
+const fetchAIChatHistory = async (conversationId: string) => {
+  try {
+    aiChatLoading.value = true;
+    aiChatMessages.value = await getChatHistoryApi(conversationId);
+    updateContext();
+  } catch (error) {
+    console.error('Failed to fetch AI chat history:', error);
+  } finally {
+    aiChatLoading.value = false;
+  }
+};
+
+const handleCreateSession = async () => {
+  try {
+    const newSession = await createChatSessionApi('新会话');
+    aiSessions.value.unshift(newSession);
+    handleSelectSession(newSession.id);
+  } catch (error) {
+    console.error('Failed to create AI session:', error);
+  }
+};
+
+const handleDeleteSession = async (conversationId: string) => {
+  try {
+    await deleteChatSessionApi(conversationId);
+    aiSessions.value = aiSessions.value.filter(s => s.id !== conversationId);
+    if (selectedConversationId.value === conversationId) {
+      if (aiSessions.value.length > 0) {
+        handleSelectSession(aiSessions.value[0]?.id as string);
+      } else {
+        router.push({ query: { ...route.query, conversationId: undefined } });
+      }
+    }
+  } catch (error) {
+    console.error('Failed to delete AI session:', error);
+  }
+};
+
+const handleUpdateSessionTitle = async (conversationId: string, title: string) => {
+  try {
+    await updateChatSessionApi(conversationId, title);
+    const session = aiSessions.value.find(s => s.id === conversationId);
+    if (session) {
+      session.title = title;
+    }
+  } catch (error) {
+    console.error('Failed to update AI session title:', error);
+  }
+};
+
+watch(activeMenu, (newMenu) => {
+  if (newMenu === 'ai-chat') {
+    fetchAISessions();
+  }
+}, { immediate: true });
+
+watch(
+  () => route.query.conversationId,
+  async (newId) => {
+    if (newId) {
+      selectedConversationId.value = String(newId);
+      activeMenu.value = 'ai-chat';
+      await fetchAIChatHistory(String(newId));
+    } else {
+      selectedConversationId.value = undefined;
+      aiChatMessages.value = [];
+    }
+  },
+  { immediate: true },
+);
+
+watch(
+  () => route.query.userId,
+  (newUserId) => {
+    if (newUserId) {
+      activeMenu.value = 'my-messages';
+    }
+  },
+);
 
 // Current user ID
 const myId = computed(() => {
@@ -69,7 +187,7 @@ const selectedUserId = computed(() => {
 // Mark conversation as read
 const markConversationAsRead = async (senderId: string) => {
   if (!myId.value) return;
-  
+
   const unreadMessages = messages.value.filter(
     (m) =>
       String(m.senderId) === senderId &&
@@ -188,15 +306,15 @@ const conversations = computed(() => {
   const list = Array.from(groups.entries()).map(([userId, msgs]) => {
     msgs.sort((a, b) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime());
     const lastMsg = msgs[0];
-    
+
     if (!lastMsg) {
       return null;
     }
-    
+
     const unreadCount = msgs.filter((m) => String(m.receiverId) === String(myId.value) && !m.isRead).length;
 
     const userInfo = userCache.value.get(userId);
-    
+
     const username = userInfo?.nickname || `User ${userId}`;
     const avatar = userInfo?.avatar;
     const lastMessage = lastMsg.content;
@@ -262,11 +380,11 @@ const currentChatMessages = computed(() => {
 });
 
 const handleSelectConversation = (userId: string) => {
-  router.push({ query: { ...route.query, userId } });
+  router.push({ query: { ...route.query, userId, conversationId: undefined } });
 };
 
 const handleBack = () => {
-  router.push({ query: { ...route.query, userId: undefined } });
+  router.push({ query: { ...route.query, userId: undefined, conversationId: undefined } });
 };
 
 watch(
@@ -283,13 +401,14 @@ const handleSendMessage = async (content: string) => {
   if (!selectedUserId.value) return;
 
   try {
+    sendingMessage.value = true;
     const newMessages = await createMessageApi({
       receiverId: selectedUserId.value,
       content,
       title: 'Chat Message',
       type: 1,
     });
-    
+
     if (newMessages) {
       if (Array.isArray(newMessages)) {
         messages.value.push(...newMessages);
@@ -300,11 +419,36 @@ const handleSendMessage = async (content: string) => {
     }
   } catch (error) {
     console.error('Failed to send message:', error);
+  } finally {
+    sendingMessage.value = false;
   }
 };
 
 const handleDeleteMessage = (id: string) => {
   messages.value = messages.value.filter((m) => m.id !== id);
+};
+
+const handleDeleteConversation = async (userId: string) => {
+  const conversationMessages = messages.value.filter(
+    (m) => String(m.senderId) === userId || String(m.receiverId) === userId,
+  );
+
+  try {
+    loading.value = true;
+    await Promise.all(conversationMessages.map((msg) => deleteMessageApi(msg.id)));
+    messages.value = messages.value.filter(
+      (m) => String(m.senderId) !== userId && String(m.receiverId) !== userId,
+    );
+    if (selectedUserId.value === userId) {
+      handleBack();
+    }
+    antMessage.success('会话已删除');
+  } catch (error) {
+    console.error('Failed to delete conversation:', error);
+    antMessage.error('删除会话失败');
+  } finally {
+    loading.value = false;
+  }
 };
 
 const aiMessageRef = ref<Message | null>(null);
@@ -315,31 +459,42 @@ const handleAISendMessage = async () => {
   const content = aiChatInput.value.trim();
   aiChatInput.value = '';
 
-  const userMessage: Message = {
+  // If no session selected, create one first
+  if (!selectedConversationId.value) {
+    try {
+      const newSession = await createChatSessionApi(content.slice(0, 20) || '新会话');
+      aiSessions.value.unshift(newSession);
+      selectedConversationId.value = newSession.id;
+      handleSelectSession(newSession.id);
+    } catch (error) {
+      console.error('Failed to create session:', error);
+      antMessage.error('创建会话失败');
+      return;
+    }
+  }
+
+  const userMessage: AIChatMessage = {
     id: Date.now().toString(),
-    senderId: myId.value,
-    receiverId: 'ai',
-    title: 'AI Chat',
+    userId: Number(myId.value),
+    conversationId: selectedConversationId.value,
+    role: 'user',
     content,
-    type: 1,
-    isRead: true,
+    modelName: '',
     createTime: new Date().toISOString(),
-    updateTime: new Date().toISOString(),
   };
   aiChatMessages.value.push(userMessage);
 
-  aiMessageRef.value = {
+  const aiMessage: AIChatMessage = {
     id: (Date.now() + 1).toString(),
-    senderId: 'ai',
-    receiverId: myId.value,
-    title: 'AI Chat',
+    userId: Number(myId.value),
+    conversationId: selectedConversationId.value,
+    role: 'assistant',
     content: '',
-    type: 1,
-    isRead: true,
+    modelName: '',
     createTime: new Date().toISOString(),
-    updateTime: new Date().toISOString(),
   };
-  aiChatMessages.value.push(aiMessageRef.value);
+  aiChatMessages.value.push(aiMessage);
+
   streamingContent.value = '';
   isStreaming.value = true;
   aiChatLoading.value = true;
@@ -348,22 +503,31 @@ const handleAISendMessage = async () => {
     chatWithLLMStreamApi(
       content,
       aiChatContext.value,
+      selectedConversationId.value,
       (token) => {
         streamingContent.value += token;
-        if (aiMessageRef.value) {
-          aiMessageRef.value.content = streamingContent.value;
+        const lastMsg = aiChatMessages.value[aiChatMessages.value.length - 1];
+        if (lastMsg) {
+          lastMsg.content = streamingContent.value;
         }
       },
       () => {
         isStreaming.value = false;
         aiChatLoading.value = false;
         updateContext();
+
+        // Update session title if it's the first message
+        const currentSession = aiSessions.value.find(s => s.id === selectedConversationId.value);
+        if (currentSession && currentSession.title === '新会话') {
+          handleUpdateSessionTitle(currentSession.id, content.slice(0, 30));
+        }
       },
       (error) => {
         console.error('Failed to send message to AI:', error);
         antMessage.error('发送消息失败，请检查大模型配置');
-        if (aiMessageRef.value) {
-          aiMessageRef.content = error;
+        const lastMsg = aiChatMessages.value[aiChatMessages.value.length - 1];
+        if (lastMsg) {
+          lastMsg.content = error;
         }
         isStreaming.value = false;
         aiChatLoading.value = false;
@@ -379,27 +543,38 @@ const handleAISendMessage = async () => {
 
 const updateContext = () => {
   aiChatContext.value = aiChatMessages.value.slice(-10).map(msg => {
-    return `${msg.senderId === myId.value ? 'User' : 'AI'}: ${msg.content}`;
+    return `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`;
   }).join('\n');
 };
 
 const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
   try {
     summarizeLoading.value = true;
+
+    // If no session selected, create one first
+    if (!selectedConversationId.value) {
+      const newSession = await createChatSessionApi(`${type === 'today' ? '今日' : '本周'}时迹总结`);
+      aiSessions.value.unshift(newSession);
+      selectedConversationId.value = newSession.id;
+      handleSelectSession(newSession.id);
+    }
+
     const summary = await summarizeTimeRecordsApi(type);
-    
-    const summaryMessage: Message = {
+
+    const summaryMessage: AIChatMessage = {
       id: Date.now().toString(),
-      senderId: 'ai',
-      receiverId: myId.value,
-      title: 'Time Records Summary',
+      userId: Number(myId.value),
+      conversationId: selectedConversationId.value,
+      role: 'assistant',
       content: summary,
-      type: 1,
-      isRead: true,
+      modelName: 'AI Summary',
       createTime: new Date().toISOString(),
-      updateTime: new Date().toISOString(),
     };
     aiChatMessages.value.push(summaryMessage);
+
+    // Also save this summary to the database as a message
+    await chatWithLLMApi(`请记录以下总结：\n${summary}`, undefined, selectedConversationId.value);
+
   } catch (error) {
     console.error('Failed to summarize time records:', error);
     antMessage.error('总结时迹记录失败，请检查大模型配置');
@@ -424,14 +599,46 @@ watch(aiChatMessages, async () => {
   }
 }, { deep: true });
 
+// Context Menu for AI Messages
+const aiMessageContextMenuVisible = ref(false);
+const aiMessageContextMenuPosition = ref({ x: 0, y: 0 });
+const selectedAiMessage = ref<AIChatMessage | null>(null);
+
+const handleAiMessageContextMenu = (e: MouseEvent, msg: AIChatMessage) => {
+  e.preventDefault();
+  selectedAiMessage.value = msg;
+  aiMessageContextMenuPosition.value = { x: e.clientX, y: e.clientY };
+  aiMessageContextMenuVisible.value = true;
+};
+
+const closeAiMessageContextMenu = () => {
+  aiMessageContextMenuVisible.value = false;
+};
+
+const handleDeleteAiMessage = () => {
+  if (selectedAiMessage.value) {
+    aiChatMessages.value = aiChatMessages.value.filter(m => m.id !== selectedAiMessage.value?.id);
+    // Since there's no single message delete API for AI, we just update local state
+    // and maybe the user will add it later.
+    antMessage.success('已从本地移除消息');
+    updateContext();
+  }
+  closeAiMessageContextMenu();
+};
+
 onMounted(() => {
   fetchMessages();
+  document.addEventListener('click', closeAiMessageContextMenu);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeAiMessageContextMenu);
 });
 </script>
 
 <template>
   <div :class="[isMobile ? 'h-[calc(100vh-48px)] p-0' : 'h-[calc(100vh-100px)] p-4']">
-    <div 
+    <div
       class="flex h-full bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100"
       :class="{'rounded-none border-0': isMobile}"
     >
@@ -450,7 +657,7 @@ onMounted(() => {
                 ? 'bg-blue-50 text-blue-600'
                 : 'text-gray-600 hover:bg-gray-100'
             "
-            @click="activeMenu = item.key"
+            @click="handleMenuClick(item.key)"
           >
             <span :class="item.icon" class="text-lg"></span>
             {{ item.label }}
@@ -458,27 +665,47 @@ onMounted(() => {
         </div>
       </div>
 
-      <div 
-        v-if="!isMobile || !selectedUserId" 
+      <div
+        v-if="!isMobile || (!selectedUserId && !selectedConversationId)"
         class="border-r border-gray-100 flex flex-col bg-white"
         :class="isMobile ? 'flex-1 w-full' : 'w-72'"
       >
+        <ChatSessionList
+          v-if="isAIChat"
+          :sessions="aiSessions"
+          :selected-session-id="selectedConversationId"
+          @select="handleSelectSession"
+          @create="handleCreateSession"
+          @delete="handleDeleteSession"
+          @update-title="handleUpdateSessionTitle"
+        />
         <ConversationList
+          v-else
           :conversations="conversations"
           :selected-user-id="selectedUserId"
           @select="handleSelectConversation"
+          @delete="handleDeleteConversation"
         />
       </div>
 
-      <div v-if="!isMobile || selectedUserId || isAIChat" class="flex-1 flex flex-col bg-white">
-        <div v-if="isAIChat" class="flex-1 flex flex-col">
+      <div v-if="!isMobile || selectedUserId || (isAIChat && selectedConversationId)" class="flex-1 flex flex-col bg-white">
+        <div v-if="isAIChat && selectedConversationId" class="flex-1 flex flex-col">
           <div class="border-b border-gray-100 px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
+              <button
+                v-if="isMobile"
+                class="p-1 -ml-1 text-gray-400 hover:text-gray-600"
+                @click="handleBack"
+              >
+                <span class="i-ant-design:left-outlined text-lg"></span>
+              </button>
               <div class="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
                 <span class="i-ant-design:robot-outlined text-blue-500 text-lg"></span>
               </div>
               <div>
-                <h3 class="font-medium text-gray-800">AI 助手</h3>
+                <h3 class="font-medium text-gray-800">
+                  {{ aiSessions.find(s => s.id === selectedConversationId)?.title || 'AI 助手' }}
+                </h3>
                 <p class="text-xs text-gray-500">智能对话与时迹分析</p>
               </div>
             </div>
@@ -488,7 +715,7 @@ onMounted(() => {
                 @click="handleSummarizeTimeRecords('today')"
                 :disabled="summarizeLoading || isStreaming"
               >
-                <span v-if="summarizeLoading" class="ant-spin ant-spin-spinning mr-1"></span>
+                <span v-if="summarizeLoading" class="i-ant-design:loading-3-quarters-outlined animate-spin mr-1"></span>
                 总结今日
               </button>
               <button
@@ -496,13 +723,13 @@ onMounted(() => {
                 @click="handleSummarizeTimeRecords('week')"
                 :disabled="summarizeLoading || isStreaming"
               >
-                <span v-if="summarizeLoading" class="ant-spin ant-spin-spinning mr-1"></span>
+                <span v-if="summarizeLoading" class="i-ant-design:loading-3-quarters-outlined animate-spin mr-1"></span>
                 总结本周
               </button>
             </div>
           </div>
 
-          <div 
+          <div
             ref="chatMessagesContainer"
             class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
             style="max-height: calc(100vh - 200px);"
@@ -511,17 +738,23 @@ onMounted(() => {
               v-for="msg in aiChatMessages"
               :key="msg.id"
               class="flex"
-              :class="msg.senderId === myId ? 'justify-end' : 'justify-start'"
+              :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+              @contextmenu="handleAiMessageContextMenu($event, msg)"
             >
               <div
                 class="max-w-[70%] p-3 rounded-lg"
-                :class="msg.senderId === myId ? 'bg-blue-100 text-gray-800' : 'bg-gray-100 text-gray-800'"
+                :class="msg.role === 'user' ? 'bg-blue-100 text-gray-800' : 'bg-gray-100 text-gray-800'"
               >
-                <div 
-                  v-if="msg.senderId !== myId"
+                <div
+                  v-if="msg.role !== 'user' && msg.content"
                   v-html="renderMarkdown(msg.content)"
                   class="prose prose-sm max-w-none"
                 ></div>
+                <div v-else-if="msg.role !== 'user' && !msg.content" class="flex items-center gap-1.5 py-1 px-1">
+                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+                  <div class="w-2 h-2 bg-blue-400 rounded-full animate-bounce"></div>
+                </div>
                 <p v-else>{{ msg.content }}</p>
                 <p class="text-xs text-gray-500 mt-1">{{ new Date(msg.createTime).toLocaleTimeString() }}</p>
               </div>
@@ -548,7 +781,7 @@ onMounted(() => {
                 @click="handleAISendMessage"
                 :disabled="aiChatLoading || !aiChatInput.trim() || isStreaming"
               >
-                <span v-if="aiChatLoading" class="ant-spin ant-spin-spinning"></span>
+                <span v-if="aiChatLoading" class="i-ant-design:loading-3-quarters-outlined animate-spin"></span>
                 <span v-else>发送</span>
               </button>
             </div>
@@ -563,6 +796,7 @@ onMounted(() => {
           :my-id="myId"
           :my-avatar="userStore.userInfo?.avatar"
           :loading="loading"
+          :sending="sendingMessage"
           :is-mobile="isMobile"
           @send="handleSendMessage"
           @delete="handleDeleteMessage"
@@ -574,6 +808,24 @@ onMounted(() => {
         </div>
       </div>
     </div>
+
+    <!-- AI Message Context Menu -->
+    <Teleport to="body">
+      <div
+        v-if="aiMessageContextMenuVisible"
+        class="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[120px]"
+        :style="{ left: aiMessageContextMenuPosition.x + 'px', top: aiMessageContextMenuPosition.y + 'px' }"
+        @click.stop
+      >
+        <div
+          class="px-4 py-2 text-sm text-red-500 cursor-pointer hover:bg-red-50 flex items-center gap-2"
+          @click="handleDeleteAiMessage"
+        >
+          <span class="i-ant-design:delete-outlined"></span>
+          删除消息
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 

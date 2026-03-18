@@ -65,7 +65,7 @@ function handleSubmit(values: any) {
 <template>
   <ProfilePasswordSetting
     ref="profilePasswordSettingRef"
-    class="w-1/3"
+    class="max-w-lg"
     :form-schema="formSchema"
     @submit="handleSubmit"
   />

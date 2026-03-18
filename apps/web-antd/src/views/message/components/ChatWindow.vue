@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Message } from '#/api/core/message';
 
-import { ref, watch } from 'vue';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
 
 import { formatDate, formatDateTime } from '@vben/utils';
 
-import { Avatar, Button, Input, Modal, message } from 'ant-design-vue';
+import { Avatar, Button, Input, Modal as AModal, message } from 'ant-design-vue';
 import { ArrowLeftOutlined } from '@ant-design/icons-vue';
 
 import { deleteMessageApi } from '#/api/core/message';
@@ -17,6 +17,7 @@ const props = defineProps<{
   myId: string;
   myAvatar?: string;
   loading?: boolean;
+  sending?: boolean;
   isMobile?: boolean;
 }>();
 
@@ -73,7 +74,13 @@ const handleDeleteMessage = async () => {
   }
 };
 
-document.addEventListener('click', closeContextMenu);
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu);
+});
 
 // Auto scroll to bottom when messages change
 watch(
@@ -175,7 +182,7 @@ watch(
         />
         <div class="absolute bottom-3 right-3 flex items-center gap-2">
            <span class="text-xs text-gray-400">{{ inputContent.length }}/500</span>
-           <Button type="primary" @click="handleSend" :disabled="!inputContent.trim()">
+           <Button type="primary" @click="handleSend" :disabled="!inputContent.trim() || sending" :loading="sending">
              发送
            </Button>
         </div>
@@ -200,14 +207,14 @@ watch(
     </Teleport>
 
     <!-- Delete Confirmation Modal -->
-    <Modal
+    <a-modal
       v-model:open="deleteModalVisible"
       title="确认删除"
       :confirm-loading="deleteLoading"
       @ok="handleDeleteMessage"
     >
       <p>确定要删除这条消息吗？删除后无法恢复。</p>
-    </Modal>
+    </a-modal>
   </div>
 </template>
 

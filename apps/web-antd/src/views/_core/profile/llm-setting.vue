@@ -1,15 +1,31 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, reactive, onUnmounted } from 'vue';
-import { message as antMessage } from 'ant-design-vue';
+import type { LLMKey } from '#/api/core/llm';
+
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue';
+
+import { useIsMobile } from '@vben/hooks';
+
 import {
+  message as antMessage,
+  Button,
+  Checkbox,
+  Form,
+  Input,
+  Modal,
+  Popconfirm,
+  Spin,
+  Table,
+} from 'ant-design-vue';
+
+import {
+  deleteLLMKeyApi,
   getLLMKeyListApi,
   saveLLMKeyApi,
-  updateLLMKeyApi,
-  deleteLLMKeyApi,
   setDefaultLLMKeyApi,
-  type LLMKey,
+  updateLLMKeyApi,
 } from '#/api/core/llm';
 
+const { isMobile } = useIsMobile();
 const dropdownRef = ref<HTMLElement | null>(null);
 
 const handleClickOutside = (event: MouseEvent) => {
@@ -35,7 +51,7 @@ const showPresetDropdown = ref(false);
 
 const formData = reactive({
   id: '',
-  modelName: 'gpt-3.5-turbo',
+  modelName: 'gpt-4o',
   apiKey: '',
   baseUrl: 'https://api.openai.com/v1',
   isDefault: 0,
@@ -43,9 +59,88 @@ const formData = reactive({
 
 // 预置大模型选项
 const presetModels = [
-  { label: 'OpenAI', value: 'gpt-3.5-turbo', baseUrl: 'https://api.openai.com/v1' },
-  { label: '阿里百炼', value: 'qwen-turbo', baseUrl: 'https://ark.cn-beijing.volces.com/api/v3' },
-  { label: 'DeepSeek', value: 'deepseek-chat', baseUrl: 'https://api.deepseek.com/v1' },
+  {
+    apiKeyUrl: 'https://platform.openai.com/api-keys',
+    baseUrl: 'https://api.openai.com/v1',
+    label: 'OpenAI',
+    modelListUrl: 'https://platform.openai.com/docs/models',
+    value: 'gpt-4o',
+  },
+  {
+    apiKeyUrl: 'https://platform.deepseek.com/api_keys',
+    baseUrl: 'https://api.deepseek.com',
+    label: 'DeepSeek',
+    modelListUrl: 'https://api-docs.deepseek.com/zh-cn/information/models',
+    value: 'deepseek-chat',
+  },
+  {
+    apiKeyUrl: 'https://cloud.siliconflow.cn/account/ak',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    label: '硅基流动',
+    modelListUrl: 'https://docs.siliconflow.cn/models',
+    value: 'deepseek-ai/DeepSeek-V3',
+  },
+  {
+    apiKeyUrl: 'https://dashscope.console.aliyun.com/apiKey',
+    baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    label: '阿里百炼',
+    modelListUrl:
+      'https://help.aliyun.com/zh/dashscope/developer-reference/model-list-information',
+    value: 'qwen-plus',
+  },
+  {
+    apiKeyUrl: 'https://platform.moonshot.cn/console/api-keys',
+    baseUrl: 'https://api.moonshot.cn/v1',
+    label: 'Kimi',
+    modelListUrl: 'https://platform.moonshot.cn/docs/pricing/models',
+    value: 'moonshot-v1-8k',
+  },
+  {
+    apiKeyUrl:
+      'https://platform.minimaxi.com/user-center/basic-information/interface-key',
+    baseUrl: 'https://api.minimaxi.com/v1',
+    label: 'MiniMax',
+    modelListUrl: 'https://platform.minimaxi.com/document/models',
+    value: 'MiniMax-M2.7',
+  },
+  {
+    apiKeyUrl: 'https://longcat.chat/docs/apiKey',
+    baseUrl: 'https://api.longcat.chat/openai',
+    label: '美团',
+    modelListUrl: 'https://longcat.chat/docs/intro',
+    value: 'LongCat-Flash-Chat',
+  },
+  {
+    apiKeyUrl: 'https://www.modelscope.cn/my/api-key',
+    baseUrl: 'https://api-inference.modelscope.cn',
+    label: '魔搭',
+    value: 'qwen-max',
+  },
+  {
+    baseUrl: 'http://localhost:11434/v1',
+    label: 'Ollama',
+    value: 'llama3.2',
+  },
+];
+
+const currentPreset = computed(() => {
+  return presetModels.find(
+    (m) => m.baseUrl === formData.baseUrl || m.value === formData.modelName,
+  );
+});
+
+const columns = [
+  {
+    title: '模型名称',
+    dataIndex: 'modelName',
+    key: 'modelName',
+    fixed: 'left',
+  },
+  { title: 'API Key', dataIndex: 'apiKey', key: 'apiKey' },
+  { title: 'Base URL', dataIndex: 'baseUrl', key: 'baseUrl' },
+  { title: '状态', dataIndex: 'isDefault', key: 'isDefault' },
+  { title: '相关链接', key: 'links' },
+  { title: '操作', key: 'action', fixed: 'right' },
 ];
 
 const fetchLLMKeys = async () => {
@@ -63,7 +158,7 @@ const fetchLLMKeys = async () => {
 const handleAdd = () => {
   Object.assign(formData, {
     id: '',
-    modelName: 'gpt-3.5-turbo',
+    modelName: 'gpt-4o',
     apiKey: '',
     baseUrl: 'https://api.openai.com/v1',
     isDefault: 0,
@@ -134,194 +229,213 @@ const selectPresetModel = (model: any) => {
   showPresetDropdown.value = false;
 };
 
-const handleModelChange = (modelName: string) => {
-  const preset = presetModels.find(m => m.value === modelName);
-  if (preset) {
-    formData.baseUrl = preset.baseUrl;
-  }
+const openUrl = (url: string) => {
+  window.open(url, '_blank');
+};
+
+const getModelLinks = (record: any) => {
+  return presetModels.find(
+    (m) => m.baseUrl === record.baseUrl || m.value === record.modelName,
+  );
 };
 </script>
 
 <template>
-  <div class="p-6">
-    <div class="flex items-center justify-between mb-6">
-      <h1 class="text-2xl font-bold text-gray-800">大模型配置</h1>
-      <button
-        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-        @click="handleAdd"
+  <div class="p-4 lg:p-6">
+    <div class="mb-6 flex items-center justify-between">
+      <h1 class="text-xl font-bold lg:text-2xl">大模型配置</h1>
+      <Button type="primary" @click="handleAdd"> 添加配置 </Button>
+    </div>
+
+    <Spin :spinning="loading">
+      <Table
+        :columns="columns"
+        :data-source="llmKeys"
+        :scroll="{ x: 'max-content' }"
+        row-key="id"
       >
-        添加配置
-      </button>
-    </div>
-
-    <div v-if="loading" class="flex justify-center items-center h-40">
-      <div class="ant-spin ant-spin-spinning"></div>
-    </div>
-
-    <div v-else class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <table class="w-full">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              模型名称
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              API Key
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              Base URL
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              状态
-            </th>
-            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-              操作
-            </th>
-          </tr>
-        </thead>
-        <tbody class="bg-white divide-y divide-gray-200">
-          <tr v-for="key in llmKeys" :key="key.id">
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-              {{ key.modelName }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ key.apiKey ? '******' : '' }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              {{ key.baseUrl }}
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-              <span v-if="key.isDefault" class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded">
-                默认
-              </span>
-              <span v-else class="px-2 py-1 bg-gray-100 text-gray-800 text-xs rounded">
-                非默认
-              </span>
-            </td>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-              <button
-                class="text-blue-600 hover:text-blue-900 mr-3"
-                @click="handleEdit(key)"
+        <template #bodyCell="{ column, record, text }">
+          <template v-if="column.key === 'apiKey'">
+            {{ record.apiKey ? '******' : '' }}
+          </template>
+          <template v-else-if="column.key === 'isDefault'">
+            <span
+              v-if="record.isDefault"
+              class="rounded bg-green-100 px-2 py-1 text-xs text-green-800 dark:bg-green-900/30 dark:text-green-300"
+            >
+              默认
+            </span>
+            <span
+              v-else
+              class="rounded bg-gray-100 px-2 py-1 text-xs text-gray-800 dark:bg-gray-800 dark:text-gray-300"
+            >
+              非默认
+            </span>
+          </template>
+          <template v-else-if="column.key === 'links'">
+            <div class="flex flex-col gap-1 text-xs">
+              <a
+                v-if="getModelLinks(record)?.modelListUrl"
+                :href="getModelLinks(record)!.modelListUrl"
+                target="_blank"
+                class="text-blue-500 hover:underline"
               >
+                模型列表
+              </a>
+              <a
+                v-if="getModelLinks(record)?.apiKeyUrl"
+                :href="getModelLinks(record)!.apiKeyUrl"
+                target="_blank"
+                class="text-blue-500 hover:underline"
+              >
+                获取 Key
+              </a>
+            </div>
+          </template>
+          <template v-else-if="column.key === 'action'">
+            <div class="flex gap-3">
+              <Button type="link" size="small" @click="handleEdit(record)">
                 编辑
-              </button>
-              <button
-                v-if="!key.isDefault"
-                class="text-green-600 hover:text-green-900 mr-3"
-                @click="handleSetDefault(key.id)"
+              </Button>
+              <Button
+                v-if="!record.isDefault"
+                type="link"
+                size="small"
+                class="!text-green-600"
+                @click="handleSetDefault(record.id)"
               >
-                设置默认
-              </button>
-              <button
-                class="text-red-600 hover:text-red-900"
-                @click="handleDelete(key.id)"
+                设为默认
+              </Button>
+              <Popconfirm
+                title="确定删除吗？"
+                @confirm="handleDelete(record.id)"
               >
-                删除
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="llmKeys.length === 0" class="p-12 text-center text-gray-500">
-        暂无大模型配置
-      </div>
-    </div>
+                <Button type="link" size="small" danger> 删除 </Button>
+              </Popconfirm>
+            </div>
+          </template>
+          <template v-else>
+            {{ text }}
+          </template>
+        </template>
+      </Table>
+    </Spin>
 
     <!-- 表单弹窗 -->
-    <div v-if="formVisible" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div class="bg-white rounded-xl shadow-lg w-full max-w-md p-6">
-        <h2 class="text-xl font-bold text-gray-800 mb-4">
-          {{ formData.id ? '编辑配置' : '添加配置' }}
-        </h2>
-        <form @submit.prevent="handleSubmit">
-          <div class="mb-4 relative" ref="dropdownRef">
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              模型名称
-            </label>
-            <div class="relative">
-              <input
-                type="text"
-                v-model="formData.modelName"
-                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 pr-10"
-                placeholder="请输入或选择模型名称"
-              />
-              <button
-                type="button"
-                @click.stop="showPresetDropdown = !showPresetDropdown"
-                class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+    <Modal
+      v-model:open="formVisible"
+      :title="formData.id ? '编辑配置' : '添加配置'"
+      :confirm-loading="formLoading"
+      @ok="handleSubmit"
+    >
+      <Form layout="vertical" class="mt-4">
+        <Form.Item label="模型名称" required>
+          <div class="relative" ref="dropdownRef">
+            <Input
+              v-model:value="formData.modelName"
+              placeholder="请输入或选择模型名称"
+              class="pr-10"
+            />
+            <div
+              class="absolute right-2 top-1/2 -translate-y-1/2 cursor-pointer text-gray-400 hover:text-gray-600"
+              @click.stop="showPresetDropdown = !showPresetDropdown"
+            >
+              <svg
+                class="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
               >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                </svg>
-              </button>
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
             </div>
-            <div v-if="showPresetDropdown" class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+            <div
+              v-if="showPresetDropdown"
+              class="absolute z-10 mt-1 max-h-60 w-full overflow-auto rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800"
+            >
               <div
                 v-for="model in presetModels"
                 :key="model.value"
                 @click="selectPresetModel(model)"
-                class="px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm"
+                class="cursor-pointer px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-blue-900/30"
               >
-                <div class="font-medium text-gray-900">{{ model.label }}</div>
-                <div class="text-xs text-gray-500">{{ model.value }}</div>
+                <div class="font-medium text-gray-900 dark:text-gray-100">
+                  {{ model.label }}
+                </div>
+                <div class="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                  <span>{{ model.value }}</span>
+                  <div class="flex gap-2">
+                    <span
+                      v-if="model.modelListUrl"
+                      class="text-blue-500 hover:underline"
+                      @click.stop="openUrl(model.modelListUrl)"
+                    >
+                      模型列表
+                    </span>
+                    <span
+                      v-if="model.apiKeyUrl"
+                      class="text-blue-500 hover:underline"
+                      @click.stop="openUrl(model.apiKeyUrl)"
+                    >
+                      获取 Key
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              API Key
-            </label>
-            <input
-              type="text"
-              v-model="formData.apiKey"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="请输入 API Key"
-            />
-          </div>
-          <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-1">
-              Base URL
-            </label>
-            <input
-              type="text"
-              v-model="formData.baseUrl"
-              class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="请输入 Base URL"
-            />
-          </div>
-          <div class="mb-4">
-            <label class="flex items-center">
-              <input
-                type="checkbox"
-                v-model="formData.isDefault"
-                class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-              />
-              <span class="ml-2 text-sm text-gray-700">设为默认</span>
-            </label>
-          </div>
-          <div class="flex justify-end space-x-3 mt-6">
-            <button
-              type="button"
-              class="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
-              @click="formVisible = false"
+          <div v-if="currentPreset?.modelListUrl" class="mt-1 text-xs">
+            <a
+              :href="currentPreset.modelListUrl"
+              target="_blank"
+              class="text-blue-500 hover:underline"
             >
-              取消
-            </button>
-            <button
-              type="submit"
-              class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-              :disabled="formLoading"
-            >
-              <span v-if="formLoading" class="ant-spin ant-spin-spinning"></span>
-              <span v-else>{{ formData.id ? '更新' : '保存' }}</span>
-            </button>
+              查看模型列表
+            </a>
           </div>
-        </form>
-      </div>
-    </div>
+        </Form.Item>
+        <Form.Item label="API Key" required>
+          <Input.Password
+            v-model:value="formData.apiKey"
+            placeholder="请输入 API Key"
+          />
+          <div v-if="currentPreset?.apiKeyUrl" class="mt-1 text-xs">
+            <a
+              :href="currentPreset.apiKeyUrl"
+              target="_blank"
+              class="text-blue-500 hover:underline"
+            >
+              获取 API Key
+            </a>
+          </div>
+        </Form.Item>
+        <Form.Item label="Base URL" required>
+          <Input
+            v-model:value="formData.baseUrl"
+            placeholder="请输入 Base URL"
+          />
+        </Form.Item>
+        <Form.Item>
+          <Checkbox
+            v-model:checked="formData.isDefault"
+            :true-value="1"
+            :false-value="0"
+          >
+            设为默认
+          </Checkbox>
+        </Form.Item>
+      </Form>
+    </Modal>
   </div>
 </template>
 
 <style scoped>
-/* Custom styles if needed */
+:deep(.ant-table-wrapper) {
+  @apply overflow-hidden rounded-xl bg-card;
+}
 </style>

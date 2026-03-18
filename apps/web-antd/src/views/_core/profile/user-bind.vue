@@ -83,21 +83,30 @@ onMounted(() => {
       <Button type="primary" @click="handleAdd">新增绑定</Button>
     </div>
     
-    <Table :columns="columns" :dataSource="data" :loading="loading" rowKey="id">
-      <template #bodyCell="{ column, record }">
+    <Table
+      :columns="columns"
+      :dataSource="data"
+      :loading="loading"
+      :scroll="{ x: 'max-content' }"
+      rowKey="id"
+    >
+      <template #bodyCell="{ column, record, text }">
         <template v-if="column.key === 'action'">
-          <Button type="link" @click="handleEdit(record)">编辑</Button>
+          <Button type="link" size="small" @click="handleEdit(record)">编辑</Button>
           <Popconfirm
             title="确定要删除此绑定吗？"
             ok-text="确定"
             cancel-text="取消"
             @confirm="handleDelete(record.id)"
           >
-            <Button type="link" danger>删除</Button>
+            <Button type="link" danger size="small">删除</Button>
           </Popconfirm>
         </template>
         <template v-else-if="column.key === 'platform'">
           {{ platformOptions.find(p => p.value === record.platform)?.label || record.platform }}
+        </template>
+        <template v-else>
+          {{ text }}
         </template>
       </template>
     </Table>

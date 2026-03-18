@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import type { Message } from '#/api/core/message';
 
-import { computed, nextTick, watch } from 'vue';
+import { computed, nextTick, ref, watch, onMounted, onUnmounted } from 'vue';
 
 import { formatDate } from '@vben/utils';
 
-import { Avatar, List, ListItem, ListItemMeta, TypographyText } from 'ant-design-vue';
+import { Avatar, List, ListItem, ListItemMeta, TypographyText, Modal as AModal, message } from 'ant-design-vue';
 
 interface Conversation {
   userId: string;
@@ -23,11 +23,49 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'select', userId: string): void;
+  (e: 'delete', userId: string): void;
 }>();
 
 const handleSelect = (userId: string) => {
   emit('select', userId);
 };
+
+// Context Menu
+const contextMenuVisible = ref(false);
+const contextMenuPosition = ref({ x: 0, y: 0 });
+const selectedUserIdForMenu = ref<string | null>(null);
+const deleteModalVisible = ref(false);
+
+const handleContextMenu = (e: MouseEvent, userId: string) => {
+  e.preventDefault();
+  selectedUserIdForMenu.value = userId;
+  contextMenuPosition.value = { x: e.clientX, y: e.clientY };
+  contextMenuVisible.value = true;
+};
+
+const closeContextMenu = () => {
+  contextMenuVisible.value = false;
+};
+
+const openDeleteConfirm = () => {
+  closeContextMenu();
+  deleteModalVisible.value = true;
+};
+
+const handleDeleteConversation = () => {
+  if (selectedUserIdForMenu.value) {
+    emit('delete', selectedUserIdForMenu.value);
+    deleteModalVisible.value = false;
+  }
+};
+
+onMounted(() => {
+  document.addEventListener('click', closeContextMenu);
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu);
+});
 
 // Scroll to selected user
 watch(
@@ -57,6 +95,7 @@ watch(
             class="cursor-pointer hover:bg-gray-50 transition-colors px-4 !py-3"
             :class="{ 'bg-blue-50': selectedUserId === item.userId }"
             @click="handleSelect(item.userId)"
+            @contextmenu="handleContextMenu($event, item.userId)"
           >
             <ListItemMeta>
               <template #avatar>
@@ -86,6 +125,33 @@ watch(
         </template>
       </List>
     </div>
+
+    <!-- Context Menu -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenuVisible"
+        class="fixed z-50 bg-white rounded-lg shadow-lg border border-gray-200 py-1 min-w-[120px]"
+        :style="{ left: contextMenuPosition.x + 'px', top: contextMenuPosition.y + 'px' }"
+        @click.stop
+      >
+        <div
+          class="px-4 py-2 text-sm text-red-500 cursor-pointer hover:bg-red-50 flex items-center gap-2"
+          @click="openDeleteConfirm"
+        >
+          <span class="i-ant-design:delete-outlined"></span>
+          删除会话
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- Delete Confirmation Modal -->
+    <a-modal
+      v-model:open="deleteModalVisible"
+      title="确认删除"
+      @ok="handleDeleteConversation"
+    >
+      <p>确定要删除与该用户的会话吗？这将删除所有聊天记录且无法恢复。</p>
+    </a-modal>
   </div>
 </template>
 

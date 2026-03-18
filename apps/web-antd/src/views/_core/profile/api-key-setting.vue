@@ -94,10 +94,18 @@ onMounted(() => {
       <Button type="primary" @click="visible = true">生成新 Key</Button>
     </div>
 
-    <Table :columns="columns" :data-source="dataSource" :loading="loading" row-key="id">
+    <Table
+      :columns="columns"
+      :data-source="dataSource"
+      :loading="loading"
+      :scroll="{ x: 'max-content' }"
+      row-key="id"
+    >
       <template #bodyCell="{ column, record, text }">
         <template v-if="column.key === 'apiKey'">
-          <code>{{ record.apiKey.substring(0, 8) }}***{{ record.apiKey.substring(record.apiKey.length - 4) }}</code>
+          <code class="bg-muted text-muted-foreground px-1.5 py-0.5 rounded font-mono text-xs">
+            {{ record.apiKey.substring(0, 8) }}***{{ record.apiKey.substring(record.apiKey.length - 4) }}
+          </code>
         </template>
         <template v-else-if="column.key === 'expiredAt'">
           {{ text ? dayjs(text).format('YYYY-MM-DD HH:mm:ss') : '永不过期' }}
@@ -107,8 +115,11 @@ onMounted(() => {
         </template>
         <template v-else-if="column.key === 'action'">
           <Popconfirm title="确定要删除该 API Key 吗？" @confirm="handleDelete(record.id)">
-            <Button type="link" danger>删除</Button>
+            <Button type="link" danger size="small">删除</Button>
           </Popconfirm>
+        </template>
+        <template v-else>
+          {{ text }}
         </template>
       </template>
     </Table>
@@ -137,10 +148,5 @@ onMounted(() => {
 </template>
 
 <style scoped>
-code {
-  background-color: #f5f5f5;
-  padding: 2px 4px;
-  border-radius: 4px;
-  font-family: monospace;
-}
+/* No styles needed, using Tailwind classes */
 </style>
