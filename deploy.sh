@@ -73,8 +73,8 @@ if rsync --help | grep -q -- "--info"; then
     PROGRESS_FLAG="--info=progress2"
 fi
 
-# 使用 sshpass -e 直接传递环境变量中的密码
-sshpass -e rsync -e 'ssh -o StrictHostKeyChecking=no' $PROGRESS_FLAG "$LOCAL_ARCHIVE_PATH" "$USERNAME@$SERVER_IP:/projects/front/$ARCHIVE_NAME"
+# 使用 rsync 传输文件，将 sshpass 放在 rsync 的 -e 参数内部
+rsync -e "sshpass -e ssh -o StrictHostKeyChecking=no" $PROGRESS_FLAG "$LOCAL_ARCHIVE_PATH" "$USERNAME@$SERVER_IP:/projects/front/$ARCHIVE_NAME"
 
 # 检查上传是否成功
 if [[ $? -ne 0 ]]; then
