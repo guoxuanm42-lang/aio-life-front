@@ -169,7 +169,7 @@
         <div class="subtasks-header">
           <span class="subtasks-title">
             <check-circle-outlined style="margin-right: 8px" />
-            明细任务
+            任务明细
           </span>
           <a-button type="link" size="small" @click="addDetail">
             <template #icon><plus-outlined /></template>
@@ -189,18 +189,6 @@
           <template #item="{ element: detail, index }">
             <div class="subtask-item">
               <holder-outlined class="drag-handle" style="cursor: move; margin-right: 8px; color: #999" />
-              <a-select 
-                v-model:value="detail.priority" 
-                size="small" 
-                :bordered="false" 
-                style="width: 80px; margin-right: 4px;"
-                :class="'priority-' + detail.priority"
-                @change="handleDetailBlur(detail)"
-              >
-                <a-select-option :value="20" class="priority-20">普通</a-select-option>
-                <a-select-option :value="10" class="priority-10">重要</a-select-option>
-                <a-select-option :value="1" class="priority-1">非常重要</a-select-option>
-              </a-select>
               <a-checkbox 
                 :checked="detail.isCompleted === 1" 
                 @update:checked="(val) => handleDetailCheck(detail, val)"
@@ -213,6 +201,18 @@
                 style="flex: 1; margin: 0 8px"
                 @blur="handleDetailBlur(detail)"
               />
+              <a-dropdown :trigger="['click']" placement="bottomRight">
+                <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; margin-right: 8px; border-radius: 4px; user-select: none;">
+                  {{ getPriorityLabel(detail.priority) }}
+                </a-tag>
+                <template #overlay>
+                  <a-menu @click="({ key }) => handlePriorityChange(detail, Number(key))">
+                    <a-menu-item key="20"><a-tag color="default" style="margin-right: 0; width: 100%; text-align: center;">低</a-tag></a-menu-item>
+                    <a-menu-item key="10"><a-tag color="warning" style="margin-right: 0; width: 100%; text-align: center;">中</a-tag></a-menu-item>
+                    <a-menu-item key="1"><a-tag color="error" style="margin-right: 0; width: 100%; text-align: center;">高</a-tag></a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
               <a-date-picker 
                 show-time 
                 size="small" 
@@ -247,10 +247,10 @@
       </div>
     </a-modal>
 
-    <!-- 添加明细任务弹窗 -->
+    <!-- 添加任务明细弹窗 -->
     <a-modal
       v-model:open="addDetailModalVisible"
-      title="添加明细任务"
+      title="添加"
       @ok="handleAddDetailOk"
       @cancel="addDetailModalVisible = false"
     >
@@ -266,10 +266,10 @@
         <div style="display: flex; gap: 10px;">
           <div style="flex: 1">
             <div style="margin-bottom: 5px; font-size: 12px; color: #666;">优先级</div>
-            <a-select v-model:value="newDetail.priority" style="width: 100%" :class="'priority-' + newDetail.priority">
-              <a-select-option :value="20" class="priority-20">普通</a-select-option>
-              <a-select-option :value="10" class="priority-10">重要</a-select-option>
-              <a-select-option :value="1" class="priority-1">非常重要</a-select-option>
+            <a-select v-model:value="newDetail.priority" style="width: 100%">
+              <a-select-option :value="20" label="低"><a-tag color="default" style="margin-right: 0;">低</a-tag></a-select-option>
+              <a-select-option :value="10" label="中"><a-tag color="warning" style="margin-right: 0;">中</a-tag></a-select-option>
+              <a-select-option :value="1" label="高"><a-tag color="error" style="margin-right: 0;">高</a-tag></a-select-option>
             </a-select>
           </div>
           <div style="flex: 1">
@@ -601,6 +601,23 @@ const handleDetailBlur = async (detail: Detail) => {
   } catch (error) {
     console.error('更新内容失败', error);
   }
+};
+
+const handlePriorityChange = async (detail: Detail, priority: number) => {
+  detail.priority = priority;
+  await handleDetailBlur(detail);
+};
+
+const getPriorityColor = (priority: number) => {
+  if (priority === 1) return 'error';
+  if (priority === 10) return 'warning';
+  return 'default';
+};
+
+const getPriorityLabel = (priority: number) => {
+  if (priority === 1) return '高';
+  if (priority === 10) return '中';
+  return '低';
 };
 
 const refreshTask = async (taskId: number) => {
@@ -961,10 +978,6 @@ const handleEditColumnOk = async () => {
   text-decoration: line-through;
   color: v-bind('token.colorTextQuaternary');
 }
-
-.priority-20 { color: #8c8c8c; }
-.priority-10 { color: #faad14; font-weight: 500; }
-.priority-1 { color: #f5222d; font-weight: 600; }
 
 .floating-add-column {
   position: fixed;

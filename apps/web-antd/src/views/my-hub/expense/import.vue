@@ -130,6 +130,8 @@ const handleFile = async (file: File) => {
 
   try {
     let parsedTransactions: Transaction[] = [];
+    let fileMinDate: Date | undefined;
+    let fileMaxDate: Date | undefined;
 
     if (file.name.endsWith('.zip')) {
       // 处理ZIP文件
@@ -159,18 +161,24 @@ const handleFile = async (file: File) => {
         const csvText = decoder.decode(csvArrayBuffer);
         // 检测文件类型并解析CSV内容
         const isMobileCSV = file.name.includes('支付宝交易明细');
-        parsedTransactions = isMobileCSV
+        const result = isMobileCSV
           ? parseMobileCSV(csvText)
           : parseCSV(csvText);
+        parsedTransactions = result.transactions;
+        fileMinDate = result.minDate;
+        fileMaxDate = result.maxDate;
       } catch {
         // 如果GBK解码失败，尝试使用UTF-8
         const decoder = new TextDecoder('utf-8');
         const csvText = decoder.decode(csvArrayBuffer);
         // 检测文件类型并解析CSV内容
         const isMobileCSV = file.name.includes('支付宝交易明细');
-        parsedTransactions = isMobileCSV
+        const result = isMobileCSV
           ? parseMobileCSV(csvText)
           : parseCSV(csvText);
+        parsedTransactions = result.transactions;
+        fileMinDate = result.minDate;
+        fileMaxDate = result.maxDate;
       }
     } else if (file.name.endsWith('.csv')) {
       // 处理CSV文件
@@ -183,18 +191,24 @@ const handleFile = async (file: File) => {
         const csvText = decoder.decode(arrayBuffer);
         // 检测文件类型并解析CSV内容
         const isMobileCSV = file.name.includes('支付宝交易明细');
-        parsedTransactions = isMobileCSV
+        const result = isMobileCSV
           ? parseMobileCSV(csvText)
           : parseCSV(csvText);
+        parsedTransactions = result.transactions;
+        fileMinDate = result.minDate;
+        fileMaxDate = result.maxDate;
       } catch {
         // 如果GBK解码失败，尝试使用UTF-8
         const decoder = new TextDecoder('utf-8');
         const csvText = decoder.decode(arrayBuffer);
         // 检测文件类型并解析CSV内容
         const isMobileCSV = file.name.includes('支付宝交易明细');
-        parsedTransactions = isMobileCSV
+        const result = isMobileCSV
           ? parseMobileCSV(csvText)
           : parseCSV(csvText);
+        parsedTransactions = result.transactions;
+        fileMinDate = result.minDate;
+        fileMaxDate = result.maxDate;
       }
     } else if (file.name.endsWith('.xlsx')) {
       // 处理Excel文件
@@ -202,14 +216,24 @@ const handleFile = async (file: File) => {
       // 检测是否为微信账单
       const isWechatBill = file.name.includes('微信支付账单');
       if (isWechatBill) {
-        parsedTransactions = parseWechatExcel(arrayBuffer);
+        const result = parseWechatExcel(arrayBuffer);
+        parsedTransactions = result.transactions;
+        fileMinDate = result.minDate;
+        fileMaxDate = result.maxDate;
       } else {
         throw new Error('暂不支持该Excel文件格式');
       }
     }
 
     transactions.value = parsedTransactions;
-    updateStats(parsedTransactions);
+    
+    let globalStartTime = '';
+    let globalEndTime = '';
+    if (fileMinDate && fileMaxDate) {
+      globalStartTime = formatDate(fileMinDate);
+      globalEndTime = formatDate(fileMaxDate);
+    }
+    updateStats(parsedTransactions, globalStartTime, globalEndTime);
 
     // 只在首次导入时匹配支出类型，后续导入不清除用户的选择
     if (dictOptions.value.length > 0) {
@@ -251,10 +275,17 @@ const readFileAsArrayBuffer = (file: File): Promise<ArrayBuffer> => {
   });
 };
 
+interface ParseResult {
+  transactions: Transaction[];
+  minDate?: Date;
+  maxDate?: Date;
+}
+
 // 解析CSV内容
-const parseCSV = (csvText: string): Transaction[] => {
+const parseCSV = (csvText: string): ParseResult => {
   const lines = csvText.split('\n');
   const transactions: Transaction[] = [];
+  const validTimes: Date[] = [];
 
   // 查找数据行开始位置（跳过标题和元数据）
   let dataStartIndex = 0;
@@ -284,6 +315,17 @@ const parseCSV = (csvText: string): Transaction[] => {
     const columns = line.split(',').map((col) => col.trim());
 
     if (columns.length >= 15) {
+      // 收集所有记录的时间（包含收入和支出）
+      const createdTime = columns[2] || '';
+      const expTime = columns[3] || '';
+      const timeStr = expTime || createdTime;
+      if (timeStr) {
+        const d = new Date(timeStr);
+        if (!isNaN(d.getTime())) {
+          validTimes.push(d);
+        }
+      }
+
       const transaction = {
         transactionId: columns[0] || '', // 交易号
         merchantOrderNo: columns[1] || '', // 商户订单号
@@ -314,7 +356,13 @@ const parseCSV = (csvText: string): Transaction[] => {
     }
   }
 
-  return transactions;
+  let minDate, maxDate;
+  if (validTimes.length > 0) {
+    minDate = new Date(Math.min(...validTimes.map((d) => d.getTime())));
+    maxDate = new Date(Math.max(...validTimes.map((d) => d.getTime())));
+  }
+
+  return { transactions, minDate, maxDate };
 };
 
 // 将Excel日期序列号转换为日期字符串
@@ -335,8 +383,9 @@ const excelDateToString = (excelDate: any): string => {
 };
 
 // 解析微信账单Excel内容
-const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
+const parseWechatExcel = (arrayBuffer: ArrayBuffer): ParseResult => {
   const transactions: Transaction[] = [];
+  const validTimes: Date[] = [];
 
   // 解析Excel文件
   const workbook = XLSX.read(arrayBuffer);
@@ -417,6 +466,14 @@ const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
     // 获取各字段值
     const transactionTimeRaw = getRowValue(row, columnIndex.transactionTime);
     const transactionTime = excelDateToString(transactionTimeRaw);
+    
+    if (transactionTime) {
+      const d = new Date(transactionTime);
+      if (!isNaN(d.getTime())) {
+        validTimes.push(d);
+      }
+    }
+    
     const transactionType = String(getRowValue(row, columnIndex.transactionType) || '');
     const counterparty = String(getRowValue(row, columnIndex.counterparty) || '');
     const goods = String(getRowValue(row, columnIndex.goods) || '');
@@ -461,13 +518,20 @@ const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
     }
   }
 
-  return transactions;
+  let minDate, maxDate;
+  if (validTimes.length > 0) {
+    minDate = new Date(Math.min(...validTimes.map((d) => d.getTime())));
+    maxDate = new Date(Math.max(...validTimes.map((d) => d.getTime())));
+  }
+
+  return { transactions, minDate, maxDate };
 };
 
 // 解析手机端CSV内容
-const parseMobileCSV = (csvText: string): Transaction[] => {
+const parseMobileCSV = (csvText: string): ParseResult => {
   const lines = csvText.split('\n');
   const transactions: Transaction[] = [];
+  const validTimes: Date[] = [];
 
   // 查找数据行开始位置（跳过标题和元数据）
   let dataStartIndex = 0;
@@ -541,6 +605,15 @@ const parseMobileCSV = (csvText: string): Transaction[] => {
 
     // 手机端CSV格式：交易时间,交易分类,交易对方,对方账号,商品说明,收/支,金额,收/付款方式,交易状态,交易订单号,商家订单号,备注
     if (columns.length >= 12) {
+      // 收集所有记录的时间（包含收入和支出）
+      const timeStr = columns[0] || '';
+      if (timeStr) {
+        const d = new Date(timeStr);
+        if (!isNaN(d.getTime())) {
+          validTimes.push(d);
+        }
+      }
+
       // 获取交易分类
       const transactionType = columns[1] || '';
 
@@ -586,29 +659,13 @@ const parseMobileCSV = (csvText: string): Transaction[] => {
     }
   }
 
-  return transactions;
-};
+  let minDate, maxDate;
+  if (validTimes.length > 0) {
+    minDate = new Date(Math.min(...validTimes.map((d) => d.getTime())));
+    maxDate = new Date(Math.max(...validTimes.map((d) => d.getTime())));
+  }
 
-// 计算月度统计数据
-const getMonthlyStats = (transactions: Transaction[]) => {
-  const monthlyData: Record<string, number> = {};
-
-  transactions.forEach((transaction) => {
-    if (transaction.flow === '支出') {
-      // 解析日期，提取年月
-      const dateStr = transaction.expTime || transaction.createdTime;
-      if (dateStr) {
-        const date = new Date(dateStr);
-        if (!isNaN(date.getTime())) {
-          const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
-          monthlyData[monthKey] =
-            (monthlyData[monthKey] || 0) + transaction.amt;
-        }
-      }
-    }
-  });
-
-  return monthlyData;
+  return { transactions, minDate, maxDate };
 };
 
 // 计算类型统计数据
@@ -630,32 +687,34 @@ const getCategoryStats = (transactions: Transaction[]) => {
 };
 
 // 更新统计信息
-const updateStats = (transactions: Transaction[]) => {
+const updateStats = (transactions: Transaction[], globalStartTime?: string, globalEndTime?: string) => {
   let totalExpense = 0;
   let expenseCount = 0;
 
   // 计算开始时间和结束时间
-  let startTime = '';
-  let endTime = '';
+  let startTime = globalStartTime || '';
+  let endTime = globalEndTime || '';
 
-  if (transactions.length > 0) {
-    // 提取所有有效的时间
-    const validTimes = transactions
-      .map((t) => t.expTime || t.createdTime)
-      .filter((time) => time && time.trim() !== '')
-      .map((time) => new Date(time))
-      .filter((date) => !isNaN(date.getTime()));
+  if (!startTime || !endTime) {
+    if (transactions.length > 0) {
+      // 提取所有有效的时间
+      const validTimes = transactions
+        .map((t) => t.expTime || t.createdTime)
+        .filter((time) => time && time.trim() !== '')
+        .map((time) => new Date(time))
+        .filter((date) => !isNaN(date.getTime()));
 
-    if (validTimes.length > 0) {
-      // 找到最早和最晚的时间
-      const earliest = new Date(
-        Math.min(...validTimes.map((d) => d.getTime())),
-      );
-      const latest = new Date(Math.max(...validTimes.map((d) => d.getTime())));
+      if (validTimes.length > 0) {
+        // 找到最早和最晚的时间
+        const earliest = new Date(
+          Math.min(...validTimes.map((d) => d.getTime())),
+        );
+        const latest = new Date(Math.max(...validTimes.map((d) => d.getTime())));
 
-      // 格式化时间显示
-      startTime = formatDate(earliest);
-      endTime = formatDate(latest);
+        // 格式化时间显示
+        startTime = formatDate(earliest);
+        endTime = formatDate(latest);
+      }
     }
   }
 
@@ -684,8 +743,85 @@ const formatDate = (date: Date): string => {
 
 // 更新图表
 const updateCharts = (transactions: Transaction[]) => {
-  const monthlyData = getMonthlyStats(transactions);
   const categoryData = getCategoryStats(transactions);
+  const totalCategory = Object.values(categoryData).reduce((sum, val) => sum + val, 0);
+
+  // 获取按月份和分类的统计数据
+  const monthlyCategoryData: Record<string, Record<string, number>> = {};
+  const allMonthsSet = new Set<string>();
+  const allCategoriesSet = new Set<string>();
+
+  transactions.forEach((transaction) => {
+    if (transaction.flow === '支出') {
+      const dateStr = transaction.expTime || transaction.createdTime;
+      if (dateStr) {
+        const date = new Date(dateStr);
+        if (!isNaN(date.getTime())) {
+          const monthKey = `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}`;
+          const category = transaction.transactionType || transaction.type || '其他';
+          
+          allMonthsSet.add(monthKey);
+          allCategoriesSet.add(category);
+          
+          if (!monthlyCategoryData[monthKey]) {
+            monthlyCategoryData[monthKey] = {};
+          }
+          monthlyCategoryData[monthKey][category] = (monthlyCategoryData[monthKey][category] || 0) + transaction.amt;
+        }
+      }
+    }
+  });
+
+  const months = Array.from(allMonthsSet).sort();
+  const categories = Array.from(allCategoriesSet);
+  
+  // 计算每个月的总计用于显示在柱子顶部
+  const monthlyTotals = months.map(month => {
+    return categories.reduce((sum, category) => sum + (monthlyCategoryData[month]?.[category] || 0), 0);
+  });
+
+  const series: any[] = [];
+  
+  categories.forEach(category => {
+    const data = months.map(month => monthlyCategoryData[month]?.[category] || 0);
+    series.push({
+      name: category,
+      type: 'bar',
+      stack: 'expense',
+      barMaxWidth: 120,
+      emphasis: {
+        focus: 'series'
+      },
+      data
+    });
+  });
+
+  // 添加一个透明系列用于显示每个月的总计
+  series.push({
+    name: '月度合计',
+    type: 'bar',
+    stack: '',
+    data: monthlyTotals,
+    barMaxWidth: 120,
+    barGap: '-100%',
+    z: 10,
+    label: {
+      show: true,
+      position: 'top',
+      formatter: (params: any) => {
+        return params.value > 0 ? `¥${params.value.toFixed(2)}` : '';
+      },
+      fontSize: 12,
+      color: '#333',
+      fontWeight: 'bold'
+    },
+    itemStyle: {
+      color: 'rgba(0,0,0,0)'
+    },
+    emphasis: {
+      disabled: true
+    }
+  });
 
   // 渲染月度柱状图
   renderMonthlyChart({
@@ -695,19 +831,48 @@ const updateCharts = (transactions: Transaction[]) => {
         type: 'shadow',
       },
       formatter: (params: any) => {
-        const data = params[0];
-        return `${data.name}<br/>支出金额: ¥${data.value.toFixed(2)}`;
+        let tooltip = `${params[0].name}<br/>`;
+        let total = 0;
+
+        // 计算总数
+        params.forEach((item: any) => {
+          if (item.seriesName !== '月度合计') {
+            total += item.value || 0;
+          }
+        });
+
+        // 显示各分类
+        params.forEach((item: any) => {
+          if (item.seriesName !== '月度合计' && item.value > 0) {
+            const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
+            tooltip += `${item.marker} ${item.seriesName}: ¥${item.value.toFixed(2)} (${percentage}%)<br/>`;
+          }
+        });
+
+        tooltip += `<div style="border-top:1px solid #eee;margin-top:5px;padding-top:5px;font-weight:bold;">
+          月度合计: ¥${total.toFixed(2)}
+        </div>`;
+        return tooltip;
+      },
+    },
+    legend: {
+      type: 'scroll',
+      bottom: 0,
+      formatter: (name: string) => {
+        if (name === '月度合计') return '';
+        return name;
       },
     },
     grid: {
+      top: '15%',
       left: '3%',
       right: '4%',
-      bottom: '3%',
+      bottom: '10%',
       containLabel: true,
     },
     xAxis: {
       type: 'category',
-      data: Object.keys(monthlyData).sort(),
+      data: months,
       axisLabel: {
         rotate: 45,
       },
@@ -718,18 +883,7 @@ const updateCharts = (transactions: Transaction[]) => {
         formatter: '¥{value}',
       },
     },
-    series: [
-      {
-        name: '月度支出',
-        type: 'bar',
-        data: Object.keys(monthlyData)
-          .sort()
-          .map((month) => monthlyData[month]),
-        itemStyle: {
-          color: '#ff4d4f',
-        },
-      },
-    ],
+    series,
   });
 
   // 渲染类型饼图
@@ -741,6 +895,17 @@ const updateCharts = (transactions: Transaction[]) => {
     .sort((a, b) => b.value - a.value);
 
   renderCategoryChart({
+    title: {
+      text: `总计\n¥${totalCategory.toFixed(2)}`,
+      left: '40%',
+      top: '50%',
+      textAlign: 'center',
+      textVerticalAlign: 'middle',
+      textStyle: {
+        fontSize: 14,
+        fontWeight: 'bold'
+      }
+    },
     tooltip: {
       trigger: 'item',
       formatter: '{a} <br/>{b}: ¥{c} ({d}%)',
@@ -1001,7 +1166,7 @@ const gridOptions: VxeGridProps<RowType> = {
       slots: { default: 'action' },
       fixed: 'right',
       title: '操作',
-      width: 120,
+      width: 80,
     },
   ],
   footerMethod: ({ columns, data }) => {
@@ -1009,7 +1174,7 @@ const gridOptions: VxeGridProps<RowType> = {
     const sums: Record<string, string> = {};
     columns.forEach((column) => {
       const field = column.field;
-      if (field === 'amt') {
+      if (field === 'amt' || field === 'transactionAmt') {
         const total = data.reduce((prev, row) => {
           const value = row[field];
           return prev + (Number(value) || 0);
@@ -1111,7 +1276,7 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 </script>
 
 <template>
-  <div class="container">
+  <div class="page-container">
     <div
       ref="uploadAreaRef"
       class="upload-area"
@@ -1215,68 +1380,33 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 </template>
 
 <style scoped>
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-}
-
-.container {
-  margin: 0 auto;
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
-  padding: 30px;
+.page-container {
+  @apply w-full bg-white dark:bg-[#141414] rounded-xl shadow-sm p-4 md:p-6;
 }
 
 h1 {
-  text-align: center;
-  color: #1677ff;
-  margin-bottom: 20px;
-  font-weight: 600;
+  @apply text-center text-blue-600 dark:text-blue-500 mb-5 font-semibold;
 }
 
 .upload-area {
-  border: 2px dashed #1677ff;
-  border-radius: 8px;
-  padding: 20px;
-  text-align: center;
-  margin-bottom: 30px;
-  background-color: #f0f7ff;
-  transition: all 0.3s ease;
-  cursor: pointer;
+  @apply border-2 border-dashed border-blue-500 dark:border-blue-700 rounded-lg p-4 md:p-6 text-center mb-6 bg-blue-50 dark:bg-blue-900/20 transition-all duration-300 cursor-pointer;
 }
 
 .upload-area:hover,
 .upload-area.dragover {
-  background-color: #e0efff;
-  transform: translateY(-2px);
+  @apply bg-blue-100 dark:bg-blue-900/40 -translate-y-0.5;
 }
 
 .upload-text {
-  margin-bottom: 5px;
-  font-weight: 500;
+  @apply mb-1 font-medium text-gray-800 dark:text-gray-200;
 }
 
 .upload-hint {
-  margin-bottom: 10px;
-  font-size: 12px;
-  color: #666;
+  @apply mb-2 text-xs text-gray-500 dark:text-gray-400;
 }
 
 .browse-btn {
-  display: inline-block;
-  background: #1677ff;
-  color: white;
-  padding: 10px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.3s;
-}
-
-.browse-btn:hover {
-  background: #0e5fd0;
+  @apply inline-block bg-blue-600 dark:bg-blue-600 text-white py-2 px-4 rounded-md cursor-pointer transition-colors duration-300 hover:bg-blue-700 dark:hover:bg-blue-500;
 }
 
 input[type='file'] {
@@ -1284,89 +1414,50 @@ input[type='file'] {
 }
 
 .results {
-  margin-top: 30px;
+  @apply mt-6;
+}
+
+.results h2 {
+  @apply text-lg font-semibold mb-4 text-gray-800 dark:text-gray-200;
 }
 
 .stats {
-  display: flex;
-  justify-content: space-around;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  @apply flex justify-around mb-5 flex-wrap gap-3;
 }
 
 .stat-card {
-  background: white;
-  border-radius: 8px;
-  padding: 20px;
-  min-width: 200px;
-  text-align: center;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
-  margin: 10px;
+  @apply bg-white dark:bg-[#1f1f1f] rounded-lg p-4 min-w-[140px] md:min-w-[160px] text-center shadow-sm flex-1 border border-gray-100 dark:border-[#303030];
 }
 
 .stat-value {
-  font-size: 24px;
-  font-weight: bold;
-  color: #1677ff;
-  margin: 10px 0;
+  @apply text-xl md:text-2xl font-bold text-blue-600 dark:text-blue-400 my-2;
 }
 
 .stat-label {
-  color: #666;
-  font-size: 14px;
+  @apply text-sm text-gray-500 dark:text-gray-400;
 }
 
 .expense {
-  color: #ff4d4f;
+  @apply text-red-500 dark:text-red-400;
 }
 
 .loading {
-  text-align: center;
-  padding: 20px;
-  color: #1677ff;
+  @apply text-center p-5 text-blue-600 dark:text-blue-400;
 }
 
 .charts-container {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 30px;
+  @apply grid grid-cols-1 md:grid-cols-2 gap-4 mt-6 mb-6;
 }
 
 .chart-card {
-  height: 400px;
-}
-
-@media (max-width: 768px) {
-  .charts-container {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 768px) {
-  .container {
-    padding: 15px;
-  }
-
-  .upload-area {
-    padding: 20px;
-  }
-
-  .stat-card {
-    min-width: 140px;
-    padding: 15px;
-  }
+  @apply h-[400px];
 }
 
 .toolbar-buttons {
-  display: flex;
-  gap: 8px;
-  align-items: center;
+  @apply flex gap-2 items-center;
 }
 
 .toolbar-buttons :deep(.ant-btn) {
-  padding: 4px 12px;
-  height: 32px;
-  font-size: 14px;
+  @apply px-3 h-8 text-sm;
 }
 </style>
