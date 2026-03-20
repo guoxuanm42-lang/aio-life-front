@@ -50,8 +50,8 @@ const tempConversation = ref<any>(null);
 
 // Menu items
 const menuItems = [
-  { key: 'my-messages', label: '我的消息', icon: 'ant-design:message-outlined' },
-  { key: 'ai-chat', label: 'AI 对话', icon: 'ant-design:robot-outlined' },
+  { key: 'my-messages', label: '我的消息', icon: 'i-ant-design:message-outlined' },
+  { key: 'ai-chat', label: 'AI 对话', icon: 'i-ant-design:robot-outlined' },
 ];
 
 const handleMenuClick = (key: string) => {
@@ -80,7 +80,7 @@ const summarizeLoading = ref(false);
 const fetchAISessions = async () => {
   try {
     aiSessions.value = await getChatSessionsApi();
-    if (aiSessions.value.length > 0 && !selectedConversationId.value) {
+    if (aiSessions.value.length > 0 && !selectedConversationId.value && !isMobile.value) {
       handleSelectSession(aiSessions.value[0]?.id as string);
     }
   } catch (error) {
@@ -670,6 +670,19 @@ onUnmounted(() => {
         class="border-r border-gray-100 flex flex-col bg-white"
         :class="isMobile ? 'flex-1 w-full' : 'w-72'"
       >
+        <!-- Mobile Switcher -->
+        <div v-if="isMobile" class="flex border-b border-gray-100 bg-gray-50/30">
+          <div
+            v-for="item in menuItems"
+            :key="item.key"
+            class="flex-1 text-center py-3.5 font-medium transition-all cursor-pointer flex items-center justify-center gap-2"
+            :class="activeMenu === item.key ? 'text-blue-600 border-b-2 border-blue-600 bg-white' : 'text-gray-500 hover:bg-gray-50'"
+            @click="handleMenuClick(item.key)"
+          >
+            <span :class="item.icon" class="text-lg"></span>
+            {{ item.label }}
+          </div>
+        </div>
         <ChatSessionList
           v-if="isAIChat"
           :sessions="aiSessions"
@@ -731,8 +744,8 @@ onUnmounted(() => {
 
           <div
             ref="chatMessagesContainer"
-            class="flex-1 overflow-y-auto p-4 space-y-4 min-h-0"
-            style="max-height: calc(100vh - 200px);"
+            class="flex-1 overflow-y-auto min-h-0"
+            :class="isMobile ? 'px-3 py-2 space-y-3' : 'p-4 space-y-4'"
           >
             <div
               v-for="msg in aiChatMessages"

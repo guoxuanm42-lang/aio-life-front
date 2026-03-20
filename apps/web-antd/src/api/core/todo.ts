@@ -25,6 +25,7 @@ export interface Detail {
   taskId: number;
   content: string;
   isCompleted: number; // 0: uncompleted, 1: completed
+  priority: number; // 1: very important, 10: important, 20: normal
   startTime?: string;
   endTime?: string;
 }

@@ -189,6 +189,18 @@
           <template #item="{ element: detail, index }">
             <div class="subtask-item">
               <holder-outlined class="drag-handle" style="cursor: move; margin-right: 8px; color: #999" />
+              <a-select 
+                v-model:value="detail.priority" 
+                size="small" 
+                :bordered="false" 
+                style="width: 80px; margin-right: 4px;"
+                :class="'priority-' + detail.priority"
+                @change="handleDetailBlur(detail)"
+              >
+                <a-select-option :value="20" class="priority-20">普通</a-select-option>
+                <a-select-option :value="10" class="priority-10">重要</a-select-option>
+                <a-select-option :value="1" class="priority-1">非常重要</a-select-option>
+              </a-select>
               <a-checkbox 
                 :checked="detail.isCompleted === 1" 
                 @update:checked="(val) => handleDetailCheck(detail, val)"
@@ -253,6 +265,14 @@
         </div>
         <div style="display: flex; gap: 10px;">
           <div style="flex: 1">
+            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">优先级</div>
+            <a-select v-model:value="newDetail.priority" style="width: 100%" :class="'priority-' + newDetail.priority">
+              <a-select-option :value="20" class="priority-20">普通</a-select-option>
+              <a-select-option :value="10" class="priority-10">重要</a-select-option>
+              <a-select-option :value="1" class="priority-1">非常重要</a-select-option>
+            </a-select>
+          </div>
+          <div style="flex: 1">
             <div style="margin-bottom: 5px; font-size: 12px; color: #666;">开始时间</div>
             <a-date-picker
               show-time
@@ -299,7 +319,7 @@
 <script lang="ts" setup>
 import { ref, onMounted } from 'vue';
 import draggable from 'vuedraggable';
-import { Button as AButton, Input as AInput, Textarea as ATextarea, Modal as AModal, DatePicker as ADatePicker, Popconfirm as APopconfirm, Checkbox as ACheckbox, theme, Dropdown as ADropdown, Menu as AMenu, MenuItem as AMenuItem, Tag as ATag } from 'ant-design-vue';
+import { Button as AButton, Input as AInput, Textarea as ATextarea, Modal as AModal, DatePicker as ADatePicker, Popconfirm as APopconfirm, Checkbox as ACheckbox, theme, Dropdown as ADropdown, Menu as AMenu, MenuItem as AMenuItem, Tag as ATag, Select as ASelect, SelectOption as ASelectOption } from 'ant-design-vue';
 
 import { getTaskColumnList, saveColumn, updateColumn, deleteColumn, reSortColumn} from '#/api/core/todo';
 
@@ -315,6 +335,7 @@ interface Detail {
   taskId: number;
   content: string;
   isCompleted: number;
+  priority: number; // 1: very important, 10: important, 20: normal
   startTime?: any;
   endTime?: any;
 }
@@ -490,6 +511,7 @@ const editingTask = ref<Task>({
 const addDetailModalVisible = ref(false);
 const newDetail = ref<any>({
   content: '',
+  priority: 20,
   startTime: undefined,
   endTime: undefined,
 });
@@ -520,6 +542,7 @@ const openEditModal = async (task: Task) => {
 const addDetail = () => {
   newDetail.value = {
     content: '',
+    priority: 20,
     startTime: undefined,
     endTime: undefined,
   };
@@ -938,6 +961,10 @@ const handleEditColumnOk = async () => {
   text-decoration: line-through;
   color: v-bind('token.colorTextQuaternary');
 }
+
+.priority-20 { color: #8c8c8c; }
+.priority-10 { color: #faad14; font-weight: 500; }
+.priority-1 { color: #f5222d; font-weight: 600; }
 
 .floating-add-column {
   position: fixed;
