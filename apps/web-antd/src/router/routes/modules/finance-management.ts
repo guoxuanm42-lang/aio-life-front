@@ -48,7 +48,7 @@ const routes: RouteRecordRaw[] = [
           backTop: false,
         },
         name: 'alipayImport',
-        path: '/finance-management/alipay-import',
+        path: '/finance-management/import',
         component: () => import('#/views/my-hub/expense/import.vue'),
       },
     ],

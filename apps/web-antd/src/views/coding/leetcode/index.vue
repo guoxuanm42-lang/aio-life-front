@@ -528,7 +528,7 @@ onMounted(async () => {
       username.value = leetcodeBind.platformUsername;
       fetchData();
     } else {
-      message.warning('未绑定 LeetCode 账号，无法显示相关信息');
+      message.warning('未绑定 LeetCode 账号，请在个人中心绑定');
     }
   } catch (e) {
     console.error('获取绑定信息失败', e);

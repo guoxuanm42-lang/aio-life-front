@@ -415,7 +415,7 @@ watch(
       if (githubBind && githubBind.platformUsername) {
         username.value = githubBind.platformUsername;
         githubToken.value = githubBind.accessToken || '';
-        
+
         hasWarnedNoUsername = false;
         await Promise.all([
           fetchContributions(username.value),
@@ -424,7 +424,7 @@ watch(
         ]);
       } else {
         if (!hasWarnedNoUsername) {
-          message.warning('未绑定 Github 账号，无法显示相关信息');
+          message.warning('未绑定 Github 账号，请在个人中心绑定');
           hasWarnedNoUsername = true;
         }
       }

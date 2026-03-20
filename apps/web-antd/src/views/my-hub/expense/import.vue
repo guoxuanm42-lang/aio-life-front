@@ -5,18 +5,16 @@ import type { VxeGridProps } from '#/adapter/vxe-table';
 
 import { computed, onMounted, ref } from 'vue';
 
-import { useVbenDrawer } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 import { Button, Card, message, Popconfirm } from "ant-design-vue";
+import { DeleteOutlined } from '@ant-design/icons-vue';
 import JSZip from 'jszip';
 import * as XLSX from 'xlsx';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getByDictType } from '#/api/core/common';
 import { saveBatch } from '#/api/core/expense';
-
-import FormDrawerDemo from './form-drawer.vue';
 
 interface Transaction {
   transactionId: string;
@@ -42,10 +40,8 @@ interface Transaction {
   payTypeId: number; // 支付类型ID，1=支付宝，2=微信
 }
 
-// 定义RowType接口，用于表格数据
-interface RowType extends Transaction {
-  // 可以添加额外的表格字段
-}
+// 表格行类型
+type RowType = Transaction;
 
 const uploadAreaRef = ref<HTMLElement>();
 const fileInputRef = ref<HTMLInputElement>();
@@ -62,7 +58,6 @@ const monthlyChartRef = ref<EchartsUIType>();
 const categoryChartRef = ref<EchartsUIType>();
 const {
   renderEcharts: renderMonthlyChart,
-  getChartInstance: getMonthlyChartInstance,
 } = useEcharts(monthlyChartRef);
 const {
   renderEcharts: renderCategoryChart,
@@ -123,9 +118,12 @@ const handleFile = async (file: File) => {
     !file.name.endsWith('.csv') &&
     !file.name.endsWith('.xlsx')
   ) {
-    alert('请上传ZIP文件、CSV文件或Excel文件');
+    message.warning('请上传ZIP文件、CSV文件或Excel文件');
     return;
   }
+
+  // 重置过滤状态，确保新导入的数据显示正常
+  selectedCategory.value = null;
 
   loading.value = true;
   resultsVisible.value = false;
@@ -213,10 +211,21 @@ const handleFile = async (file: File) => {
     transactions.value = parsedTransactions;
     updateStats(parsedTransactions);
 
+    // 只在首次导入时匹配支出类型，后续导入不清除用户的选择
+    if (dictOptions.value.length > 0) {
+      // 检查是否有未设置支出类型的记录
+      const hasUnmatchedRecords = transactions.value.some(
+        (t) => !t.expTypeId || t.expTypeId === 119,
+      );
+      if (hasUnmatchedRecords) {
+        matchExpenseTypes();
+      }
+    }
+
     // 更新表格数据
     gridApi.setState({
       gridOptions: {
-        data: parsedTransactions,
+        data: transactions.value,
       },
     });
 
@@ -250,7 +259,7 @@ const parseCSV = (csvText: string): Transaction[] => {
   // 查找数据行开始位置（跳过标题和元数据）
   let dataStartIndex = 0;
   for (const [i, line] of lines.entries()) {
-    if (line.includes('交易号') || line.includes('交易号')) {
+    if (line.includes('交易号')) {
       dataStartIndex = i + 1;
       break;
     }
@@ -308,6 +317,23 @@ const parseCSV = (csvText: string): Transaction[] => {
   return transactions;
 };
 
+// 将Excel日期序列号转换为日期字符串
+const excelDateToString = (excelDate: any): string => {
+  if (typeof excelDate === 'number' && excelDate > 0) {
+    const date = XLSX.SSF.parse_date_code(excelDate);
+    if (date) {
+      const year = date.y;
+      const month = String(date.m).padStart(2, '0');
+      const day = String(date.d).padStart(2, '0');
+      const hours = String(date.H).padStart(2, '0');
+      const minutes = String(date.M).padStart(2, '0');
+      const seconds = String(date.S).padStart(2, '0');
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    }
+  }
+  return String(excelDate || '');
+};
+
 // 解析微信账单Excel内容
 const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
   const transactions: Transaction[] = [];
@@ -328,10 +354,12 @@ const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
 
   // 查找数据行开始位置
   let dataStartIndex = -1;
+  let headerRow: string[] = [];
   for (const [i, jsonDatum] of jsonData.entries()) {
-    const row = jsonDatum as string[];
-    if (row.length > 0 && row[0]?.includes('交易时间')) {
+    const row = jsonDatum as any[];
+    if (row.length > 0 && String(row[0]).includes('交易时间')) {
       dataStartIndex = i + 1;
+      headerRow = row.map((cell) => String(cell || ''));
       break;
     }
   }
@@ -340,60 +368,96 @@ const parseWechatExcel = (arrayBuffer: ArrayBuffer): Transaction[] => {
     throw new Error('未找到微信账单数据行');
   }
 
+  // 建立列索引映射，增强健壮性
+  const columnIndex = {
+    transactionTime: headerRow.findIndex((h) => h.includes('交易时间')),
+    transactionType: headerRow.findIndex((h) => h.includes('交易类型')),
+    counterparty: headerRow.findIndex((h) => h.includes('交易对方')),
+    goods: headerRow.findIndex((h) => h.includes('商品')),
+    flow: headerRow.findIndex((h) => h.includes('收/支')),
+    amount: headerRow.findIndex((h) => h.includes('金额')),
+    paymentMethod: headerRow.findIndex((h) => h.includes('支付方式')),
+    transactionStatus: headerRow.findIndex((h) => h.includes('当前状态')),
+    transactionId: headerRow.findIndex((h) => h.includes('交易单号')),
+    merchantOrderNo: headerRow.findIndex((h) => h.includes('商户单号')),
+    remark: headerRow.findIndex((h) => h.includes('备注')),
+  };
+
+  // 辅助函数：安全获取行值
+  const getRowValue = (row: any[], index: number): any => {
+    return index >= 0 && index < row.length ? row[index] : undefined;
+  };
+
   // 解析数据行
   for (let i = dataStartIndex; i < jsonData.length; i++) {
-    const row = jsonData[i] as string[];
+    const row = jsonData[i] as any[];
 
     // 跳过空行
-    if (!row || row.length === 0 || !row[0]) {
+    if (!row || row.length === 0) {
       continue;
     }
 
-    // 微信账单格式：交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态,交易单号,商户单号,备注
-    if (row.length >= 11) {
-      const transactionTime = row[0] || '';
-      const transactionType = row[1] || '';
-      const counterparty = row[2] || '';
-      const goods = row[3] || '';
-      const flow = row[4] || '';
-      const amountStr = row[5] || '';
-      const paymentMethod = row[6] || '';
-      const transactionStatus = row[7] || '';
-      const transactionId = row[8] || '';
-      const merchantOrderNo = row[9] || '';
-      const remark = row[10] || '';
+    // 跳过汇总行和说明行
+    const firstCell = String(row[0] || '');
+    if (
+      firstCell.includes('收入') ||
+      firstCell.includes('支出') ||
+      firstCell.includes('中性') ||
+      firstCell.includes('注：') ||
+      firstCell.includes('共') ||
+      firstCell.includes('----------------------') ||
+      firstCell.includes('导出时间') ||
+      firstCell.includes('微信昵称') ||
+      firstCell.includes('起始时间') ||
+      firstCell.includes('导出类型')
+    ) {
+      continue;
+    }
 
-      // 处理金额，去除¥符号并转换为数字
-      const amount = Number.parseFloat(amountStr.replaceAll('¥', '')) || 0;
+    // 获取各字段值
+    const transactionTimeRaw = getRowValue(row, columnIndex.transactionTime);
+    const transactionTime = excelDateToString(transactionTimeRaw);
+    const transactionType = String(getRowValue(row, columnIndex.transactionType) || '');
+    const counterparty = String(getRowValue(row, columnIndex.counterparty) || '');
+    const goods = String(getRowValue(row, columnIndex.goods) || '');
+    const flow = String(getRowValue(row, columnIndex.flow) || '');
+    const amountStr = String(getRowValue(row, columnIndex.amount) || '');
+    const paymentMethod = String(getRowValue(row, columnIndex.paymentMethod) || '');
+    const transactionStatus = String(getRowValue(row, columnIndex.transactionStatus) || '');
+    const transactionId = String(getRowValue(row, columnIndex.transactionId) || '');
+    const merchantOrderNo = String(getRowValue(row, columnIndex.merchantOrderNo) || '');
+    const remark = String(getRowValue(row, columnIndex.remark) || '');
 
-      // 只处理支出记录
-      if (flow === '支出') {
-        const transaction: Transaction = {
-          transactionId: transactionId || '',
-          merchantOrderNo: merchantOrderNo || '',
-          createdTime: transactionTime || '',
-          expTime: transactionTime || '',
-          lastModifiedTime: transactionTime || '',
-          source: '微信支付',
-          type: transactionType || '',
-          transactionType: transactionType || '',
-          counterparty: counterparty || '',
-          counterpartyAcct: '',
-          expDesc: goods || '',
-          amt: amount,
-          transactionAmt: amount,
-          flow: flow || '',
-          transactionStatus: transactionStatus || '',
-          serviceFee: 0,
-          successfulRefund: 0,
-          remark: remark || '',
-          fundStatus: paymentMethod || '',
-          expTypeId: 119, // 默认支出类型
-          payTypeId: 2, // 微信支付类型
-        };
+    // 处理金额，去除¥符号和其他非数字字符
+    const amount = Number.parseFloat(amountStr.replace(/[^0-9.-]/g, '')) || 0;
 
-        transactions.push(transaction);
-      }
+    // 只处理支出记录
+    if (flow === '支出') {
+      const transaction: Transaction = {
+        transactionId: transactionId || '',
+        merchantOrderNo: merchantOrderNo || '',
+        createdTime: transactionTime || '',
+        expTime: transactionTime || '',
+        lastModifiedTime: transactionTime || '',
+        source: '微信支付',
+        type: transactionType || '',
+        transactionType: transactionType || '',
+        counterparty: counterparty || '',
+        counterpartyAcct: '',
+        expDesc: goods || '',
+        amt: amount,
+        transactionAmt: amount,
+        flow: flow || '',
+        transactionStatus: transactionStatus || '',
+        serviceFee: 0,
+        successfulRefund: 0,
+        remark: remark || '',
+        fundStatus: paymentMethod || '',
+        expTypeId: 119, // 默认支出类型
+        payTypeId: 2, // 微信支付类型
+      };
+
+      transactions.push(transaction);
     }
   }
 
@@ -779,25 +843,56 @@ const loadExpTypes = async () => {
   try {
     const res = await getByDictType('exp_type');
     dictOptions.value = res.dictDetailList;
+
+    // 更新表格列的支出类型选项
+    if (gridOptions.columns) {
+      const columns = gridOptions.columns;
+      const expTypeColumn = columns.find((col) => col.field === 'expTypeId');
+      if (expTypeColumn && expTypeColumn.editRender) {
+        expTypeColumn.editRender.options = selectOptions.value;
+      }
+    }
+
+    // 自动匹配支出类型
+    matchExpenseTypes();
   } catch (error) {
     console.error('加载支出类型失败:', error);
   }
 };
 
-// 添加一个计算属性或方法来查找标签
-const getIncomeTypeLabel = (value: number) => {
-  // 将 value 转换为字符串以匹配 dictOptions 中的值
-  const option = dictOptions.value.find((item) => item.id === value);
-  return option ? option.label : String(value);
+// 根据原交易分类自动匹配支出类型
+const matchExpenseTypes = () => {
+  if (dictOptions.value.length === 0) return;
+
+  transactions.value.forEach((transaction) => {
+    // 如果支出类型还没有设置，或者设置为默认值119，则尝试匹配
+    if (!transaction.expTypeId || transaction.expTypeId === 119) {
+      const transactionType = transaction.transactionType || transaction.type;
+      if (transactionType) {
+        // 查找匹配的支出类型
+        const matchedOption = dictOptions.value.find(
+          (option) => option.label === transactionType,
+        );
+        if (matchedOption) {
+          transaction.expTypeId = matchedOption.id;
+        }
+      }
+    }
+  });
+
+  // 更新表格数据
+  if (transactions.value.length > 0) {
+    gridApi.setState({
+      gridOptions: {
+        data: transactions.value,
+      },
+    });
+  }
 };
 
 // 在组件挂载时加载值集数据
 onMounted(() => {
   loadExpTypes();
-});
-
-const [FormDrawer, formDrawerApi] = useVbenDrawer({
-  connectedComponent: FormDrawerDemo,
 });
 
 const gridOptions: VxeGridProps<RowType> = {
@@ -928,27 +1023,37 @@ const gridOptions: VxeGridProps<RowType> = {
     return footerData;
   },
   keepSource: true,
-  toolbarConfig: {
-    // 是否显示搜索表单控制按钮
-  },
 };
 
 function submitData() {
-  // 获取所有表格数据（包括懒加载的数据）
-  const tableData = gridApi.grid.getFullData();
-  if (!tableData || tableData.length === 0) {
-    alert('没有数据可提交');
+  // 直接使用 transactions.value，这是用户修改后的最新数据
+  if (!transactions.value || transactions.value.length === 0) {
+    message.warning('没有数据可提交');
     return;
   }
-  console.log('提交数据:', tableData);
+
+  // 同步表格中的编辑数据到 transactions.value
+  const tableData = gridApi.grid.getTableData();
+  if (tableData && tableData.fullData) {
+    // 将表格中的修改同步回 transactions
+    tableData.fullData.forEach((row: any) => {
+      const transaction = transactions.value.find(
+        (t) => t.transactionId === row.transactionId,
+      );
+      if (transaction) {
+        Object.assign(transaction, row);
+      }
+    });
+  }
+
+  console.log('提交数据:', transactions.value);
   submitLoading.value = true;
-  saveBatch(tableData)
+  saveBatch(transactions.value)
     .then(() => {
       message.success('数据提交成功');
     })
     .catch((error) => {
       console.error('提交失败:', error);
-      message.error(`提交失败: ${error.message}`);
     })
     .finally(() => {
       submitLoading.value = false;
@@ -959,7 +1064,7 @@ function submitData() {
 const deleteSelectedRows = () => {
   const selectedRows = gridApi.grid.getCheckboxRecords();
   if (selectedRows.length === 0) {
-    alert('请先选择要删除的记录');
+    message.warning('请先选择要删除的记录');
     return;
   }
 
@@ -979,7 +1084,7 @@ const deleteSelectedRows = () => {
   // 更新统计信息
   updateStats(transactions.value);
 
-  alert(`成功删除 ${selectedRows.length} 条记录`);
+  message.success(`成功删除 ${selectedRows.length} 条记录`);
 };
 
 // 添加删除单行函数
@@ -999,7 +1104,7 @@ const deleteRow = (row: RowType) => {
   // 更新统计信息
   updateStats(transactions.value);
 
-  alert('提交成功');
+  message.success('删除成功');
 };
 
 const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
@@ -1030,7 +1135,7 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
 
     <div v-if="loading" class="loading">正在处理文件，请稍候...</div>
 
-    <div v-if="resultsVisible" class="results">
+    <div v-show="resultsVisible" class="results">
       <h2>交易记录概览</h2>
       <div class="stats">
         <div class="stat-card">
@@ -1067,31 +1172,30 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
     <div class="w-full">
       <Grid>
         <template #toolbar-tools>
-          <Button
-            class="mr-2"
-            type="primary"
-            @click="submitData"
-            :loading="submitLoading"
-          >
-            提交
-          </Button>
-          &nbsp;
-          <Popconfirm
-            title="确定要删除选中的记录吗？"
-            ok-text="确定"
-            cancel-text="取消"
-            @confirm="deleteSelectedRows"
-          >
-            <Button class="mr-2" type="primary"> 删除 </Button>&nbsp;
+          <div class="toolbar-buttons">
             <Button
-              class="mr-2"
+              type="primary"
+              @click="submitData"
+              :loading="submitLoading"
+            >
+              提交
+            </Button>
+            <Popconfirm
+              title="确定要删除选中的记录吗？"
+              ok-text="确定"
+              cancel-text="取消"
+              @confirm="deleteSelectedRows"
+            >
+              <Button type="primary" danger>删除</Button>
+            </Popconfirm>
+            <Button
               type="default"
               @click="resetFilter"
               v-if="selectedCategory"
             >
               重置过滤
             </Button>
-          </Popconfirm>
+          </div>
         </template>
         <template #action="{ row }">
           <Popconfirm
@@ -1100,7 +1204,9 @@ const [Grid, gridApi] = useVbenVxeGrid({ gridOptions });
             cancel-text="否"
             @confirm="deleteRow(row)"
           >
-            <a href="#">删除</a>
+            <Button type="link" size="small" danger>
+              <template #icon><DeleteOutlined /></template>
+            </Button>
           </Popconfirm>
         </template>
       </Grid>
@@ -1250,5 +1356,17 @@ input[type='file'] {
     min-width: 140px;
     padding: 15px;
   }
+}
+
+.toolbar-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.toolbar-buttons :deep(.ant-btn) {
+  padding: 4px 12px;
+  height: 32px;
+  font-size: 14px;
 }
 </style>
