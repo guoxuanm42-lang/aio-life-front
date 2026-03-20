@@ -58,19 +58,19 @@ const gridOptions: VxeGridProps<RowType> = {
   columns: [
     { title: '序号', type: 'seq', width: 50 },
     { title: '主键', visible: false },
-    { field: 'performanceName', title: '演出名称', sortable: true },
-    { field: 'performer', title: '演员', sortable: true },
+    { field: 'performanceName', title: '活动名称', sortable: true },
+    { field: 'performer', title: '人员', sortable: true },
     {
       field: 'performanceType',
-      title: '演出类型',
+      title: '活动类型',
       sortable: true,
       formatter: ({ cellValue }) => {
         return cellValue === '1' ? '演唱会' : cellValue === '2' ? '音乐节' : cellValue;
       }
     },
-    { field: 'performanceDate', title: '演出日期', sortable: true },
-    { field: 'venue', title: '演出地点', sortable: true },
-    { field: 'city', title: '演出城市', sortable: true },
+    { field: 'performanceDate', title: '日期', sortable: true },
+    { field: 'venue', title: '地点', sortable: true },
+    { field: 'city', title: '城市', sortable: true },
     {
       cellRender: { name: 'CellImage' },
       field: 'imageUrl',

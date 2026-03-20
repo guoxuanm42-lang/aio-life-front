@@ -48,7 +48,7 @@ const [Form, formApi] = useVbenForm({
         placeholder: '请输入',
       },
       fieldName: 'performanceName',
-      label: '演出名称',
+      label: '活动名称',
       rules: 'required',
     },
     {
@@ -57,7 +57,7 @@ const [Form, formApi] = useVbenForm({
         placeholder: '请输入',
       },
       fieldName: 'performer',
-      label: '演员名称',
+      label: '参与人',
       rules: 'required',
     },
     {
@@ -70,7 +70,7 @@ const [Form, formApi] = useVbenForm({
         style: { width: '100%' },
       },
       fieldName: 'performanceType',
-      label: '演出类型',
+      label: '活动类型',
     },
     {
       component: 'Input',
@@ -78,7 +78,7 @@ const [Form, formApi] = useVbenForm({
         placeholder: '请输入',
       },
       fieldName: 'city',
-      label: '演出城市',
+      label: '城市',
     },
     {
       component: 'Input',
@@ -86,7 +86,7 @@ const [Form, formApi] = useVbenForm({
         placeholder: '请输入',
       },
       fieldName: 'venue',
-      label: '演出地点',
+      label: '地点',
       rules: 'required',
     },
     {
@@ -100,12 +100,12 @@ const [Form, formApi] = useVbenForm({
     {
       component: 'DatePicker',
       componentProps: {
-        placeholder: '请选择演出日期',
+        placeholder: '请选择活动日期',
         format: 'YYYY-MM-DD',
         valueFormat: 'YYYY-MM-DD',
       },
       fieldName: 'performanceDate',
-      label: '演出日期',
+      label: '活动日期',
     },
     {
       component: 'Input',

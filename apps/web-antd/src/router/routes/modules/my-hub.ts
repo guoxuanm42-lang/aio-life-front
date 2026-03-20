@@ -54,7 +54,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           icon: 'mdi:chart-line-variant',
-          title: '演出',
+          title: '活动',
           backTop: false,
         },
         name: 'performance',
