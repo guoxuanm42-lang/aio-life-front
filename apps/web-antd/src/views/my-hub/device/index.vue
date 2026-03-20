@@ -222,6 +222,12 @@ export default {
         message.error('删除失败');
       }
     },
+    async handleDeleteFromModal() {
+      if (this.newDevice.id) {
+        await this.handleDelete(this.newDevice);
+        this.visible = false;
+      }
+    },
   },
 };
 </script>
@@ -237,10 +243,32 @@ export default {
       <!-- 维护设备弹窗 -->
       <AModal
         v-model:open="visible"
-        title="新增设备"
+        :title="newDevice.id ? '编辑设备' : '新增设备'"
         @ok="handleOk"
         @cancel="handleCancel"
       >
+        <template #footer>
+          <div style="display: flex; justify-content: space-between; align-items: center; width: 100%">
+            <div>
+              <APopconfirm
+                v-if="newDevice.id"
+                title="确定要删除这个设备吗？"
+                ok-text="确定"
+                cancel-text="取消"
+                @confirm="handleDeleteFromModal"
+              >
+                <AButton danger type="text">
+                  <template #icon><DeleteOutlined /></template>
+                  删除
+                </AButton>
+              </APopconfirm>
+            </div>
+            <div>
+              <AButton @click="handleCancel">取消</AButton>
+              <AButton type="primary" @click="handleOk">确定</AButton>
+            </div>
+          </div>
+        </template>
         <AForm :model="newDevice" layout="vertical">
           <AFormItem label="设备名称">
             <AInput v-model:value="newDevice.name" />
@@ -635,11 +663,7 @@ export default {
 
 @media screen and (max-width: 768px) {
   .delete-btn {
-    opacity: 1;
-    width: 28px;
-    height: 28px;
-    bottom: 5px;
-    right: 5px;
+    display: none;
   }
 }
 </style>
