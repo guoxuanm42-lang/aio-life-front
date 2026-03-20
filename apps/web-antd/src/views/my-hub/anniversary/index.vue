@@ -218,7 +218,7 @@ const selectColor = (color: string) => {
             </span>
             纪念册
           </h1>
-          <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm md:text-base">记录每一个值得铭记的瞬间</p>
+          <p class="text-gray-500 dark:text-gray-400 mt-1 text-sm md:text-base">记录每一个值得铭记的瞬间（未完成）</p>
         </div>
         <Button 
           type="primary" 
