@@ -143,17 +143,17 @@
         }"
       />
 
-      <div style="display: flex; gap: 10px; margin-bottom: 20px;">
-        <div style="flex: 1">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">开始时间</div>
+      <div class="task-dates-row">
+        <div class="date-col">
+            <div class="date-label">开始时间</div>
             <a-date-picker show-time v-model:value="editingTask.startTime" placeholder="开始时间" style="width: 100%" />
         </div>
-        <div style="flex: 1">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">结束时间</div>
+        <div class="date-col">
+            <div class="date-label">结束时间</div>
             <a-date-picker show-time v-model:value="editingTask.endTime" placeholder="结束时间" style="width: 100%" />
         </div>
-        <div style="flex: 1">
-             <div style="margin-bottom: 5px; font-size: 12px; color: #666;">目标完成时间</div>
+        <div class="date-col">
+             <div class="date-label">目标完成时间</div>
              <a-date-picker show-time v-model:value="editingTask.dueDate" placeholder="目标完成时间" style="width: 100%" />
         </div>
       </div>
@@ -192,55 +192,57 @@
               <a-checkbox 
                 :checked="detail.isCompleted === 1" 
                 @update:checked="(val) => handleDetailCheck(detail, val)"
+                class="subtask-checkbox"
               />
               <a-input 
                 v-model:value="detail.content" 
                 :bordered="false"
                 placeholder="输入任务内容..."
-                :class="{ 'subtask-completed': detail.isCompleted === 1 }"
-                style="flex: 1; margin: 0 8px"
+                :class="['subtask-input', { 'subtask-completed': detail.isCompleted === 1 }]"
                 @blur="handleDetailBlur(detail)"
               />
-              <a-dropdown :trigger="['click']" placement="bottomRight">
-                <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; margin-right: 8px; border-radius: 4px; user-select: none;">
-                  {{ getPriorityLabel(detail.priority) }}
-                </a-tag>
-                <template #overlay>
-                  <a-menu @click="({ key }) => handlePriorityChange(detail, Number(key))">
-                    <a-menu-item key="20"><a-tag color="default" style="margin-right: 0; width: 100%; text-align: center;">低</a-tag></a-menu-item>
-                    <a-menu-item key="10"><a-tag color="warning" style="margin-right: 0; width: 100%; text-align: center;">中</a-tag></a-menu-item>
-                    <a-menu-item key="1"><a-tag color="error" style="margin-right: 0; width: 100%; text-align: center;">高</a-tag></a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
-              <a-date-picker 
-                show-time 
-                size="small" 
-                v-model:value="detail.startTime" 
-                placeholder="开始" 
-                style="width: 140px; margin-right: 4px;"
-                :bordered="false"
-                @change="handleDetailBlur(detail)"
-              />
-              <a-date-picker 
-                show-time 
-                size="small" 
-                v-model:value="detail.endTime" 
-                placeholder="结束" 
-                style="width: 140px; margin-right: 4px;"
-                :bordered="false"
-                @change="handleDetailBlur(detail)"
-              />
-              <a-popconfirm
-                title="确定要删除这条明细吗?"
-                ok-text="确定"
-                cancel-text="取消"
-                @confirm="removeDetail(index, detail)"
-              >
-                <a-button type="text" danger size="small">
-                  <template #icon><delete-outlined /></template>
-                </a-button>
-              </a-popconfirm>
+              <div class="subtask-actions">
+                <a-dropdown :trigger="['click']" placement="bottomRight">
+                  <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; border-radius: 4px; user-select: none;" class="priority-tag">
+                    {{ getPriorityLabel(detail.priority) }}
+                  </a-tag>
+                  <template #overlay>
+                    <a-menu @click="({ key }) => handlePriorityChange(detail, Number(key))">
+                      <a-menu-item key="20"><a-tag color="default" style="margin-right: 0; width: 100%; text-align: center;">低</a-tag></a-menu-item>
+                      <a-menu-item key="10"><a-tag color="warning" style="margin-right: 0; width: 100%; text-align: center;">中</a-tag></a-menu-item>
+                      <a-menu-item key="1"><a-tag color="error" style="margin-right: 0; width: 100%; text-align: center;">高</a-tag></a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
+                <a-date-picker 
+                  show-time 
+                  size="small" 
+                  v-model:value="detail.startTime" 
+                  placeholder="开始" 
+                  class="subtask-date"
+                  :bordered="false"
+                  @change="handleDetailBlur(detail)"
+                />
+                <a-date-picker 
+                  show-time 
+                  size="small" 
+                  v-model:value="detail.endTime" 
+                  placeholder="结束" 
+                  class="subtask-date"
+                  :bordered="false"
+                  @change="handleDetailBlur(detail)"
+                />
+                <a-popconfirm
+                  title="确定要删除这条明细吗?"
+                  ok-text="确定"
+                  cancel-text="取消"
+                  @confirm="removeDetail(index, detail)"
+                >
+                  <a-button type="text" danger size="small" class="subtask-delete-btn">
+                    <template #icon><delete-outlined /></template>
+                  </a-button>
+                </a-popconfirm>
+              </div>
             </div>
           </template>
         </draggable>
@@ -263,17 +265,17 @@
             auto-focus
           />
         </div>
-        <div style="display: flex; gap: 10px;">
-          <div style="flex: 1">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">优先级</div>
+        <div class="task-dates-row">
+          <div class="date-col">
+            <div class="date-label">优先级</div>
             <a-select v-model:value="newDetail.priority" style="width: 100%">
               <a-select-option :value="20" label="低"><a-tag color="default" style="margin-right: 0;">低</a-tag></a-select-option>
               <a-select-option :value="10" label="中"><a-tag color="warning" style="margin-right: 0;">中</a-tag></a-select-option>
               <a-select-option :value="1" label="高"><a-tag color="error" style="margin-right: 0;">高</a-tag></a-select-option>
             </a-select>
           </div>
-          <div style="flex: 1">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">开始时间</div>
+          <div class="date-col">
+            <div class="date-label">开始时间</div>
             <a-date-picker
               show-time
               v-model:value="newDetail.startTime"
@@ -281,8 +283,8 @@
               style="width: 100%"
             />
           </div>
-          <div style="flex: 1">
-            <div style="margin-bottom: 5px; font-size: 12px; color: #666;">结束时间</div>
+          <div class="date-col">
+            <div class="date-label">结束时间</div>
             <a-date-picker
               show-time
               v-model:value="newDetail.endTime"
@@ -998,4 +1000,90 @@ const handleEditColumnOk = async () => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* --- Responsive Styles --- */
+.task-dates-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.date-col {
+  flex: 1;
+}
+.date-label {
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.subtask-input {
+  flex: 1;
+  margin: 0 8px;
+}
+.subtask-actions {
+  display: flex;
+  align-items: center;
+}
+.priority-tag {
+  margin-right: 8px;
+}
+.subtask-date {
+  width: 140px;
+  margin-right: 4px;
+}
+
+@media (max-width: 768px) {
+  /* Task Edit Modal Responsive */
+  .task-dates-row {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .subtask-item {
+    flex-wrap: wrap;
+    background: v-bind('token.colorFillQuaternary');
+    border-radius: 8px;
+    padding: 8px;
+    margin-bottom: 12px;
+    position: relative;
+  }
+
+  .subtask-checkbox {
+    margin-right: 8px;
+  }
+
+  .subtask-input {
+    flex: 1 1 calc(100% - 60px); /* Take remaining width in top row */
+    margin: 0 0 8px 0;
+    min-width: 150px;
+  }
+
+  .subtask-actions {
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-left: 24px; /* Align with input start */
+  }
+
+  .subtask-date {
+    width: 130px; /* Give it a fixed small width on mobile instead of flex */
+    margin-right: 0;
+  }
+  
+  .priority-tag {
+    margin-right: 0;
+  }
+
+  .subtask-delete-btn {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+  }
+
+  .drag-handle {
+    opacity: 1; /* Always show handle on mobile */
+  }
+}
 </style>
