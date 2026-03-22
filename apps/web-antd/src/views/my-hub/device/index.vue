@@ -4,12 +4,14 @@ import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import {
   Button,
   Card,
+  Col,
   DatePicker,
   Form,
   Input,
   InputNumber,
   Modal,
   Popconfirm,
+  Row,
   Select,
   message,
 } from 'ant-design-vue';
@@ -31,6 +33,8 @@ export default {
     ASelect: Select,
     ASelectOption: Select.Option,
     ACard: Card,
+    ARow: Row,
+    ACol: Col,
     PlusOutlined,
     DeleteOutlined,
   },
@@ -44,12 +48,14 @@ export default {
       statusOptions: [], // 设备状态选项
       newDevice: {
         name: '',
+        spec: '',
         purchasePrice: 0,
         purchaseDate: '',
         image: '',
-        status: '1', // 默认状态为"使用中"
+        status: '1',
         purchasePlace: '',
-        orderNumber: '',
+        endDate: '',
+        remark: '',
       },
       electronics: [],
       tabList: [], // 页签列表
@@ -74,10 +80,11 @@ export default {
       this.electronics = res.items;
       this.totalDailyCost = 0;
       this.electronics.forEach((item) => {
-        item.usaDay = this.getUsageDays(item.purchaseDate);
+        item.usaDay = this.getUsageDays(item.purchaseDate, item.endDate);
         item.dailyCost = this.calculateAvgCost(
           item.purchasePrice,
           item.purchaseDate,
+          item.endDate,
         );
         this.totalDailyCost += Number.parseFloat(item.dailyCost);
       });
@@ -92,10 +99,14 @@ export default {
     showModal() {
       this.newDevice = {
         name: '',
-        purchasePrice: 0,
+        spec: '',
+        purchasePrice: null,
         purchaseDate: dayjs(),
-        payStatus: '1', // 默认状态为"使用中",
+        status: '1',
         image: '',
+        purchasePlace: '',
+        endDate: '',
+        remark: '',
         type: this.tabKey,
       };
       this.visible = true;
@@ -103,30 +114,34 @@ export default {
     showEditModal(item) {
       this.newDevice = {
         ...item,
-        // 确保日期类型一致
         purchaseDate: dayjs(item.purchaseDate),
+        endDate: item.endDate ? dayjs(item.endDate) : null,
       };
       this.visible = true;
     },
     async handleOk() {
-      // 确保日期正确格式化
-      let formattedDate = '';
+      let formattedPurchaseDate = '';
       if (this.newDevice.purchaseDate) {
-        // 如果是字符串直接使用，如果是moment对象则格式化
-        formattedDate =
+        formattedPurchaseDate =
           typeof this.newDevice.purchaseDate === 'string'
             ? this.newDevice.purchaseDate
             : this.newDevice.purchaseDate.format('YYYY-MM-DD');
       }
 
-      console.log('格式化后的日期:', formattedDate);
+      let formattedEndDate = '';
+      if (this.newDevice.endDate) {
+        formattedEndDate =
+          typeof this.newDevice.endDate === 'string'
+            ? this.newDevice.endDate
+            : this.newDevice.endDate.format('YYYY-MM-DD');
+      }
 
       const deviceData = {
         ...this.newDevice,
-        purchaseDate: formattedDate,
+        purchaseDate: formattedPurchaseDate,
+        endDate: formattedEndDate,
       };
 
-      // 调用API新增设备
       await insertOrUpdate(deviceData);
 
       this.query();
@@ -140,23 +155,27 @@ export default {
     resetForm() {
       this.newDevice = {
         name: '',
+        spec: '',
         purchasePrice: 0,
         purchaseDate: '',
         image: '',
+        purchasePlace: '',
+        endDate: '',
+        remark: '',
       };
     },
-    calculateAvgCost(price, purchaseDate) {
-      const usageDays = this.getUsageDays(purchaseDate);
-      if (usageDays <= 0) return price.toFixed(2); // 如果使用天数小于等于0，直接返回价格
-      return (price / usageDays).toFixed(2); // 保留两位小数
+    calculateAvgCost(price, purchaseDate, endDate) {
+      const usageDays = this.getUsageDays(purchaseDate, endDate);
+      if (usageDays <= 0) return price.toFixed(2);
+      return (price / usageDays).toFixed(2);
     },
 
-    getUsageDays(purchaseDate) {
+    getUsageDays(purchaseDate, endDate) {
       const purchase = new Date(purchaseDate);
-      const now = new Date();
-      const diffTime = now - purchase;
+      const end = endDate ? new Date(endDate) : new Date();
+      const diffTime = end - purchase;
       const days = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-      return days <= 0 ? 1 : days; // 确保除数不为0
+      return days <= 0 ? 1 : days;
     },
 
     getStatusClass(status) {
@@ -273,19 +292,39 @@ export default {
           <AFormItem label="设备名称">
             <AInput v-model:value="newDevice.name" />
           </AFormItem>
+          <AFormItem label="配置">
+            <AInput
+              v-model:value="newDevice.spec"
+              placeholder=""
+            />
+          </AFormItem>
           <AFormItem label="价格">
             <AInputNumber
               v-model:value="newDevice.purchasePrice"
               style="width: 100%"
             />
           </AFormItem>
-          <AFormItem label="购买日期">
-            <ADatePicker
-              format="YYYY-MM-DD"
-              v-model:value="newDevice.purchaseDate"
-              style="width: 100%"
-            />
-          </AFormItem>
+          <a-row :gutter="16">
+            <a-col :span="12">
+              <AFormItem label="购买日期">
+                <ADatePicker
+                  format="YYYY-MM-DD"
+                  v-model:value="newDevice.purchaseDate"
+                  style="width: 100%"
+                />
+              </AFormItem>
+            </a-col>
+            <a-col :span="12">
+              <AFormItem label="退役日期">
+                <ADatePicker
+                  format="YYYY-MM-DD"
+                  v-model:value="newDevice.endDate"
+                  style="width: 100%"
+                  placeholder="留空则计算至今日"
+                />
+              </AFormItem>
+            </a-col>
+          </a-row>
           <AFormItem label="设备类型">
             <ASelect
               v-model:value="newDevice.type"
@@ -306,8 +345,13 @@ export default {
           <AFormItem label="购买平台">
             <AInput v-model:value="newDevice.purchasePlace" />
           </AFormItem>
-          <AFormItem label="订单号">
-            <AInput v-model:value="newDevice.orderNumber" />
+          <AFormItem label="备注">
+            <AInput
+              v-model:value="newDevice.remark"
+              type="textarea"
+              :rows="3"
+              placeholder="其他备注信息"
+            />
           </AFormItem>
         </AForm>
       </AModal>
@@ -365,6 +409,7 @@ export default {
           </div>
           <div class="card-content">
             <h3>{{ item.name }}</h3>
+            <p v-if="item.spec" class="spec">{{ item.spec }}</p>
             <p class="price">价格: {{ item.purchasePrice }}</p>
             <p class="purchase-date">购买时间: {{ item.purchaseDate }}</p>
             <p class="usage-days">已使用: {{ item.usaDay }} 天</p>
@@ -527,8 +572,14 @@ export default {
 }
 
 .card-content h3 {
-  margin: 0 0 10px 0;
+  margin: 0 0 5px 0;
   font-size: 18px;
+}
+
+.spec {
+  color: #888;
+  font-size: 12px;
+  margin: 0 0 5px 0;
 }
 
 .price {
