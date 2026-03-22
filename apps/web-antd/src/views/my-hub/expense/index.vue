@@ -1057,18 +1057,7 @@ const handleUpdateSuccess = async (updatedRow: any) => {
   overflow: hidden;
 }
 
-/* 表格容器样式 */
-:deep(.vxe-grid) {
-  overflow: auto;
-}
 
-:deep(.vxe-table--body-wrapper) {
-  overflow-x: auto;
-}
-
-:deep(.vxe-table--header-wrapper) {
-  overflow-x: hidden;
-}
 
 .total-card {
   background: linear-gradient(135deg, #f093fb 0%, #764ba2 50%, #667eea 100%);

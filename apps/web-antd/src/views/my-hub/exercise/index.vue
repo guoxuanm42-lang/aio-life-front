@@ -531,7 +531,7 @@ const handleCellClick = (params: any) => {
 const gridOptions: VxeGridProps<RowType> = {
   border: true, // 表格是否显示边框
   stripe: true, // 是否显示斑马纹
-  maxHeight: 800, // 表格最大高度
+  maxHeight: 600, // 表格最大高度
   checkboxConfig: {
     isShiftKey: true,
   },
@@ -542,7 +542,7 @@ const gridOptions: VxeGridProps<RowType> = {
   },
   columns: [
     { type: 'checkbox', title: '', width: 40 },
-    { title: '序号', type: 'seq', width: 50 },
+    { title: '序号', type: 'seq', width: 50, visible: !isMobile.value },
     { title: '主键', visible: false },
     {
       field: 'exerciseTypeId',
@@ -594,6 +594,7 @@ const gridOptions: VxeGridProps<RowType> = {
       headerAlign: 'center',
       align: 'center',
       width: 180,
+      visible: !isMobile.value,
     },
     {
       field: 'action',
@@ -601,6 +602,7 @@ const gridOptions: VxeGridProps<RowType> = {
       fixed: 'right',
       title: '操作',
       width: 100,
+      visible: !isMobile.value,
     },
     {
       field: 'mobileCard',
@@ -690,7 +692,7 @@ const updateColumnsVisibility = () => {
       showHeader: true, // 手机端也显示表头
       border: !mobile, // 手机端不显示边框，保持简洁
       stripe: !mobile,
-      maxHeight: mobile ? '' : 800,
+      maxHeight: mobile ? 800 : 800,
       size: mobile ? 'mini' : 'small', // 手机端使用更紧凑的尺寸
       rowClassName: mobile ? 'mobile-row' : '',
     },
@@ -709,8 +711,11 @@ const updateColumnsVisibility = () => {
       if (mobile) {
         col.width = col.field === 'exerciseDate' ? 100 : 'auto';
       }
-    } else if (col.type === 'checkbox' || col.type === 'seq' || col.field === 'action') {
-      // 手机端隐藏复选框、序号、操作列以节省空间
+    } else if (col.field === 'action' || col.field === 'updateTime') {
+      // 手机端隐藏操作列和修改时间列以节省空间
+      col.visible = !mobile;
+    } else if (col.type === 'checkbox' || col.type === 'seq') {
+      // 手机端隐藏复选框、序号列
       col.visible = !mobile;
     } else {
       // 隐藏其他所有列
@@ -877,18 +882,6 @@ const tableReload = () => {
   margin-bottom: 12px;
 }
 
-/* 表格容器样式 */
-:deep(.vxe-grid) {
-  overflow: auto;
-}
-
-:deep(.vxe-table--body-wrapper) {
-  overflow-x: auto;
-}
-
-:deep(.vxe-table--header-wrapper) {
-  overflow-x: hidden;
-}
 
 :deep(.mobile-card-col) {
   padding: 0 !important;
