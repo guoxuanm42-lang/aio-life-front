@@ -4,7 +4,7 @@
       <span class="text-lg font-bold">公共分类管理</span>
     </template>
 
-    <div class="p-4 space-y-4">
+    <div class="space-y-4">
       <Card title="公共分类列表" :bordered="false">
         <template #extra>
           <Button type="primary" @click="handleAddCategory">
@@ -20,6 +20,19 @@
           :pagination="false"
           row-key="id"
         >
+          <template #headerCell="{ column }">
+            <template v-if="column.key === 'isTrackTime'">
+              <span>
+                卡片统计
+                <Tooltip title="开启后，将在卡片上展示统计数据">
+                  <InfoCircleOutlined class="text-gray-400 ml-1 cursor-help" />
+                </Tooltip>
+              </span>
+            </template>
+            <template v-else>
+              {{ column.title }}
+            </template>
+          </template>
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'icon'">
               <div class="flex justify-center items-center">
@@ -35,33 +48,48 @@
               <div
                 class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                 :style="{
-                  backgroundColor: record.color + '20',
+                  backgroundColor: record.color + '10',
                   color: record.color,
                   borderWidth: '1px',
                   borderStyle: 'solid',
-                  borderColor: record.color + '40'
+                  borderColor: record.color + '20'
                 }"
               >
                 {{ record.name }}
               </div>
             </template>
             <template v-else-if="column.key === 'isTrackTime'">
-              <Badge :status="record.isTrackTime ? 'processing' : 'default'" :text="record.isTrackTime ? '是' : '否'" />
+              <Switch
+                :checked="record.isTrackTime === 1"
+                :loading="loadingCategoryId === record.id"
+                size="small"
+                @change="(checked: boolean) => handleToggleTrackTime(record, checked)"
+              />
+            </template>
+            <template v-else-if="column.key === 'isEnabled'">
+              <Switch
+                :checked="record.isEnabled === 1"
+                :loading="loadingCategoryId === record.id"
+                size="small"
+                @change="(checked: boolean) => handleToggleEnable(record, checked)"
+              />
             </template>
             <template v-else-if="column.key === 'action'">
               <div class="flex justify-center gap-2">
-                <Button type="link" size="small" @click="handleEditCategory(record)">
-                  <EditOutlined />
-                  编辑
-                </Button>
+                <Tooltip title="编辑">
+                  <Button type="link" size="small" @click="handleEditCategory(record)">
+                    <template #icon><EditOutlined /></template>
+                  </Button>
+                </Tooltip>
                 <Popconfirm
                   title="确定要删除此分类吗？删除后所有用户的覆盖设置将失效，原始分类将消失。"
                   @confirm="handleDeleteCategory(record)"
                 >
-                  <Button type="link" size="small" danger>
-                    <DeleteOutlined />
-                    删除
-                  </Button>
+                  <Tooltip title="删除">
+                    <Button type="link" size="small" danger>
+                      <template #icon><DeleteOutlined /></template>
+                    </Button>
+                  </Tooltip>
                 </Popconfirm>
               </div>
             </template>
@@ -94,7 +122,10 @@
               v-model:value="formState.color"
               placeholder="请输入颜色值（如 #1890ff）"
             />
-            <div class="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded border transition-transform hover:scale-110">
+            <div 
+              class="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded border transition-transform hover:scale-110"
+              :style="{ backgroundColor: formState.color }"
+            >
               <input
                 type="color"
                 :value="formState.color"
@@ -168,9 +199,17 @@
           <Input.TextArea v-model:value="formState.description" placeholder="请输入描述" :rows="3" />
         </Form.Item>
 
-        <Form.Item label="追踪时间" name="isTrackTime">
+        <Form.Item label="卡片统计" name="isTrackTime">
           <Switch
             v-model:checked="formState.isTrackTime"
+            :checked-value="1"
+            :un-checked-value="0"
+          />
+        </Form.Item>
+
+        <Form.Item label="是否启用" name="isEnabled">
+          <Switch
+            v-model:checked="formState.isEnabled"
             :checked-value="1"
             :un-checked-value="0"
           />
@@ -225,12 +264,14 @@ import {
   Select,
   Switch,
   Table,
+  Tooltip,
   message,
 } from 'ant-design-vue';
 import {
   PlusOutlined,
   EditOutlined,
   DeleteOutlined,
+  InfoCircleOutlined,
 } from '@ant-design/icons-vue';
 import {
   adminListCategories,
@@ -247,13 +288,15 @@ import {
 
 const loading = ref(false);
 const submitting = ref(false);
+const loadingCategoryId = ref<string | null>(null);
 const publicCategories = ref<TimeTrackerCategoryEntity[]>([]);
 
 const columns = [
   { title: '排序', dataIndex: 'sort', key: 'sort', width: 80 },
   { title: '图标', dataIndex: 'icon', key: 'icon', width: 80, align: 'center' },
   { title: '名称', dataIndex: 'name', key: 'name', width: 180, align: 'center' },
-  { title: '追踪时间', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
+  { title: '卡片统计', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
+  { title: '是否启用', dataIndex: 'isEnabled', key: 'isEnabled', width: 100, align: 'center' },
   { title: '操作', key: 'action', width: 150, align: 'center' },
 ];
 
@@ -291,6 +334,7 @@ const formState = ref<TimeTrackerCategoryEntity>({
   icon: '',
   description: '',
   isTrackTime: 1,
+  isEnabled: 1,
   sort: 0,
 });
 
@@ -310,6 +354,7 @@ const handleAddCategory = () => {
     icon: '',
     description: '',
     isTrackTime: 1,
+    isEnabled: 1,
     sort: publicCategories.value.length * 10,
   };
   editModalVisible.value = true;
@@ -336,6 +381,35 @@ const handleDeleteCategory = async (record: TimeTrackerCategoryEntity) => {
   } catch (error) {
     console.error('Failed to delete category:', error);
     message.error('删除失败');
+  }
+};
+
+const handleToggleEnable = async (record: TimeTrackerCategoryEntity, checked: boolean) => {
+  if (!record.id) return;
+  try {
+    loadingCategoryId.value = record.id;
+    const newVal = checked ? 1 : 0;
+    await adminUpdateCategory({ ...record, isEnabled: newVal });
+    fetchCategories();
+  } catch (error) {
+    console.error('Failed to toggle enable:', error);
+    message.error('操作失败');
+  } finally {
+    loadingCategoryId.value = null;
+  }
+};
+
+const handleToggleTrackTime = async (record: TimeTrackerCategoryEntity, checked: boolean) => {
+  if (!record.id) return;
+  try {
+    loadingCategoryId.value = record.id;
+    const newVal = checked ? 1 : 0;
+    await adminUpdateCategory({ ...record, isTrackTime: newVal });
+    fetchCategories();
+  } catch (error) {
+    console.error('Failed to toggle track time:', error);
+  } finally {
+    loadingCategoryId.value = null;
   }
 };
 

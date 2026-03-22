@@ -9,7 +9,7 @@
       </div>
     </template>
     
-    <div class="p-2 sm:p-4 space-y-4">
+    <div class="space-y-4">
 
       <!-- 分类列表区域 -->
       <Card title="我的分类" :bordered="false" class="category-section" :headStyle="{ padding: '0 12px' }" :bodyStyle="{ padding: '12px' }">
@@ -33,6 +33,19 @@
           :scroll="{ x: 560 }"
           size="middle"
         >
+          <template #headerCell="{ column }">
+            <template v-if="column.key === 'isTrackTime'">
+              <span>
+                卡片统计
+                <Tooltip title="开启后，将在卡片上展示统计数据">
+                  <InfoCircleOutlined class="text-gray-400 ml-1 cursor-help" />
+                </Tooltip>
+              </span>
+            </template>
+            <template v-else>
+              {{ column.title }}
+            </template>
+          </template>
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'drag'">
               <HolderOutlined class="drag-handle cursor-move text-gray-400" />
@@ -51,44 +64,52 @@
               <div 
                 class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
                 :style="{
-                  backgroundColor: record.color + '20',
+                  backgroundColor: record.color + '10',
                   color: record.color,
                   borderWidth: '1px',
                   borderStyle: 'solid',
-                  borderColor: record.color + '40'
+                  borderColor: record.color + '20'
                 }"
               >
                 {{ record.name }}
               </div>
             </template>
             <template v-else-if="column.key === 'isTrackTime'">
-              <Badge :status="record.isTrackTime ? 'processing' : 'default'" :text="record.isTrackTime ? '是' : '否'" />
+              <Switch
+                :checked="record.isTrackTime"
+                :loading="loadingCategoryId === record.realId"
+                size="small"
+                @change="(checked: boolean) => handleToggleTrackTime(record, checked)"
+              />
             </template>
             <template v-else-if="column.key === 'actions'">
               <div class="flex justify-center gap-2">
-                <Button type="link" size="small" @click="handleEditClick(record)">
-                  <EditOutlined />
-                  编辑
-                </Button>
-                <Popconfirm
-                  v-if="record.categoryType === 'public'"
-                  title="确定要隐藏此分类吗？您可以随时在下方恢复。"
-                  @confirm="handleHide(record)"
-                >
-                  <Button type="link" size="small" danger>
-                    <EyeInvisibleOutlined />
-                    隐藏
+                <Tooltip title="编辑">
+                  <Button type="link" size="small" @click="handleEditClick(record)">
+                    <template #icon><EditOutlined /></template>
                   </Button>
-                </Popconfirm>
+                </Tooltip>
+                <Tooltip title="隐藏" v-if="record.categoryType === 'public'">
+                  <Button 
+                    type="link" 
+                    size="small" 
+                    danger
+                    :loading="loadingCategoryId === record.realId"
+                    @click="handleHide(record)"
+                  >
+                    <template #icon><EyeInvisibleOutlined /></template>
+                  </Button>
+                </Tooltip>
                 <Popconfirm
-                  v-else
+                  v-if="record.categoryType !== 'public'"
                   title="确定要删除这个分类吗？删除后相关的时间记录将保留但分类信息将丢失。"
                   @confirm="handleDelete(record)"
                 >
-                  <Button type="link" size="small" danger>
-                    <DeleteOutlined />
-                    删除
-                  </Button>
+                  <Tooltip title="删除">
+                    <Button type="link" size="small" danger>
+                      <template #icon><DeleteOutlined /></template>
+                    </Button>
+                  </Tooltip>
                 </Popconfirm>
               </div>
             </template>
@@ -102,10 +123,23 @@
               <Tag 
                 v-for="cat in hiddenCategories" 
                 :key="cat.id"
-                closable 
-                @close="handleUnhide(cat)"
+                class="cursor-pointer inline-flex items-center gap-1 py-1 hover:opacity-80"
+                :style="{
+                  backgroundColor: cat.color ? cat.color + '10' : undefined,
+                  borderColor: cat.color ? cat.color + '20' : undefined,
+                  color: cat.color || undefined
+                }"
+                @click="handleUnhide(cat)"
               >
-                {{ cat.originalName || cat.name }} (点击恢复)
+                <component 
+                  v-if="cat.icon" 
+                  :is="getCategoryIcon(cat.icon)" 
+                  class="size-3.5" 
+                />
+                <span>{{ cat.originalName || cat.name }}</span>
+                <span class="text-blue-500 ml-1 inline-flex items-center gap-0.5">
+                  <UndoOutlined />恢复
+                </span>
               </Tag>
             </div>
           </Collapse.Panel>
@@ -137,7 +171,10 @@
               v-model:value="formState.color"
               placeholder="请输入颜色值（如 #1890ff）"
             />
-            <div class="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded border transition-transform hover:scale-110">
+            <div 
+              class="relative h-8 w-8 shrink-0 cursor-pointer overflow-hidden rounded border transition-transform hover:scale-110"
+              :style="{ backgroundColor: formState.color }"
+            >
               <input
                 type="color"
                 :value="formState.color"
@@ -207,7 +244,7 @@
           </div>
         </Form.Item>
 
-        <Form.Item label="追踪时间" name="isTrackTime">
+        <Form.Item label="卡片统计" name="isTrackTime">
           <Switch
             v-model:checked="formState.isTrackTime"
             :checked-value="1"
@@ -276,6 +313,7 @@ import {
   HolderOutlined,
   InfoCircleOutlined,
   PlusOutlined,
+  UndoOutlined,
 } from '@ant-design/icons-vue';
 import { useSortable } from '@vben/hooks';
 
@@ -300,6 +338,7 @@ const router = useRouter();
 
 // 状态
 const loading = ref(false);
+const loadingCategoryId = ref<string | null>(null);
 const categories = ref<TimeTrackerCategoryEntity[]>([]);
 const mergedCategories = ref<MergedCategory[]>([]);
 const showGuide = ref(localStorage.getItem('time-tracker-category-guide') !== 'false');
@@ -313,7 +352,7 @@ const columns = [
   { title: '', dataIndex: 'drag', key: 'drag', width: 50, align: 'center' },
   { title: '图标', dataIndex: 'icon', key: 'icon', width: 80, align: 'center' },
   { title: '名称', dataIndex: 'name', key: 'name', width: 180, align: 'center' },
-  { title: '追踪时间', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
+  { title: '卡片统计', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
   { title: '操作', key: 'actions', width: 150, align: 'center' },
 ];
 
@@ -341,6 +380,7 @@ const formState = ref<TimeTrackerCategoryEntity>({
   icon: '',
   description: '',
   isTrackTime: 1,
+  isEnabled: 1,
   sort: 0,
 });
 
@@ -427,6 +467,7 @@ const handleAddCategory = () => {
     icon: '',
     description: '',
     isTrackTime: 1,
+    isEnabled: 1,
     sort: visibleCategories.value.length * 10,
   };
   showEditModal.value = true;
@@ -448,6 +489,7 @@ const handleEdit = (record: MergedCategory) => {
     icon: record.icon,
     description: record.description,
     isTrackTime: record.isTrackTime ? 1 : 0,
+    isEnabled: record.isHidden ? 0 : 1,
     sort: record.sort,
   };
   isOverrideMode.value = false;
@@ -465,6 +507,7 @@ const handleOverride = (record: MergedCategory) => {
     icon: record.icon,
     description: record.description,
     isTrackTime: record.isTrackTime ? 1 : 0,
+    isEnabled: record.isHidden ? 0 : 1,
     sort: record.sort,
   };
   isOverrideMode.value = true;
@@ -475,19 +518,48 @@ const handleOverride = (record: MergedCategory) => {
 
 const handleHide = async (record: MergedCategory) => {
   try {
+    loadingCategoryId.value = record.realId!;
     await updateCategory({
       id: record.realId!,
+      templateId: record.originalId,
       isEnabled: 0,
     } as TimeTrackerCategoryEntity);
     message.success('已隐藏');
     fetchCategories();
   } catch (error) {
     message.error('隐藏失败');
+  } finally {
+    loadingCategoryId.value = null;
+  }
+};
+
+const handleToggleEnable = async (record: MergedCategory, checked: boolean) => {
+  if (checked) {
+    await handleUnhide(record);
+  } else {
+    await handleHide(record);
+  }
+};
+
+const handleToggleTrackTime = async (record: MergedCategory, checked: boolean) => {
+  try {
+    loadingCategoryId.value = record.realId!;
+    await updateCategory({
+      id: record.realId!,
+      templateId: record.originalId,
+      isTrackTime: checked ? 1 : 0,
+    } as TimeTrackerCategoryEntity);
+    fetchCategories();
+  } catch (error) {
+    message.error('操作失败');
+  } finally {
+    loadingCategoryId.value = null;
   }
 };
 
 const handleUnhide = async (record: MergedCategory) => {
   try {
+    loadingCategoryId.value = record.realId!;
     await updateCategory({
       id: record.realId!,
       templateId: record.originalId,
@@ -497,6 +569,8 @@ const handleUnhide = async (record: MergedCategory) => {
     fetchCategories();
   } catch (error) {
     message.error('恢复失败');
+  } finally {
+    loadingCategoryId.value = null;
   }
 };
 

@@ -70,7 +70,7 @@ const presetModels = [
     apiKeyUrl: 'https://platform.deepseek.com/api_keys',
     baseUrl: 'https://api.deepseek.com',
     label: 'DeepSeek',
-    modelListUrl: 'https://api-docs.deepseek.com/zh-cn/information/models',
+    modelListUrl: 'https://api-docs.deepseek.com/zh-cn/quick_start/pricing',
     value: 'deepseek-chat',
   },
   {
