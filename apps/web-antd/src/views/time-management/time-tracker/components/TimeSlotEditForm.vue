@@ -16,8 +16,9 @@
             :value="category.id"
           >
             <div class="category-option">
-              <div class="color-indicator" :style="{ backgroundColor: getDisplayColor(category) }"></div>
-              <span class="flex-1 truncate">{{ getDisplayName(category) }}</span>
+              <span class="color-dot" :style="{ backgroundColor: getDisplayColor(category) }"></span>
+              <component v-if="getDisplayIcon(category)" :is="getDisplayIcon(category)" class="category-icon" />
+              <span class="flex-1 truncate category-name">{{ getDisplayName(category) }}</span>
             </div>
           </Select.Option>
         </Select>
@@ -264,7 +265,8 @@ import type { FormInstance } from 'ant-design-vue';
 import type { TimeSlot, TimeSlotCategory, MergedCategory, TimeSlotFormData, ExerciseDetail } from '../types';
 import { timeToMinutes, minutesToTime, getAboveSlotEndTime, getBelowSlotStartTime } from '../utils';
 import { getByDictType } from '#/api/core/common';
-import { getCategoryColor, getCategoryName } from '../config';
+import { getCategoryColor, getCategoryName, getCategoryIconById } from '../config';
+import { createIconifyIcon } from '@vben/icons';
 import dayjs from 'dayjs';
 
 interface Props {
@@ -295,6 +297,20 @@ const getDisplayColor = (category: TimeSlotCategory | MergedCategory) => {
 // 获取显示名称
 const getDisplayName = (category: TimeSlotCategory | MergedCategory) => {
   return getCategoryName(category.id, props.categories);
+};
+
+// 获取显示图标
+const getDisplayIcon = (category: TimeSlotCategory | MergedCategory) => {
+  const iconName = getCategoryIconById(category.id, props.categories);
+  if (iconName) {
+    try {
+      return createIconifyIcon(iconName);
+    } catch (error) {
+      console.warn(`Failed to create icon: ${iconName}`, error);
+      return null;
+    }
+  }
+  return null;
 };
 
 // 本地表单状态接口，时间字段使用 Dayjs
@@ -721,13 +737,25 @@ onUnmounted(() => {
 .category-option {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
-.color-indicator {
-  width: 12px;
-  height: 12px;
+.color-dot {
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.category-icon {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: #666;
+}
+
+.category-name {
+  color: #333;
 }
 
 .duration-display {

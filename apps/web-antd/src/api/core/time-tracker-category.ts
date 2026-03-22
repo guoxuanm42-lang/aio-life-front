@@ -9,6 +9,7 @@ export interface TimeTrackerCategoryEntity {
   templateId?: string | null;  // 新增：模板ID，指向被覆盖的公共分类ID
   name: string;
   color: string;
+  icon?: string;  // 图标名称(Iconify格式)
   description?: string;
   isTrackTime?: number;
   sort?: number;

@@ -115,6 +115,7 @@
                     >
                       <div class="slot-content">
                         <div class="slot-info" :style="isMobile ? { flexDirection: 'column', alignItems: 'center', gap: '0' } : {}">
+                          <component v-if="getSlotIcon(slot) && shouldShowSlotIcon(slot)" :is="getSlotIcon(slot)" class="slot-icon" />
                           <span class="slot-title">{{ getSlotTitle(slot) }}</span>
                           <span class="slot-time" :style="isMobile ? { fontSize: '10px', lineHeight: '1.2' } : { marginLeft: '4px', fontSize: '11px' }">
                             {{ formatDuration(slot.endTime - slot.startTime) }}
@@ -172,6 +173,7 @@
                     >
                       <div class="slot-content">
                         <div class="slot-info">
+                          <component v-if="getSlotIcon(slot) && shouldShowSlotIcon(slot)" :is="getSlotIcon(slot)" class="slot-icon" />
                           <span class="slot-title">{{ getSlotTitle(slot) }}</span>
                           <span v-if="slot.endTime - slot.startTime > 60" class="slot-time" style="margin-left: 2px; font-size: 10px;">
                             {{ formatDuration(slot.endTime - slot.startTime) }}
@@ -227,6 +229,7 @@
                   >
                     <div class="slot-content">
                       <div class="slot-info">
+                        <component v-if="getSlotIcon(slot) && shouldShowSlotIcon(slot)" :is="getSlotIcon(slot)" class="slot-icon" />
                         <span class="slot-title">{{ getSlotTitle(slot) }}</span>
                         <span class="slot-time">
                           {{ formatSlotTime(slot) }}
@@ -416,6 +419,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 import { SettingOutlined, PlusOutlined, LeftOutlined, RightOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 import { Button, Modal, message, DatePicker, Spin, Radio, theme } from 'ant-design-vue';
+import { createIconifyIcon } from '@vben/icons';
 import { useRouter } from 'vue-router';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
@@ -518,6 +522,7 @@ const loadCategories = async () => {
           realId: item.id as string, // 保留真实的数据库 ID
           name: item.name,
           color: item.color,
+          icon: item.icon,
           description: item.description,
           isTrackTime: item.isTrackTime === 1,
           categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
@@ -1032,6 +1037,26 @@ const getSlotTitle = (slot: TimeSlot) => {
   if (slot.title) return slot.title;
   const category = config.value.categories.find((cat) => cat.id === slot.categoryId);
   return category?.name || '未知分类';
+};
+
+// 获取时间段的分类图标
+const getSlotIcon = (slot: TimeSlot) => {
+  const category = config.value.categories.find((cat) => cat.id === slot.categoryId);
+  if (category?.icon) {
+    try {
+      return createIconifyIcon(category.icon);
+    } catch (error) {
+      console.warn(`Failed to create icon: ${category.icon}`, error);
+      return null;
+    }
+  }
+  return null;
+};
+
+// 判断时间槽是否应该显示图标（时间太短时不显示，避免拥挤）
+const shouldShowSlotIcon = (slot: TimeSlot) => {
+  const slotClass = getSlotClass(slot);
+  return !slotClass; // 只有当 slotClass 为空（即高度 >= 40）时才显示图标
 };
 
 // 获取时间轴高度
@@ -2218,6 +2243,12 @@ const getDaySlots = (date: string): TimeSlot[] => {
   font-size: 12px;
   opacity: 0.9;
   white-space: nowrap;
+}
+
+.slot-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
 }
 
 .resize-handle {

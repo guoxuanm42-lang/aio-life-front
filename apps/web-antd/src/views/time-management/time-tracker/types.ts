@@ -21,6 +21,7 @@ export interface TimeSlotCategory {
   id: string;
   name: string;
   color: string;
+  icon?: string;  // 图标名称(Iconify格式)
   description?: string;
   isTrackTime?: boolean;
   // 新增字段
@@ -37,6 +38,7 @@ export interface MergedCategory extends TimeSlotCategory {
   overrideFields?: {
     name?: string;
     color?: string;
+    icon?: string;  // 图标字段
     sort?: number;
   };
 }
@@ -47,6 +49,7 @@ export interface CategoryConfigItem {
   templateId?: string | null;
   name: string;
   color: string;
+  icon?: string;  // 图标名称(Iconify格式)
   description?: string;
   isTrackTime: boolean;
   sort: number;

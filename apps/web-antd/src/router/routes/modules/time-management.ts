@@ -48,7 +48,7 @@ const routes: RouteRecordRaw[] = [
       {
         meta: {
           icon: 'mdi:shield-account-outline',
-          title: '分类管理(Admin)',
+          title: '分类管理（管理员）',
           backTop: false,
           authority: ['admin'],
         },

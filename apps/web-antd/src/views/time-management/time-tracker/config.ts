@@ -1,3 +1,5 @@
+import { createIconifyIcon } from '@vben/icons';
+
 import type { TimeTrackerConfig, TimeSlotCategory, MergedCategory } from './types';
 import type { TimeTrackerCategoryEntity } from '#/api/core/time-tracker-category';
 
@@ -25,6 +27,55 @@ export const CATEGORY_COLOR_PRESETS = [
   '#a0d911', // 草绿
   '#2f54eb', // 宝蓝
 ];
+
+// 预设图标列表
+export const PRESET_ICONS = [
+  { icon: 'lucide:book', label: '学习' },
+  { icon: 'lucide:briefcase', label: '工作' },
+  { icon: 'lucide:moon', label: '休息' },
+  { icon: 'lucide:coffee', label: '咖啡' },
+  { icon: 'lucide:apple', label: '水果' },
+  { icon: 'lucide:dumbbell', label: '运动' },
+  { icon: 'lucide:music', label: '音乐' },
+  { icon: 'lucide:clapperboard', label: '电影' },
+  { icon: 'lucide:book-open', label: '阅读' },
+  { icon: 'lucide:home', label: '家务' },
+  { icon: 'lucide:car', label: '出行' },
+  { icon: 'lucide:shopping-cart', label: '购物' },
+  { icon: 'lucide:heart-pulse', label: '健康' },
+  { icon: 'lucide:users', label: '社交' },
+  { icon: 'lucide:star', label: '重要' },
+  { icon: 'lucide:heart', label: '喜欢' },
+  { icon: 'lucide:gamepad-2', label: '游戏' },
+  { icon: 'lucide:code', label: '编程' },
+  { icon: 'lucide:pencil', label: '写作' },
+  { icon: 'lucide:beer', label: '饮品' },
+  { icon: 'lucide:bed-double', label: '睡眠' },
+  { icon: 'lucide:smartphone', label: '手机' },
+  { icon: 'lucide:monitor', label: '追剧' },
+  { icon: 'lucide:utensils', label: '餐饮' },
+];
+
+// 获取分类图标的渲染组件
+export function getCategoryIcon(icon: string | undefined) {
+  if (!icon) return null;
+  try {
+    return createIconifyIcon(icon);
+  } catch (error) {
+    console.warn(`Failed to create icon: ${icon}`, error);
+    return null;
+  }
+}
+
+// 从图标名称提取图标集前缀
+export function extractIconSet(icon: string | undefined): string {
+  if (!icon) return 'lucide';
+  if (icon.includes(':')) {
+    const parts = icon.split(':');
+    return parts[0] || 'lucide';
+  }
+  return 'lucide';
+}
 
 // 判断是否为覆盖记录
 export function isOverrideRecord(category: TimeTrackerCategoryEntity): boolean {
@@ -63,6 +114,18 @@ export function getCategoryName(categoryId: string, categories: (TimeSlotCategor
     return (category as MergedCategory).overrideFields!.name!;
   }
   return category.name;
+}
+
+// 获取分类图标（考虑覆盖）
+export function getCategoryIconById(categoryId: string, categories: (TimeSlotCategory | MergedCategory)[]): string | undefined {
+  const category = categories.find(cat => cat.id === categoryId);
+  if (!category) return undefined;
+  
+  // 如果有图标覆盖，使用覆盖后的图标
+  if ('isOverridden' in category && category.isOverridden && (category as MergedCategory).overrideFields?.icon) {
+    return (category as MergedCategory).overrideFields!.icon!;
+  }
+  return category.icon;
 }
 
 // 合并公共分类和用户覆盖记录
@@ -108,9 +171,9 @@ export function mergeCategoriesWithOverrides(
       id: pubCat.id!,
       name: override?.name || pubCat.name,
       color: override?.color || pubCat.color,
+      icon: override?.icon || pubCat.icon,
       description: override?.description || pubCat.description,
       isTrackTime: !!(override?.isTrackTime ?? pubCat.isTrackTime),
-      // 注意：这里由于原始分类没有 sort，如果是使用覆盖后的排序，可能需要取 override 的 sort
       categoryType: 'public',
       originalId: pubCat.id!,
       originalName: pubCat.name,
@@ -119,6 +182,7 @@ export function mergeCategoriesWithOverrides(
       overrideFields: isOverridden ? {
         name: override?.name !== pubCat.name ? override.name : undefined,
         color: override?.color !== pubCat.color ? override.color : undefined,
+        icon: override?.icon !== pubCat.icon ? override.icon : undefined,
         sort: override?.sort !== pubCat.sort ? override.sort : undefined,
       } : undefined,
     });
@@ -130,6 +194,7 @@ export function mergeCategoriesWithOverrides(
       id: privCat.id!,
       name: privCat.name,
       color: privCat.color,
+      icon: privCat.icon,
       description: privCat.description,
       isTrackTime: !!privCat.isTrackTime,
       categoryType: 'private',
@@ -152,6 +217,7 @@ export function generateOverrideRecord(
     templateId: publicCategory.id!,
     name: changes.name ?? publicCategory.name,
     color: changes.color ?? publicCategory.color,
+    icon: changes.icon ?? publicCategory.icon,
     description: changes.description ?? publicCategory.description,
     isTrackTime: changes.isTrackTime ?? publicCategory.isTrackTime,
     sort: changes.sort,

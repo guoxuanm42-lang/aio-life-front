@@ -9,29 +9,16 @@
       </div>
     </template>
     
-    <div class="p-4 space-y-4">
-      <Alert
-        v-if="showGuide"
-        type="info"
-        show-icon
-        closable
-        @close="handleCloseGuide"
-      >
-        <template #message>
-          <b>欢迎使用分类自定义功能</b>
-        </template>
-        <template #description>
-          <ul class="list-disc pl-4 mt-1">
-            <li>您可以自定义分类的名称、颜色和排序。</li>
-            <li>如果不使用某些分类，您可以将其隐藏，稍后可以随时恢复。</li>
-          </ul>
-        </template>
-      </Alert>
+    <div class="p-2 sm:p-4 space-y-4">
 
       <!-- 分类列表区域 -->
-      <Card title="我的分类" :bordered="false" class="category-section">
+      <Card title="我的分类" :bordered="false" class="category-section" :headStyle="{ padding: '0 12px' }" :bodyStyle="{ padding: '12px' }">
         <template #extra>
-          <Button type="primary" @click="handleAddCategory">
+          <Button type="primary" size="small" class="sm:hidden" @click="handleAddCategory">
+            <template #icon><PlusOutlined /></template>
+            添加
+          </Button>
+          <Button type="primary" class="hidden sm:inline-flex" @click="handleAddCategory">
             <template #icon><PlusOutlined /></template>
             添加分类
           </Button>
@@ -43,18 +30,35 @@
           :loading="loading"
           :pagination="false"
           row-key="id"
+          :scroll="{ x: 560 }"
+          size="middle"
         >
           <template #bodyCell="{ column, record }">
             <template v-if="column.key === 'drag'">
               <HolderOutlined class="drag-handle cursor-move text-gray-400" />
             </template>
-            <template v-else-if="column.key === 'name'">
-              <span>{{ record.name }}</span>
+            <template v-else-if="column.key === 'icon'">
+              <div class="flex justify-center items-center">
+                <component 
+                  v-if="record.icon" 
+                  :is="getCategoryIcon(record.icon)" 
+                  class="size-5" 
+                />
+                <span v-else class="text-gray-400 text-xs">无</span>
+              </div>
             </template>
-            <template v-else-if="column.key === 'color'">
-              <div class="flex items-center justify-center gap-2">
-                <div class="h-5 w-5 rounded border" :style="{ backgroundColor: record.color }"></div>
-                <span class="font-mono text-xs">{{ record.color }}</span>
+            <template v-else-if="column.key === 'name'">
+              <div 
+                class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium"
+                :style="{
+                  backgroundColor: record.color + '20',
+                  color: record.color,
+                  borderWidth: '1px',
+                  borderStyle: 'solid',
+                  borderColor: record.color + '40'
+                }"
+              >
+                {{ record.name }}
               </div>
             </template>
             <template v-else-if="column.key === 'isTrackTime'">
@@ -153,6 +157,56 @@
           </div>
         </Form.Item>
 
+        <Form.Item label="图标" name="icon">
+          <div class="space-y-3">
+            <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+              <div class="text-xs text-gray-500 mb-2">常用图标（点击选择）</div>
+              <div class="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-1">
+                <div
+                  v-for="item in PRESET_ICONS"
+                  :key="item.icon"
+                  class="flex flex-col items-center justify-center p-2 rounded cursor-pointer transition-all hover:bg-white hover:shadow-sm"
+                  :class="{ 'bg-blue-50 ring-2 ring-blue-500': formState.icon === item.icon }"
+                  @click="formState.icon = item.icon"
+                >
+                  <component 
+                    :is="getCategoryIcon(item.icon)" 
+                    class="size-5 mb-1"
+                  />
+                  <span class="text-xs text-gray-600 truncate w-full text-center">{{ item.label }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <Button 
+              type="link" 
+              size="small" 
+              @click="showIconPickerModal = true"
+            >
+              📋 选择更多图标...
+            </Button>
+            
+            <div 
+              v-if="formState.icon" 
+              class="flex items-center gap-2 p-2 bg-gray-50 rounded"
+            >
+              <component 
+                :is="getCategoryIcon(formState.icon)" 
+                class="size-6 shrink-0"
+              />
+              <Input
+                v-model:value="formState.icon"
+                placeholder="输入图标名称，如 lucide:code"
+                class="flex-1"
+                size="small"
+              />
+              <Button type="link" size="small" danger @click="formState.icon = ''">
+                清除
+              </Button>
+            </div>
+          </div>
+        </Form.Item>
+
         <Form.Item label="追踪时间" name="isTrackTime">
           <Switch
             v-model:checked="formState.isTrackTime"
@@ -162,13 +216,41 @@
         </Form.Item>
       </Form>
     </Modal>
+
+    <!-- 图标选择器模态框 -->
+    <Modal
+      v-model:open="showIconPickerModal"
+      title="选择图标"
+      :footer="null"
+      :width="800"
+      style="max-width: 100%"
+    >
+      <div class="flex flex-col gap-4">
+        <Select 
+          v-model:value="selectedIconSet" 
+          class="w-full sm:w-[200px]"
+          placeholder="选择图标集"
+        >
+          <Select.Option value="lucide">Lucide Icons</Select.Option>
+          <Select.Option value="ant-design">Ant Design Icons</Select.Option>
+          <Select.Option value="mdi">Material Design Icons</Select.Option>
+          <Select.Option value="fluent-emoji">Fluent Emoji（彩色）</Select.Option>
+          <Select.Option value="noto-color">Noto Emoji（彩色）</Select.Option>
+        </Select>
+        <IconPicker 
+          :prefix="selectedIconSet"
+          @select="handleIconSelect"
+        />
+      </div>
+    </Modal>
   </Page>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, nextTick } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { Page } from '@vben/common-ui';
+import { IconPicker } from '@vben/common-ui';
 import {
   Alert,
   Badge,
@@ -179,6 +261,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Select,
   Switch,
   Table,
   Tag,
@@ -205,7 +288,12 @@ import {
   updateCategory,
 } from '#/api/core/time-tracker-category';
 import type { TimeTrackerCategoryEntity } from '#/api/core/time-tracker-category';
-import { CATEGORY_COLOR_PRESETS } from '../config';
+import {
+  CATEGORY_COLOR_PRESETS,
+  extractIconSet,
+  getCategoryIcon,
+  PRESET_ICONS,
+} from '../config';
 import type { MergedCategory } from '../types';
 
 const router = useRouter();
@@ -223,8 +311,8 @@ const hiddenCategories = computed(() => mergedCategories.value.filter(c => c.isH
 // 表格列配置
 const columns = [
   { title: '', dataIndex: 'drag', key: 'drag', width: 50, align: 'center' },
-  { title: '名称', dataIndex: 'name', key: 'name', width: 150 },
-  { title: '颜色', dataIndex: 'color', key: 'color', width: 150, align: 'center' },
+  { title: '图标', dataIndex: 'icon', key: 'icon', width: 80, align: 'center' },
+  { title: '名称', dataIndex: 'name', key: 'name', width: 180, align: 'center' },
   { title: '追踪时间', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
   { title: '操作', key: 'actions', width: 150, align: 'center' },
 ];
@@ -232,13 +320,25 @@ const columns = [
 // 表单相关
 const formRef = ref();
 const showEditModal = ref(false);
+const showIconPickerModal = ref(false);
 const submitLoading = ref(false);
 const editingCategory = ref<TimeTrackerCategoryEntity | null>(null);
 const isOverrideMode = ref(false);
+const selectedIconSet = ref('lucide');
+
+const openIconPicker = () => {
+  showIconPickerModal.value = true;
+};
+
+const handleIconSelect = (icon: string) => {
+  formState.value.icon = icon;
+  showIconPickerModal.value = false;
+};
 
 const formState = ref<TimeTrackerCategoryEntity>({
   name: '',
   color: CATEGORY_COLOR_PRESETS[0] || '#1890ff',
+  icon: '',
   description: '',
   isTrackTime: 1,
   sort: 0,
@@ -279,6 +379,7 @@ const fetchCategories = async () => {
         realId: item.id as string,
         name: item.name,
         color: item.color,
+        icon: item.icon,
         description: item.description,
         isTrackTime: item.isTrackTime === 1,
         categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
@@ -295,6 +396,7 @@ const fetchCategories = async () => {
         realId: item.templateId as string || item.id,
         name: item.name,
         color: item.color,
+        icon: item.icon,
         description: item.description,
         isTrackTime: item.isTrackTime === 1,
         categoryType: 'public',
@@ -318,9 +420,11 @@ const fetchCategories = async () => {
 const handleAddCategory = () => {
   editingCategory.value = null;
   isOverrideMode.value = false;
+  selectedIconSet.value = 'ant-design';
   formState.value = {
     name: '',
     color: CATEGORY_COLOR_PRESETS[0] || '#1890ff',
+    icon: '',
     description: '',
     isTrackTime: 1,
     sort: visibleCategories.value.length * 10,
@@ -341,11 +445,13 @@ const handleEdit = (record: MergedCategory) => {
     id: record.realId,
     name: record.name,
     color: record.color,
+    icon: record.icon,
     description: record.description,
     isTrackTime: record.isTrackTime ? 1 : 0,
     sort: record.sort,
   };
   isOverrideMode.value = false;
+  selectedIconSet.value = extractIconSet(record.icon);
   formState.value = { ...editingCategory.value };
   showEditModal.value = true;
 };
@@ -356,11 +462,13 @@ const handleOverride = (record: MergedCategory) => {
     templateId: record.originalId,
     name: record.name,
     color: record.color,
+    icon: record.icon,
     description: record.description,
     isTrackTime: record.isTrackTime ? 1 : 0,
     sort: record.sort,
   };
   isOverrideMode.value = true;
+  selectedIconSet.value = extractIconSet(record.icon);
   formState.value = { ...editingCategory.value };
   showEditModal.value = true;
 };
