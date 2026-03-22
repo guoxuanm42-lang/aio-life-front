@@ -117,7 +117,7 @@
                         <div class="slot-info" :style="isMobile ? { flexDirection: 'column', alignItems: 'center', gap: '0' } : {}">
                           <component v-if="getSlotIcon(slot) && shouldShowSlotIcon(slot)" :is="getSlotIcon(slot)" class="slot-icon" />
                           <span class="slot-title">{{ getSlotTitle(slot) }}</span>
-                          <span class="slot-time" :style="isMobile ? { fontSize: '10px', lineHeight: '1.2' } : { marginLeft: '4px', fontSize: '11px' }">
+                          <span class="slot-time" :style="isMobile ? { fontSize: '10px', lineHeight: '1.2' } : { fontSize: '11px' }">
                             {{ formatDuration(slot.endTime - slot.startTime) }}
                           </span>
                         </div>
@@ -175,7 +175,7 @@
                         <div class="slot-info">
                           <component v-if="getSlotIcon(slot) && shouldShowSlotIcon(slot)" :is="getSlotIcon(slot)" class="slot-icon" />
                           <span class="slot-title">{{ getSlotTitle(slot) }}</span>
-                          <span v-if="slot.endTime - slot.startTime > 60" class="slot-time" style="margin-left: 2px; font-size: 10px;">
+                          <span v-if="slot.endTime - slot.startTime > 60" class="slot-time" style="font-size: 10px;">
                             {{ formatDuration(slot.endTime - slot.startTime) }}
                           </span>
                         </div>
@@ -276,21 +276,14 @@
               >
                 <span class="stat-label-corner">{{ comp.name }}</span>
                 <div
+                  class="stat-diff-corner"
                   :style="{
-                    position: 'absolute',
-                    top: '12px',
-                    right: '14px',
                     color:
                       comp.diff === 0
                         ? '#8c8c8c'
                         : comp.diff > 0
                           ? token.colorError
                           : token.colorSuccess,
-                    fontSize: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    fontWeight: 'normal',
-                    zIndex: 2,
                   }"
                 >
                   <span v-if="comp.diff !== 0" style="margin-right: 2px">
@@ -2042,6 +2035,11 @@ const getDaySlots = (date: string): TimeSlot[] => {
   padding: 3px;
 }
 
+.month-day-track .slot-info {
+  flex-direction: column;
+  gap: 2px;
+}
+
 .month-day-track .slot-title {
   font-size: 11px;
   line-height: 1.2;
@@ -2119,6 +2117,11 @@ const getDaySlots = (date: string): TimeSlot[] => {
 
 .week-day-track .slot-content {
   padding: 4px;
+}
+
+.week-day-track .slot-info {
+  flex-direction: column;
+  gap: 2px;
 }
 
 .week-day-track .slot-title {
@@ -2222,6 +2225,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   justify-content: center;
   color: white;
   font-weight: 500;
+  overflow: hidden;
 }
 
 .slot-info {
@@ -2331,6 +2335,18 @@ const getDaySlots = (date: string): TimeSlot[] => {
   line-height: 1;
   z-index: 2; /* 确保在背景之上 */
   text-shadow: 0 0 4px v-bind('token.colorBgElevated'); /* 增加文字光晕，提高在复杂背景下的可读性 */
+}
+
+.stat-diff-corner {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  font-weight: normal;
+  z-index: 2;
+  text-shadow: 0 0 4px v-bind('token.colorBgElevated');
 }
 
 .stat-value-center {
@@ -2546,15 +2562,32 @@ const getDaySlots = (date: string): TimeSlot[] => {
   }
 
   .stats-cards-group {
-    flex-direction: row;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
     width: 100%;
-    justify-content: space-between;
-    flex-wrap: wrap;
   }
 
   .stat-square-card {
-    flex: 1;
     min-width: 0;
+    width: 100%;
+    height: 80px;
+  }
+
+  .stat-label-corner {
+    font-size: 12px;
+    top: 8px;
+    left: 10px;
+  }
+
+  .stat-diff-corner {
+    font-size: 11px;
+    top: 8px;
+    right: 10px;
+  }
+
+  .stat-value-center {
+    font-size: 15px;
   }
 }
 
