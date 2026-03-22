@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { TimeSlot, TimeSlotCategory } from '../types';
+import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
+import { getCategoryColor, getCategoryName } from '../config';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -10,7 +11,7 @@ import dayjs from 'dayjs';
 
 interface Props {
   timeSlots: TimeSlot[];
-  categories: TimeSlotCategory[];
+  categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   statMode: 'month' | 'week';
   selectedFilterCategoryIds: null | string[];
@@ -100,11 +101,11 @@ const renderChart = () => {
   });
 
   const series = filteredCategories.map(cat => ({
-    name: cat.name,
+    name: getCategoryName(cat.id, props.categories),
     type: 'bar',
     stack: 'total',
     data: seriesData[cat.id],
-    itemStyle: { color: cat.color },
+    itemStyle: { color: getCategoryColor(cat.id, props.categories) },
     label: {
       show: true,
       position: 'inside',

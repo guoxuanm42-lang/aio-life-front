@@ -23,6 +23,35 @@ export interface TimeSlotCategory {
   color: string;
   description?: string;
   isTrackTime?: boolean;
+  // 新增字段
+  categoryType?: 'public' | 'private';  // 分类来源类型
+  originalId?: string;  // 原始公共分类ID（仅覆盖记录）
+  originalName?: string;  // 原始公共分类名称
+  isOverridden?: boolean;  // 是否被当前用户覆盖
+}
+
+// 合并后的分类列表（用于前端展示）
+export interface MergedCategory extends TimeSlotCategory {
+  realId?: string; // 真实的数据库主键 ID
+  isHidden: boolean; // 是否被当前用户隐藏
+  overrideFields?: {
+    name?: string;
+    color?: string;
+    sort?: number;
+  };
+}
+
+// 分类配置项（用于表单）
+export interface CategoryConfigItem {
+  id?: string;
+  templateId?: string | null;
+  name: string;
+  color: string;
+  description?: string;
+  isTrackTime: boolean;
+  sort: number;
+  categoryType: 'public' | 'private' | 'override';
+  originalPublicId?: string;  // 原始公共分类ID
 }
 
 // 时间轴配置

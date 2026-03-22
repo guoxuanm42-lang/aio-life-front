@@ -25,18 +25,6 @@ const routes: RouteRecordRaw[] = [
       },
       {
         meta: {
-          icon: 'mdi:cog-outline',
-          title: '分类配置',
-          backTop: false,
-          hideInMenu: true,
-        },
-        name: 'TimeTrackerCategoryConfig',
-        path: '/time-management/time-tracker/category-config',
-        component: () =>
-          import('#/views/time-management/time-tracker/category-config/index.vue'),
-      },
-      {
-        meta: {
           icon: 'mdi:view-dashboard-outline',
           title: '看板',
           backTop: false,
@@ -45,6 +33,29 @@ const routes: RouteRecordRaw[] = [
         name: 'TimeTrackerDashboard',
         path: '/time-management/dashboard',
         component: () => import('#/views/time-management/dashboard/index.vue'),
+      },
+      {
+        meta: {
+          icon: 'mdi:tag-multiple-outline',
+          title: '我的分类',
+          backTop: false,
+        },
+        name: 'CategoryConfig',
+        path: '/time-management/my-categories',
+        component: () =>
+          import('#/views/time-management/time-tracker/category-config/index.vue'),
+      },
+      {
+        meta: {
+          icon: 'mdi:shield-account-outline',
+          title: '分类管理(Admin)',
+          backTop: false,
+          authority: ['admin'],
+        },
+        name: 'TimeTrackerCategoryAdmin',
+        path: '/time-management/category-admin',
+        component: () =>
+          import('#/views/time-management/time-tracker/admin/index.vue'),
       },
     ],
   },

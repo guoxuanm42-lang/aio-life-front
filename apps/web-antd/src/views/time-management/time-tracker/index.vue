@@ -510,13 +510,23 @@ const loadCategories = async () => {
   try {
     const data = await listCategories();
     if (data) {
-      config.value.categories = data.map((cat) => ({
-        id: cat.code,
-        name: cat.name,
-        color: cat.color,
-        description: cat.description,
-        isTrackTime: !!cat.isTrackTime,
-      }));
+      config.value.categories = data.map((item) => {
+        const isPublic = Number(item.userId) === 0;
+        const isOverride = !!item.templateId;
+        return {
+          id: item.id as string, // 保持与历史记录一致，使用 id 作为分类标识
+          realId: item.id as string, // 保留真实的数据库 ID
+          name: item.name,
+          color: item.color,
+          description: item.description,
+          isTrackTime: item.isTrackTime === 1,
+          categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
+          isOverridden: isOverride,
+          isHidden: false,
+          originalId: item.templateId?.toString() || item.id,
+          sort: item.sort,
+        };
+      });
 
       // 如果当前默认分类不在新加载的分类中，则将第一个分类设为默认分类
       if (

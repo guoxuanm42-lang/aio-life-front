@@ -197,13 +197,19 @@ const loadCategories = async () => {
   try {
     const data = await listCategories();
     if (data) {
-      categories.value = data.map((cat) => ({
-        id: cat.code || '',
-        name: cat.name,
-        color: cat.color,
-        description: cat.description || '',
-        isTrackTime: !!cat.isTrackTime,
-      }));
+      categories.value = data.map((cat) => {
+        const isPublic = Number(cat.userId) === 0;
+        const isOverride = !!cat.templateId;
+        return {
+          id: cat.id || '',
+          name: cat.name,
+          color: cat.color,
+          description: cat.description || '',
+          isTrackTime: !!cat.isTrackTime,
+          categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
+          isOverridden: isOverride,
+        };
+      }) as any;
     }
   } catch (error) {
     console.error('加载分类配置失败:', error);

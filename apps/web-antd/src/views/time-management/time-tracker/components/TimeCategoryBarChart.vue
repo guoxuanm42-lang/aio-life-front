@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import type { TimeSlot, TimeSlotCategory } from '../types';
+import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
+import { getCategoryColor, getCategoryName } from '../config';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -12,7 +13,7 @@ import dayjs from 'dayjs';
 
 interface Props {
   timeSlots: TimeSlot[];
-  categories: TimeSlotCategory[];
+  categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   selectedFilterCategoryIds?: string[] | null;
 }
@@ -53,10 +54,10 @@ const barChartData = computed(() => {
       const total = categoryDurations.value[category.id] || 0;
       const avg = Math.round(total / divisor);
       return {
-        name: category.name,
+        name: getCategoryName(category.id, props.categories),
         value: avg,
         total,
-        itemStyle: { color: category.color }
+        itemStyle: { color: getCategoryColor(category.id, props.categories) }
       };
     })
     .filter(item => item.total > 0)

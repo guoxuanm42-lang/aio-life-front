@@ -11,13 +11,13 @@
       <Form.Item label="分类" name="categoryId">
         <Select v-model:value="formState.categoryId" placeholder="请选择分类" @change="(value) => handleCategoryChange(value as string)">
           <Select.Option
-            v-for="category in categories"
+            v-for="category in visibleCategories"
             :key="category.id"
             :value="category.id"
           >
             <div class="category-option">
-              <div class="color-indicator" :style="{ backgroundColor: category.color }"></div>
-              {{ category.name }}
+              <div class="color-indicator" :style="{ backgroundColor: getDisplayColor(category) }"></div>
+              <span class="flex-1 truncate">{{ getDisplayName(category) }}</span>
             </div>
           </Select.Option>
         </Select>
@@ -258,17 +258,18 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Form, Input, Select, TimePicker, Button, message, Row, Col, Textarea, InputNumber, Popconfirm } from 'ant-design-vue';
+import { Form, Input, Select, TimePicker, Button, message, Row, Col, Textarea, InputNumber, Popconfirm, Tag } from 'ant-design-vue';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import type { FormInstance } from 'ant-design-vue';
-import type { TimeSlot, TimeSlotCategory, TimeSlotFormData, ExerciseDetail } from '../types';
+import type { TimeSlot, TimeSlotCategory, MergedCategory, TimeSlotFormData, ExerciseDetail } from '../types';
 import { timeToMinutes, minutesToTime, getAboveSlotEndTime, getBelowSlotStartTime } from '../utils';
 import { getByDictType } from '#/api/core/common';
+import { getCategoryColor, getCategoryName } from '../config';
 import dayjs from 'dayjs';
 
 interface Props {
   slot: TimeSlot;
-  categories: TimeSlotCategory[];
+  categories: (TimeSlotCategory | MergedCategory)[];
   existingSlots?: TimeSlot[];
 }
 
@@ -280,6 +281,21 @@ interface Emits {
 
 const props = defineProps<Props>();
 const emit = defineEmits<Emits>();
+
+// 分类计算属性
+const visibleCategories = computed(() => {
+  return props.categories.filter(c => !('isHidden' in c && c.isHidden));
+});
+
+// 获取显示颜色
+const getDisplayColor = (category: TimeSlotCategory | MergedCategory) => {
+  return getCategoryColor(category.id, props.categories);
+};
+
+// 获取显示名称
+const getDisplayName = (category: TimeSlotCategory | MergedCategory) => {
+  return getCategoryName(category.id, props.categories);
+};
 
 // 本地表单状态接口，时间字段使用 Dayjs
 interface LocalFormState {

@@ -9,11 +9,12 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { Card } from 'ant-design-vue';
 import dayjs from 'dayjs';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
-import type { TimeSlot, TimeSlotCategory } from '../types';
+import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
+import { getCategoryColor, getCategoryName } from '../config';
 
 interface Props {
   timeSlots: TimeSlot[];
-  categories: TimeSlotCategory[];
+  categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   statMode: 'day' | 'week' | 'month';
   selectedFilterCategoryIds?: string[] | null;
@@ -150,7 +151,7 @@ const renderChart = () => {
 
   const series = filteredCategories.map(category => {
     return {
-      name: category.name,
+      name: getCategoryName(category.id, props.categories),
       type: 'line',
       stack: 'Total',
       areaStyle: {},
@@ -159,7 +160,7 @@ const renderChart = () => {
       },
       data: seriesData[category.id] || [],
       itemStyle: {
-        color: category.color
+        color: getCategoryColor(category.id, props.categories)
       },
       showSymbol: false,
       smooth: false

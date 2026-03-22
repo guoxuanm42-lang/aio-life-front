@@ -6,7 +6,8 @@
 
 <script setup lang="ts">
 import type { EchartsUIType } from '@vben/plugins/echarts';
-import type { TimeSlot, TimeSlotCategory } from '../types';
+import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
+import { getCategoryColor, getCategoryName } from '../config';
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { Card } from 'ant-design-vue';
@@ -15,7 +16,7 @@ import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 interface Props {
   timeSlots: TimeSlot[];
-  categories: TimeSlotCategory[];
+  categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   selectedFilterCategoryIds?: string[] | null;
 }
@@ -50,10 +51,10 @@ const pieChartData = computed(() => {
   const data = props.categories.map(category => {
     const duration = categoryDurations.value[category.id] || 0;
     return {
-      name: category.name,
+      name: getCategoryName(category.id, props.categories),
       value: duration,
       itemStyle: {
-        color: category.color
+        color: getCategoryColor(category.id, props.categories)
       }
     };
   }).filter(item => item.value > 0); // 只显示有数据的分类
