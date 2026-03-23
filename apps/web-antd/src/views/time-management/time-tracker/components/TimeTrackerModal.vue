@@ -92,43 +92,16 @@ const open = async (slot?: TimeSlot, date?: string, contextExistingSlots?: TimeS
   
   const targetDate = slot?.date || date || dayjs().format('YYYY-MM-DD');
 
-  if (contextExistingSlots) {
-    existingSlots.value = contextExistingSlots;
-  } else {
-    try {
-      const res = await query({ condition: { date: targetDate } });
-      existingSlots.value = Array.isArray(res) ? res : res.items || [];
-    } catch (e) {
-      console.error('获取已有记录失败:', e);
-      existingSlots.value = [];
-    }
-  }
-
+  // 同步初始化 editingSlot，让页面能立即撑开
   if (isEditMode.value && slot) {
-    // 编辑模式
     editingSlot.value = { ...slot };
-    try {
-      const detail = await getById(slot.id);
-      if (detail && editingSlot.value && editingSlot.value.id === slot.id) {
-        editingSlot.value = {
-          ...editingSlot.value,
-          ...detail,
-          exercises: detail.exercises || []
-        };
-      }
-    } catch (error) {
-      console.error('获取详情失败', error);
-    } finally {
-      loading.value = false;
-    }
   } else {
-    // 新增模式
     let initialCategoryId = defaultConfig.defaultCategoryId;
     if (categories.value.length > 0 && !categories.value.find(c => c.id === initialCategoryId)) {
       initialCategoryId = categories.value[0]?.id || initialCategoryId;
     }
 
-    const newSlot: TimeSlot = {
+    editingSlot.value = {
       id: generateId(),
       startTime: 0,
       endTime: 30,
@@ -138,30 +111,62 @@ const open = async (slot?: TimeSlot, date?: string, contextExistingSlots?: TimeS
       date: targetDate,
       exercises: []
     };
-    editingSlot.value = newSlot;
+  }
 
-    try {
-      const result = await recommendNext({ date: targetDate });
-      if (result) {
-        const { recommend } = result;
-        if (recommend) {
+  // 异步加载数据
+  const promises: Promise<void>[] = [];
+
+  if (contextExistingSlots) {
+    existingSlots.value = contextExistingSlots;
+  } else {
+    promises.push(
+      query({ condition: { date: targetDate } }).then(res => {
+        existingSlots.value = Array.isArray(res) ? res : res.items || [];
+      }).catch(e => {
+        console.error('获取已有记录失败:', e);
+        existingSlots.value = [];
+      })
+    );
+  }
+
+  if (isEditMode.value && slot) {
+    // 编辑模式：获取详情
+    promises.push(
+      getById(slot.id).then(detail => {
+        if (detail && editingSlot.value && editingSlot.value.id === slot.id) {
           editingSlot.value = {
-            ...newSlot,
-            id: recommend.id || newSlot.id,
-            startTime: recommend.startTime,
-            endTime: recommend.endTime,
-            categoryId: recommend.categoryId,
-            title: '',
-            date: recommend.date || targetDate,
+            ...editingSlot.value,
+            ...detail,
+            exercises: detail.exercises || []
           };
         }
-      }
-    } catch (e) {
-      console.error('Failed to initialize modal:', e);
-    } finally {
-      loading.value = false;
-    }
+      }).catch(error => {
+        console.error('获取详情失败', error);
+      })
+    );
+  } else {
+    // 新增模式：获取推荐
+    promises.push(
+      recommendNext({ date: targetDate }).then(result => {
+        if (result && result.recommend && editingSlot.value) {
+          editingSlot.value = {
+            ...editingSlot.value,
+            id: result.recommend.id || editingSlot.value.id,
+            startTime: result.recommend.startTime,
+            endTime: result.recommend.endTime,
+            categoryId: result.recommend.categoryId,
+            title: '',
+            date: result.recommend.date || targetDate,
+          };
+        }
+      }).catch(e => {
+        console.error('Failed to initialize modal:', e);
+      })
+    );
   }
+
+  await Promise.all(promises);
+  loading.value = false;
 };
 
 const handleCancel = () => {
