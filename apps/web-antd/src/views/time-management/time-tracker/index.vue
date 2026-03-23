@@ -361,25 +361,10 @@
     </div>
 
     <!-- 时间段编辑模态框 -->
-    <Modal
-      v-model:open="showEditModal"
-      :title="editModalTitle"
-      :width="isMobile ? '95vw' : 600"
-      :footer="null"
-      @cancel="handleEditCancel"
-    >
-      <Spin :spinning="modalLoading" tip="">
-        <TimeSlotEditForm
-          v-if="editingSlot"
-          :slot="editingSlot"
-          :categories="config.categories"
-          :existing-slots="timeSlots"
-          @save="handleSaveSlot"
-          @delete="handleDeleteSlot"
-          @cancel="handleEditCancel"
-        />
-      </Spin>
-    </Modal>
+    <TimeTrackerModal
+      ref="timeTrackerModalRef"
+      @success="handleModalSuccess"
+    />
 
 
 
@@ -417,7 +402,7 @@ import { useRouter } from 'vue-router';
 import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isoWeek from 'dayjs/plugin/isoWeek';
-import type { TimeSlot, TimeSlotCategory, DragOperation } from './types';
+import type { TimeSlot, DragOperation } from './types';
 
 import { defaultConfig } from './config';
 import {
@@ -429,10 +414,9 @@ import {
   getSlotPosition,
   getTimeFromPosition,
   hasOverlap,
-  isValidSlot,
   snapToGrid,
 } from './utils';
-import TimeSlotEditForm from './components/TimeSlotEditForm.vue';
+import TimeTrackerModal from './components/TimeTrackerModal.vue';
 import TimeCategoryPieChart from './components/TimeCategoryPieChart.vue';
 import TimeCategoryStackedAreaChart from './components/TimeCategoryStackedAreaChart.vue';
 import TimeCategoryBarChart from './components/TimeCategoryBarChart.vue';
@@ -441,11 +425,8 @@ import DailyStatsPieChart from './components/DailyStatsPieChart.vue';
 import CategoryFilter from './components/CategoryFilter.vue';
 import {
   deleteByDate,
-  deleteData,
-  getById,
   query,
   queryForWeek,
-  recommendNext,
   recommendType,
   save,
   update,
@@ -472,8 +453,7 @@ const timeSlots = ref<TimeSlot[]>([]);
 const previousPeriodTimeSlots = ref<TimeSlot[]>([]);
 const dragOperation = ref<DragOperation | null>(null);
 const selectedFilterCategoryIds = ref<string[]>([]);
-const showEditModal = ref(false);
-const editingSlot = ref<null | TimeSlot>(null);
+const timeTrackerModalRef = ref();
 const currentTime = ref(0);
 const selectedDate = ref(dayjs());
 const loading = ref(false);
@@ -773,17 +753,6 @@ const getCurrentSelectedDate = () => {
   }
   return selectedDate.value.format('YYYY-MM-DD');
 };
-
-// 编辑模态框标题
-const editModalTitle = computed(() => {
-  if (!editingSlot.value) return '编辑时间段';
-
-  // 判断是新增还是编辑：如果时间段ID在现有时间段中不存在，则是新增
-  const isExisting = timeSlots.value.some(
-    (slot) => slot.id === editingSlot.value?.id,
-  );
-  return isExisting ? '编辑时间段' : '新增时间段';
-});
 
 // 生命周期
 onMounted(async () => {
@@ -1542,164 +1511,18 @@ const handleResizeStartPointer = (
   window.addEventListener('touchend', handleTrackPointerUp);
 };
 
-const modalLoading = ref(false);
-
 const handleSlotClick = async (slot: TimeSlot) => {
   if (dragOperation.value) return; // 防止拖拽后触发点击
-
-  editingSlot.value = { ...slot };
-  showEditModal.value = true;
-
-  modalLoading.value = true;
-  try {
-      const detail = await getById(slot.id);
-      if (detail && editingSlot.value && editingSlot.value.id === slot.id) {
-          editingSlot.value = {
-              ...editingSlot.value,
-              ...detail,
-              exercises: detail.exercises || []
-          };
-      }
-  } catch (error) {
-      console.error('获取详情失败', error);
-  } finally {
-      modalLoading.value = false;
-  }
+  timeTrackerModalRef.value?.open(slot, undefined, timeSlots.value);
 };
 
 const handleAddSlot = async () => {
   const currentDate = getCurrentSelectedDate();
-
-  // 先初始化一个默认的时间段，让弹窗显示出来
-  const initialCategoryId = config.value.defaultCategoryId;
-  const newSlot: TimeSlot = {
-    id: generateId(),
-    startTime: 0,
-    endTime: 30,
-    categoryId: initialCategoryId,
-    title: '',
-    description: '',
-    date: currentDate,
-  };
-  editingSlot.value = newSlot;
-  showEditModal.value = true;
-
-  // 开始异步加载推荐数据
-  modalLoading.value = true;
-  try {
-    const result = await recommendNext({ date: currentDate });
-
-    // 更新时间段数据
-    if (editingSlot.value && editingSlot.value.id === newSlot.id) {
-      const { recommend } = result;
-      if (recommend) {
-        editingSlot.value = {
-          ...editingSlot.value,
-          startTime: recommend.startTime,
-          endTime: recommend.endTime,
-          categoryId: recommend.categoryId,
-          title: '',
-          date: recommend.date || currentDate,
-        };
-      }
-    }
-  } catch (error) {
-    console.error('获取推荐失败', error);
-    // 失败时保持默认值，不需要额外操作
-  } finally {
-    modalLoading.value = false;
-  }
+  timeTrackerModalRef.value?.open(undefined, currentDate, timeSlots.value);
 };
 
-const handleSaveSlot = (formData: any) => {
-  const index = timeSlots.value.findIndex((slot) => slot.id === formData.id);
-
-  if (index === -1) {
-    // 新增时间段
-    const currentDate = getCurrentSelectedDate();
-
-    const newSlot: TimeSlot = {
-      id: formData.id,
-      startTime: formData.startTime,
-      endTime: formData.endTime,
-      categoryId: formData.categoryId,
-      title: formData.title,
-      description: formData.description || '',
-      date: currentDate,
-      exercises: formData.exercises,
-    };
-
-    // 检查重叠时，只考虑同一天内的时间段
-    const sameDaySlots = timeSlots.value.filter(
-      (slot: TimeSlot) => slot.date === currentDate,
-    );
-
-    if (
-      isValidSlot(newSlot) &&
-      !hasOverlap(sameDaySlots, newSlot)
-    ) {
-      timeSlots.value.push(newSlot);
-      save(newSlot as any);
-      showEditModal.value = false;
-    } else {
-      message.error('时间段无效或重叠');
-    }
-  } else {
-    // 编辑现有时间段
-    const updatedSlot = { ...timeSlots.value[index], ...formData };
-
-    // 检查重叠时，只考虑同一天内的时间段
-    const sameDaySlots = timeSlots.value.filter(
-      (slot: TimeSlot) =>
-        slot.date === updatedSlot.date && slot.id !== formData.id,
-    );
-
-    if (
-      isValidSlot(updatedSlot) &&
-      !hasOverlap(sameDaySlots, updatedSlot)
-    ) {
-      timeSlots.value[index] = updatedSlot;
-      update(updatedSlot)
-        .then(() => {
-          showEditModal.value = false;
-        })
-        .catch((error) => {
-          console.error('更新失败:', error);
-          message.error('更新失败');
-        });
-    } else {
-      message.error('时间段无效或重叠');
-    }
-  }
-};
-
-const handleDeleteSlot = async (slotId: string) => {
-  try {
-    loading.value = true;
-    await deleteData({ id: slotId });
-    timeSlots.value = timeSlots.value.filter((slot) => slot.id !== slotId);
-    showEditModal.value = false;
-    message.success('删除成功');
-  } catch (error) {
-    console.error('删除失败:', error);
-    message.error('删除失败');
-  } finally {
-    loading.value = false;
-  }
-};
-
-const handleEditCancel = () => {
-  showEditModal.value = false;
-  editingSlot.value = null;
-};
-
-// 工具函数
-const getCategoryName = (
-  categoryId: string,
-  categories: TimeSlotCategory[],
-) => {
-  const category = categories.find((cat) => cat.id === categoryId);
-  return category?.name || '未知';
+const handleModalSuccess = () => {
+  loadData();
 };
 
 // 获取某天的时间段数据

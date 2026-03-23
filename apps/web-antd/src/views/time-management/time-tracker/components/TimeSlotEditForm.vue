@@ -9,7 +9,7 @@
     >
 
       <Form.Item label="分类" name="categoryId">
-        <Select v-model:value="formState.categoryId" placeholder="请选择分类" @change="(value) => handleCategoryChange(value as string)">
+        <Select v-model:value="formState.categoryId" placeholder="请选择分类" @change="handleCategoryChange">
           <Select.Option
             v-for="category in visibleCategories"
             :key="category.id"
@@ -239,7 +239,7 @@
       <Form.Item>
         <div class="form-actions">
           <Popconfirm
-            v-if="formState.id"
+            v-if="isExistingSlot"
             title="确定要删除此时间段吗？"
             ok-text="确定"
             cancel-text="取消"
@@ -259,7 +259,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Form, Input, Select, TimePicker, Button, message, Row, Col, Textarea, InputNumber, Popconfirm, Tag } from 'ant-design-vue';
+import { Form, Input, Select, TimePicker, Button, message, Row, Col, Textarea, InputNumber, Popconfirm } from 'ant-design-vue';
 import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
 import type { FormInstance } from 'ant-design-vue';
 import type { TimeSlot, TimeSlotCategory, MergedCategory, TimeSlotFormData, ExerciseDetail } from '../types';
@@ -343,6 +343,15 @@ const isExerciseCategory = computed(() => {
   if (!categoryId) return false;
   const category = props.categories.find((c) => c.id === categoryId);
   return category?.name === '运动' || categoryId === 'exercise';
+});
+
+// 判断是否为已有时间段
+const isExistingSlot = computed(() => {
+  if (!formState.value.id) return false;
+  if (props.existingSlots) {
+    return props.existingSlots.some(slot => slot.id === formState.value.id);
+  }
+  return true; // 如果没有提供 existingSlots，默认如果 id 存在则认为是已有的
 });
 
 // 加载运动类型
@@ -548,7 +557,7 @@ watch(() => props.slot, (newSlot, oldSlot) => {
 }, { immediate: true });
 
 // 处理分类变化
-const handleCategoryChange = (categoryId: string) => {
+const handleCategoryChange = () => {
   // 不再自动填充标题，展示逻辑会处理 fallback
   if (isExerciseCategory.value && formState.value.exercises.length === 0) {
     formState.value.exercises = [

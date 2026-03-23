@@ -19,7 +19,7 @@ import {
 } from '#/constants/action';
 
 import ExerciseAddModal from '../../my-hub/exercise/components/ExerciseAddModal.vue';
-import TimeTrackerAddModal from '../../time-management/time-tracker/components/TimeTrackerAddModal.vue';
+import TimeTrackerModal from '../../time-management/time-tracker/components/TimeTrackerModal.vue';
 import AnalysisCard from './components/analysis-card.vue';
 
 interface OverviewItem {
@@ -338,7 +338,7 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
         />
       </div>
     </div>
-    <TimeTrackerAddModal
+    <TimeTrackerModal
       ref="timeTrackerModalRef"
       @success="handleTimeTrackerSuccess"
     />
