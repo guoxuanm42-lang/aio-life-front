@@ -10,6 +10,7 @@ import ProfilePasswordSetting from './password-setting.vue';
 import UserBindSetting from './user-bind.vue';
 import ApiKeySetting from './api-key-setting.vue';
 import LLMSetting from './llm-setting.vue';
+import MbtiSetting from './mbti-setting.vue';
 
 const userStore = useUserStore();
 
@@ -36,6 +37,10 @@ const tabs = ref([
     label: '大模型配置',
     value: 'llm',
   },
+  {
+    label: 'MBTI测试',
+    value: 'mbti',
+  },
   // {
   //   label: '新消息提醒',
   //   value: 'notice',
@@ -55,6 +60,7 @@ const tabs = ref([
       <ProfilePasswordSetting v-if="tabsValue === 'password'" />
       <ApiKeySetting v-if="tabsValue === 'api-key'" />
       <LLMSetting v-if="tabsValue === 'llm'" />
+      <MbtiSetting v-if="tabsValue === 'mbti'" />
       <ProfileNotificationSetting v-if="tabsValue === 'notice'" />
     </template>
   </Profile>
