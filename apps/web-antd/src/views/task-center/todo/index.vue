@@ -57,7 +57,7 @@
                     title="确定要删除这个任务吗?"
                     ok-text="确定"
                     cancel-text="取消"
-                    @click.stop
+                    trigger="click"
                     @confirm="deleteTaskFunc(element.id)"
                   >
                     <a-button
@@ -65,6 +65,7 @@
                       size="small"
                       danger
                       class="delete-task-btn"
+                      @click.stop
                     >
                       <template #icon><delete-outlined /></template>
                     </a-button>
@@ -236,6 +237,7 @@
                   title="确定要删除这条明细吗?"
                   ok-text="确定"
                   cancel-text="取消"
+                  trigger="click"
                   @confirm="removeDetail(index, detail)"
                 >
                   <a-button type="text" danger size="small" class="subtask-delete-btn">
@@ -576,7 +578,7 @@ const handleAddDetailOk = async () => {
 
 const removeDetail = async (index: number, detail: Detail) => {
   try {
-    if (typeof detail.id === 'number') {
+    if (detail.id !== undefined && detail.id !== null) {
       await deleteTaskDetail(detail.id);
     }
     editingTask.value.details?.splice(index, 1);

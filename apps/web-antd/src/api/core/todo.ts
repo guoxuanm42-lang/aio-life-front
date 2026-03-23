@@ -62,7 +62,7 @@ export async function updateTaskDetail(data: Partial<Detail>) {
   return await requestClient.put<boolean>('/taskDetails', data);
 }
 
-export async function deleteTaskDetail(id: number) {
+export async function deleteTaskDetail(id: string | number) {
   return await requestClient.delete<void>(`/taskDetails/${id}`);
 }
 
