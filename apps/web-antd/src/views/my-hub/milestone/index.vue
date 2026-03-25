@@ -128,21 +128,30 @@ const filteredMilestones = computed(() => {
 });
 
 const groupedMilestones = computed(() => {
-  const groups: { items: Milestone[]; yearMonth: string }[] = [];
+  const groups: { items: Milestone[]; year: string }[] = [];
 
   filteredMilestones.value.forEach((item) => {
-    const yearMonth = dayjs(item.date).format('YYYY年MM月');
+    const year = dayjs(item.date).format('YYYY年');
     const lastGroup = groups[groups.length - 1];
 
-    if (lastGroup && lastGroup.yearMonth === yearMonth) {
+    if (lastGroup && lastGroup.year === year) {
       lastGroup.items.push(item);
     } else {
-      groups.push({ yearMonth, items: [item] });
+      groups.push({ year, items: [item] });
     }
   });
 
   return groups;
 });
+
+const isNewMonth = (items: Milestone[], index: number) => {
+  if (items.length === 0) return false;
+  const current = items[index];
+  if (!current) return false;
+  if (index === 0) return true;
+  const prev = items[index - 1];
+  return !prev || dayjs(current.date).format('MM月') !== dayjs(prev.date).format('MM月');
+};
 
 // 加载数据
 const loadData = async () => {
@@ -368,89 +377,99 @@ const getTypeLabel = (type: string) => {
     <div v-if="groupedMilestones.length > 0">
       <div
         v-for="group in groupedMilestones"
-        :key="group.yearMonth"
-        class="relative mb-8"
+        :key="group.year"
+        class="relative mb-12"
       >
-        <!-- Month Header -->
-        <div class="mb-6 flex items-center pl-3">
-          <div class="mr-3 h-6 w-1 rounded-full bg-blue-500"></div>
-          <h2 class="text-lg font-bold text-gray-700 dark:text-gray-200">
-            {{ group.yearMonth }}
+        <!-- Year Header -->
+        <div class="mb-8 flex items-center pl-3">
+          <div class="mr-3 h-8 w-1.5 rounded-full bg-blue-600"></div>
+          <h2 class="text-2xl font-black text-gray-800 dark:text-gray-100">
+            {{ group.year }}
           </h2>
         </div>
 
-        <!-- Items -->
-        <div class="space-y-4 border-l-2 border-gray-200 dark:border-gray-700 ml-3">
-          <div
-            v-for="item in group.items"
-            :key="item.id"
-            class="relative pl-8 py-2 group"
-          >
-            <!-- Dot -->
-            <div
-              class="absolute left-[-9px] top-6 w-4 h-4 rounded-full border-2 border-white dark:border-[#151515] shadow-sm z-10"
-              :class="getTypeColor(item.type)"
-            ></div>
-
-            <!-- Card -->
-            <div
-              class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-[#151515]"
+        <!-- Timeline Items -->
+        <div class="ml-3 border-l-2 border-gray-200 dark:border-gray-700">
+          <div v-for="(item, index) in group.items" :key="item.id">
+            <!-- Month Header within the timeline -->
+            <div 
+              v-if="isNewMonth(group.items, index)" 
+              class="relative mb-6 mt-10 flex items-center first:mt-0"
             >
-              <div class="mb-2 flex items-start justify-between">
-                <div class="flex items-center gap-2">
-                  <h3
-                    class="text-lg font-bold text-gray-800 dark:text-gray-100"
-                  >
-                    {{ item.title }}
-                  </h3>
-                  <ATag :color="getTypeTagColor(item.type)">
-                    {{ getTypeLabel(item.type) }}
-                  </ATag>
-                </div>
-                <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <AButton 
-                    type="text" 
-                    size="small" 
-                    @click.stop="handleEdit(item)"
-                  >
-                    <template #icon><EditOutlined /></template>
-                  </AButton>
-                  <APopconfirm
-                    title="确定要删除这条记录吗？"
-                    @confirm="handleDelete(item.id)"
-                  >
+              <div class="absolute left-[-2px] h-0.5 w-4 bg-gray-300 dark:bg-gray-600"></div>
+              <div class="pl-8 text-sm font-bold text-blue-500 uppercase tracking-wider">
+                {{ dayjs(item.date).format('MM月') }}
+              </div>
+            </div>
+
+            <!-- Item -->
+            <div class="relative pl-8 py-4 group">
+              <!-- Dot -->
+              <div
+                class="absolute left-[-9px] top-8 w-4 h-4 rounded-full border-2 border-white dark:border-[#151515] shadow-sm z-10"
+                :class="getTypeColor(item.type)"
+              ></div>
+
+              <!-- Card -->
+              <div
+                class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-[#151515]"
+              >
+                <div class="mb-2 flex items-start justify-between">
+                  <div class="flex items-center gap-2">
+                    <h3
+                      class="text-lg font-bold text-gray-800 dark:text-gray-100"
+                    >
+                      {{ item.title }}
+                    </h3>
+                    <ATag :color="getTypeTagColor(item.type)">
+                      {{ getTypeLabel(item.type) }}
+                    </ATag>
+                  </div>
+                  <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                     <AButton 
                       type="text" 
-                      danger 
-                      size="small"
+                      size="small" 
+                      @click.stop="handleEdit(item)"
                     >
-                      <template #icon><DeleteOutlined /></template>
+                      <template #icon><EditOutlined /></template>
                     </AButton>
-                  </APopconfirm>
+                    <APopconfirm
+                      title="确定要删除这条记录吗？"
+                      @confirm="handleDelete(item.id)"
+                    >
+                      <AButton 
+                        type="text" 
+                        danger 
+                        size="small"
+                      >
+                        <template #icon><DeleteOutlined /></template>
+                      </AButton>
+                    </APopconfirm>
+                  </div>
                 </div>
-              </div>
 
-              <div class="mb-3 font-mono text-sm text-gray-400">
-                {{ item.date }}
-                <span v-if="item.endDate"> - {{ item.endDate }}</span>
-              </div>
+                <div class="mb-3 font-mono text-sm text-gray-400">
+                  {{ item.date }}
+                  <span v-if="item.endDate"> - {{ item.endDate }}</span>
+                </div>
 
-              <div
-                class="mb-3 flex gap-2"
-                v-if="item.tags && item.tags.length > 0"
-              >
-                <span
-                  v-for="tag in item.tags"
-                  :key="tag"
-                  class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800"
+                <div
+                  class="mb-3 flex gap-2"
+                  v-if="item.tags && item.tags.length > 0"
                 >
-                  {{ tag }}
-                </span>
-              </div>
+                  <span
+                    v-for="tag in item.tags"
+                    :key="tag"
+                    class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800"
+                  >
+                    {{ tag }}
+                  </span>
+                </div>
 
-              <p class="leading-relaxed text-gray-600 dark:text-gray-400">
-                {{ item.description }}
-              </p>
+                <p class="leading-relaxed text-gray-600 dark:text-gray-400">
+                  {{ item.description }}
+                </p>
+              </div>
             </div>
           </div>
         </div>
