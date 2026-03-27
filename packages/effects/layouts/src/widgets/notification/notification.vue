@@ -104,7 +104,7 @@ function navigateTo(
         <VbenIconButton class="bell-button text-foreground relative">
           <span
             v-if="dot"
-            class="bg-primary absolute right-0.5 top-0.5 h-2 w-2 rounded"
+            class="bg-red-500 absolute right-0.5 top-0.5 h-2 w-2 rounded"
           ></span>
           <Bell class="size-4" />
         </VbenIconButton>
@@ -131,7 +131,7 @@ function navigateTo(
             >
               <span
                 v-if="!item.isRead"
-                class="bg-primary absolute right-2 top-2 h-2 w-2 rounded"
+                class="bg-red-500 absolute right-2 top-2 h-2 w-2 rounded"
               ></span>
 
               <span

@@ -18,6 +18,7 @@ import { useAccessStore, useUserStore } from '@vben/stores';
 import {
   createMessageApi,
   getMessageListApi,
+  getUnreadCountApi,
   markAllAsReadApi,
   markAsReadApi,
 } from '#/api/core/message';
@@ -34,7 +35,8 @@ const userStore = useUserStore();
 const authStore = useAuthStore();
 const accessStore = useAccessStore();
 const { destroyWatermark, updateWatermark } = useWatermark();
-const showDot = computed(() => notifications.value.length > 0);
+const unreadCount = ref(0);
+const showDot = computed(() => unreadCount.value > 0);
 
 const menus = computed(() => [
   {
@@ -81,6 +83,9 @@ async function handleLogout() {
   await authStore.logout(false);
 }
 
+// Global cache for sender avatars to prevent repeated API calls
+const avatarCache = new Map<string, string>();
+
 async function fetchNotifications() {
   try {
     const messages = await getMessageListApi();
@@ -92,8 +97,6 @@ async function fetchNotifications() {
       (m) => String(m.receiverId) === myId && !m.isRead,
     );
 
-    // Fetch sender avatars (with simple caching to avoid duplicate requests)
-    const avatarCache = new Map<string, string>();
     const notificationsWithAvatar = await Promise.all(unreadMsgs.map(async (msg) => {
       let avatarUrl = msg.avatar || '';
       const senderId = String(msg.senderId);
@@ -125,16 +128,33 @@ async function fetchNotifications() {
     }));
 
     notifications.value = notificationsWithAvatar;
+    unreadCount.value = notificationsWithAvatar.length;
   } catch (error) {
     console.error('Failed to fetch notifications:', error);
   }
 }
 
+async function fetchUnreadCount() {
+  try {
+    const res = await getUnreadCountApi();
+    const newCount = res?.count || 0;
+    
+    if (newCount > 0 && newCount !== notifications.value.length) {
+      await fetchNotifications();
+    } else if (newCount === 0) {
+      notifications.value = [];
+    }
+    unreadCount.value = newCount;
+  } catch (error) {
+    console.error('Failed to fetch unread count:', error);
+  }
+}
+
 // Fetch on mount
 onMounted(() => {
-  fetchNotifications();
+  fetchUnreadCount();
   // Poll every 30 seconds
-  setInterval(fetchNotifications, 30000);
+  setInterval(fetchUnreadCount, 30000);
 });
 
 async function handleNoticeClear() {
@@ -158,6 +178,7 @@ async function markRead(id: number | string) {
 function remove(id: number | string) {
   // Just remove from list locally for now, as there's no delete API that fits "remove from notification list" without deleting message
   notifications.value = notifications.value.filter((item) => item.id !== id);
+  unreadCount.value = notifications.value.length;
 }
 
 async function handleMakeAll() {
