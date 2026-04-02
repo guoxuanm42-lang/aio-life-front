@@ -163,10 +163,6 @@ const handleImageError = (event: Event) => {
                   <span class="truncate max-w-[100px]">{{ item.city }}{{ item.venue ? ` · ${item.venue}` : '' }}</span>
                 </div>
               </div>
-
-              <div v-if="item.ticketPrice" class="mt-2 text-sm font-medium text-primary">
-                {{ item.ticketPrice }}
-              </div>
             </div>
           </div>
         </div>

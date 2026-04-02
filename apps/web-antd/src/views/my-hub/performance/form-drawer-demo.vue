@@ -41,15 +41,6 @@ const [Form, formApi] = useVbenForm({
     {
       component: 'Input',
       componentProps: {
-        placeholder: '【自动生成】',
-      },
-      fieldName: 'id',
-      label: '主键',
-      disabled: true,
-    },
-    {
-      component: 'Input',
-      componentProps: {
         placeholder: '请输入',
       },
       fieldName: 'performanceName',
