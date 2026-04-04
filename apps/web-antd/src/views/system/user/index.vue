@@ -22,6 +22,7 @@ interface RowType {
   role: string;
   email: string;
   createTime: string;
+  lastActiveTime?: string;
   isOnline: boolean;
 }
 
@@ -59,6 +60,12 @@ const gridOptions: VxeGridProps<RowType> = {
     { field: 'role', title: '角色' },
     { field: 'email', title: '邮箱' },
     { field: 'createTime', title: '创建时间', width: 180 },
+    {
+      field: 'lastActiveTime',
+      title: '最后活跃时间',
+      width: 180,
+      formatter: ({ cellValue }) => cellValue || '-',
+    },
     {
       field: 'isOnline',
       slots: { default: 'isOnline' },
