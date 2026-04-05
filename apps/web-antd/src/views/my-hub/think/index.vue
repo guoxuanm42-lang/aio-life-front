@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRaw } from 'vue';
 import { query as queryThink, save as saveThink, update as updateThink, deleteData as deleteThink } from '#/api/core/think';
-import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin } from 'ant-design-vue';
+import { Button, Card, Modal, Input, Form, Empty, Space, message, Popconfirm, Spin } from 'ant-design-vue';
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 interface Event {
-  id: number;
+  id: number | string;
   content: string;
   create_time: string;
 }
 
 interface Thought {
-  id: number;
+  id: number | string;
   content: string;
   events: Event[];
   likes: number;
@@ -23,9 +23,14 @@ const thoughts = ref<Thought[]>([]);
 const loading = ref(false);
 
 const showModal = ref(false);
-const currentEditId = ref<null | number>(null);
+const currentEditId = ref<null | number | string>(null);
 
-const form = reactive({
+interface ThoughtForm {
+  content: string;
+  events: Event[];
+}
+
+const form = reactive<ThoughtForm>({
   content: '',
   events: [
     {
@@ -46,7 +51,7 @@ const openAddModal = () => {
   form.content = '';
   form.events = [
     {
-      id: 1,
+      id: Date.now(),
       content: '',
       create_time: new Date().toISOString(),
     },
@@ -55,7 +60,7 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = (id: number) => {
+const openEditModal = (id: number | string) => {
   const thought = thoughts.value.find((t) => t.id === id);
   if (thought) {
     form.content = thought.content;
@@ -68,7 +73,7 @@ const openEditModal = (id: number) => {
           }))
         : [
             {
-              id: 1,
+              id: Date.now(),
               content: '',
               create_time: new Date().toISOString(),
             },
@@ -83,16 +88,14 @@ const closeCardModal = () => {
 };
 
 const addEvent = () => {
-  const newEventId =
-    form.events.length > 0 ? Math.max(...form.events.map((e) => e.id)) + 1 : 1;
   form.events.push({
-    id: newEventId,
+    id: Date.now(),
     content: '',
     create_time: new Date().toISOString(),
   });
 };
 
-const removeEventById = (id: number) => {
+const removeEventById = (id: number | string) => {
   const idx = form.events.findIndex((e) => e.id === id);
   if (idx !== -1) form.events.splice(idx, 1);
 };
@@ -105,11 +108,16 @@ const saveCard = async () => {
 
   const validEvents = form.events.filter((event) => event.content.trim() !== '');
 
-  const payload = {
-    id: currentEditId.value,
+  // 构造提交数据
+  const payload: any = {
     content: form.content.trim(),
     events: validEvents.map((e) => ({ ...e })),
   };
+  
+  // 只有在编辑模式下才传 id
+  if (currentEditId.value !== null) {
+    payload.id = currentEditId.value;
+  }
 
   try {
     const saved =
@@ -119,6 +127,7 @@ const saveCard = async () => {
 
     const normalized = {
       ...saved,
+      id: saved?.id ?? currentEditId.value, // 确保 ID 不丢失
       content: saved?.content ?? saved?.text ?? saved?.title ?? saved?.summary ?? form.content.trim(),
       events: Array.isArray(saved?.events)
         ? (saved as any).events.map((e: any) => ({
@@ -147,7 +156,7 @@ const saveCard = async () => {
   }
 };
 
-const handleDelete = async (id: number) => {
+const handleDelete = async (id: number | string) => {
   try {
     await deleteThink({ idList: [id] });
     thoughts.value = thoughts.value.filter((t) => t.id !== id);
@@ -161,7 +170,7 @@ const handleDelete = async (id: number) => {
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);
   const padZero = (num: number) => num.toString().padStart(2, '0');
-  
+
   const year = date.getFullYear();
   const month = padZero(date.getMonth() + 1);
   const day = padZero(date.getDate());
@@ -235,23 +244,23 @@ onMounted(async () => {
       </div>
     </Spin>
 
-    <GlobalFloatBtn @click="openCreateModal" />
+    <GlobalFloatBtn @click="openAddModal" />
 
-    <Modal 
-      v-model:open="showModal" 
-      :title="modalTitle" 
-      :footer="null" 
-      :maskClosable="false" 
+    <Modal
+      v-model:open="showModal"
+      :title="modalTitle"
+      :footer="null"
+      :maskClosable="false"
       :destroyOnClose="true"
       centered
       @cancel="closeCardModal"
     >
       <Form layout="vertical" class="modern-form">
         <Form.Item required>
-          <Input.TextArea 
-            v-model:value="form.content" 
-            :auto-size="{ minRows: 4, maxRows: 12 }" 
-            placeholder="这一刻的想法..." 
+          <Input.TextArea
+            v-model:value="form.content"
+            :auto-size="{ minRows: 4, maxRows: 12 }"
+            placeholder="这一刻的想法..."
             class="content-textarea"
             :bordered="false"
           />
@@ -340,29 +349,33 @@ onMounted(async () => {
   }
 }
 
-/* Mobile Adaptation */
-@media (max-width: 768px) {
-  .think-page {
-    padding: 16px;
-  }
-
-  .cards-grid {
-    gap: 16px;
-  }
-
-  .thought-card :deep(.ant-card-body) {
-    padding: 20px;
-  }
-}
-
 .thought-card {
   margin-bottom: 24px;
   border-radius: 16px;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   break-inside: avoid;
   overflow: hidden;
-  /* 使用透明度颜色适应夜间模式 */
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+/* Mobile Adaptation */
+@media (max-width: 768px) {
+  .think-page {
+    padding: 12px;
+  }
+
+  .cards-grid {
+    columns: 2;
+    column-gap: 12px;
+  }
+
+  .thought-card :deep(.ant-card-body) {
+    padding: 12px;
+  }
+
+  .thought-card {
+    margin-bottom: 12px;
+  }
 }
 
 .thought-card:hover {
