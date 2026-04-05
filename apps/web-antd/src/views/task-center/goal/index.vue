@@ -64,7 +64,7 @@ const filters = ref<GoalQueryParams>({
 // Modal & Form
 const modalVisible = ref(false);
 const formRef = ref();
-const modalTitle = ref('添加目标');
+const modalTitle = ref('添加');
 const submitLoading = ref(false);
 
 const formState = ref<FormState>({
@@ -88,16 +88,16 @@ const rules: Record<string, Rule[]> = {
 
 // Computed properties for UI mapping
 const typeMap: Record<number, { label: string; color: string }> = {
-  1: { label: '日目标', color: 'green' },
-  2: { label: '周目标', color: 'cyan' },
-  3: { label: '月度目标', color: 'blue' },
-  4: { label: '季度目标', color: 'orange' },
-  5: { label: '半年目标', color: 'gold' },
-  6: { label: '年度目标', color: 'red' },
-  7: { label: '三年目标', color: 'purple' },
-  8: { label: '五年目标', color: 'magenta' },
-  9: { label: '十年目标', color: 'volcano' },
-  10: { label: '人生目标', color: 'geekblue' },
+  1: { label: '日', color: 'green' },
+  2: { label: '周', color: 'cyan' },
+  3: { label: '月', color: 'blue' },
+  4: { label: '季度', color: 'orange' },
+  5: { label: '半年', color: 'gold' },
+  6: { label: '年度', color: 'red' },
+  7: { label: '三年', color: 'purple' },
+  8: { label: '五年', color: 'magenta' },
+  9: { label: '十年', color: 'volcano' },
+  10: { label: '终生', color: 'geekblue' },
 };
 
 const statusMap: Record<number, { label: string; color: string }> = {
@@ -203,11 +203,11 @@ const clearFilters = () => {
 };
 
 const handleAdd = () => {
-  modalTitle.value = '添加目标';
+  modalTitle.value = '添加';
   formState.value = {
     title: '',
     type: 1,
-    status: 0,
+    status: 1,
     progress: 0,
     targetValue: undefined,
     currentValue: undefined,
@@ -220,7 +220,7 @@ const handleAdd = () => {
 };
 
 const handleEdit = (item: GoalEntity) => {
-  modalTitle.value = '编辑目标';
+  modalTitle.value = '编辑';
 
   // Parse tags if stored as JSON array string, else split by comma
   let tagsStr = '';
@@ -369,16 +369,16 @@ const getStatusBadgeColor = (status: number) => {
           allow-clear
           @change="handleSearch"
         >
-          <ASelectOption :value="1">日目标</ASelectOption>
-          <ASelectOption :value="2">周目标</ASelectOption>
-          <ASelectOption :value="3">月度目标</ASelectOption>
-          <ASelectOption :value="4">季度目标</ASelectOption>
-          <ASelectOption :value="5">半年目标</ASelectOption>
-          <ASelectOption :value="6">年度目标</ASelectOption>
-          <ASelectOption :value="7">三年目标</ASelectOption>
-          <ASelectOption :value="8">五年目标</ASelectOption>
-          <ASelectOption :value="9">十年目标</ASelectOption>
-          <ASelectOption :value="10">人生目标</ASelectOption>
+          <ASelectOption :value="1">日</ASelectOption>
+          <ASelectOption :value="2">周</ASelectOption>
+          <ASelectOption :value="3">月</ASelectOption>
+          <ASelectOption :value="4">季度</ASelectOption>
+          <ASelectOption :value="5">半年</ASelectOption>
+          <ASelectOption :value="6">年度</ASelectOption>
+          <ASelectOption :value="7">三年</ASelectOption>
+          <ASelectOption :value="8">五年</ASelectOption>
+          <ASelectOption :value="9">十年</ASelectOption>
+          <ASelectOption :value="10">终生</ASelectOption>
         </ASelect>
 
         <ASelect
@@ -416,14 +416,12 @@ const getStatusBadgeColor = (status: number) => {
           <!-- Card Header -->
           <div>
             <div class="mb-3 flex items-start justify-between">
-              <div class="flex items-center gap-2 max-w-full">
-                <ATag :color="typeMap[item.type]?.color || 'default'" class="m-0 border-0 font-medium">
-                  {{ typeMap[item.type]?.label }}
-                </ATag>
-                <div class="flex items-center gap-1.5 ml-1">
-                  <div class="w-2 h-2 rounded-full" :class="getStatusBadgeColor(item.status)"></div>
-                  <span class="text-xs text-muted-foreground">{{ statusMap[item.status]?.label }}</span>
-                </div>
+              <ATag :color="typeMap[item.type]?.color || 'default'" class="m-0 border-0 font-medium">
+                {{ typeMap[item.type]?.label }}
+              </ATag>
+              <div class="flex items-center gap-1.5">
+                <div class="w-2 h-2 rounded-full" :class="getStatusBadgeColor(item.status)"></div>
+                <span class="text-xs text-muted-foreground">{{ statusMap[item.status]?.label }}</span>
               </div>
             </div>
 
@@ -476,63 +474,93 @@ const getStatusBadgeColor = (status: number) => {
     <!-- Add/Edit Modal -->
     <Modal
       v-model:open="modalVisible"
-      :title="modalTitle"
       :confirm-loading="submitLoading"
       @ok="handleSave"
       width="600px"
     >
+      <template #footer>
+        <div class="flex justify-between">
+          <AButton
+            v-if="modalTitle === '编辑'"
+            danger
+            @click="handleDelete(formState.id!)"
+          >
+            删除
+          </AButton>
+          <div></div>
+          <div class="flex gap-2">
+            <AButton @click="modalVisible = false">取消</AButton>
+            <AButton type="primary" :loading="submitLoading" @click="handleSave">确定</AButton>
+          </div>
+        </div>
+      </template>
       <AForm
         ref="formRef"
         :model="formState"
         :rules="rules"
         layout="vertical"
-        class="mt-4"
       >
         <AFormItem label="目标标题" name="title">
           <AInput
             v-model:value="formState.title"
-            placeholder="请输入目标标题，回车保存"
+            placeholder="请输入目标标题"
             allow-clear
             @pressEnter="handleSave"
           />
         </AFormItem>
 
         <div class="flex gap-4">
-          <AFormItem label="目标类型" name="type" class="flex-1">
-            <ASelect v-model:value="formState.type" placeholder="请选择类型">
-              <ASelectOption :value="1">日目标</ASelectOption>
-              <ASelectOption :value="2">周目标</ASelectOption>
-              <ASelectOption :value="3">月度目标</ASelectOption>
-              <ASelectOption :value="4">季度目标</ASelectOption>
-              <ASelectOption :value="5">半年目标</ASelectOption>
-              <ASelectOption :value="6">年度目标</ASelectOption>
-              <ASelectOption :value="7">三年目标</ASelectOption>
-              <ASelectOption :value="8">五年目标</ASelectOption>
-              <ASelectOption :value="9">十年目标</ASelectOption>
-              <ASelectOption :value="10">人生目标</ASelectOption>
+          <AFormItem label="类型" name="type" class="flex-1">
+            <ASelect v-model:value="formState.type" placeholder="请选择">
+              <ASelectOption :value="1">日</ASelectOption>
+              <ASelectOption :value="2">周</ASelectOption>
+              <ASelectOption :value="3">月</ASelectOption>
+              <ASelectOption :value="4">季度</ASelectOption>
+              <ASelectOption :value="5">半年</ASelectOption>
+              <ASelectOption :value="6">年度</ASelectOption>
+              <ASelectOption :value="7">三年</ASelectOption>
+              <ASelectOption :value="8">五年</ASelectOption>
+              <ASelectOption :value="9">十年</ASelectOption>
+              <ASelectOption :value="10">终生</ASelectOption>
             </ASelect>
           </AFormItem>
 
-          <AFormItem label="当前状态" name="status" class="flex-1">
-            <ASelect v-model:value="formState.status" placeholder="请选择状态">
-              <ASelectOption :value="0">待开始</ASelectOption>
-              <ASelectOption :value="1">进行中</ASelectOption>
-              <ASelectOption :value="2">已完成</ASelectOption>
-              <ASelectOption :value="3">已放弃</ASelectOption>
+          <AFormItem label="状态" name="status" class="flex-1">
+            <ASelect v-model:value="formState.status" placeholder="请选择">
+              <ASelectOption :value="0">
+                <span class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                  待开始
+                </span>
+              </ASelectOption>
+              <ASelectOption :value="1">
+                <span class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                  进行中
+                </span>
+              </ASelectOption>
+              <ASelectOption :value="2">
+                <span class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                  已完成
+                </span>
+              </ASelectOption>
+              <ASelectOption :value="3">
+                <span class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                  已放弃
+                </span>
+              </ASelectOption>
             </ASelect>
           </AFormItem>
         </div>
-
-        <AFormItem label="进度 (%)" name="progress">
-          <ASlider v-model:value="formState.progress" :min="0" :max="100" />
-        </AFormItem>
 
         <div class="flex gap-4">
           <AFormItem label="当前值" name="currentValue" class="flex-1">
             <AInputNumber
               v-model:value="formState.currentValue"
               :min="0"
-              placeholder="当前完成值"
+              placeholder="当前值"
               class="w-full"
             />
           </AFormItem>
@@ -540,14 +568,14 @@ const getStatusBadgeColor = (status: number) => {
             <AInputNumber
               v-model:value="formState.targetValue"
               :min="0"
-              placeholder="目标总值"
+              placeholder="目标值"
               class="w-full"
             />
           </AFormItem>
         </div>
 
         <div class="flex gap-4">
-          <AFormItem label="开始时间" name="startDate" class="flex-1">
+          <AFormItem label="开始" name="startDate" class="flex-1">
             <ADatePicker
               v-model:value="formState.startDate"
               class="w-full"
@@ -556,7 +584,7 @@ const getStatusBadgeColor = (status: number) => {
             />
           </AFormItem>
 
-          <AFormItem label="结束时间" name="endDate" class="flex-1">
+          <AFormItem label="结束" name="endDate" class="flex-1">
             <ADatePicker
               v-model:value="formState.endDate"
               class="w-full"
@@ -569,16 +597,15 @@ const getStatusBadgeColor = (status: number) => {
         <AFormItem label="标签" name="tags">
           <AInput
             v-model:value="formState.tags"
-            placeholder="请输入标签，多个标签请用逗号分隔"
+            placeholder="多个标签用逗号分隔"
             allow-clear
           />
         </AFormItem>
 
-        <AFormItem label="目标描述" name="description">
-          <ATextarea
+        <AFormItem label="描述" name="description">
+          <AInput
             v-model:value="formState.description"
-            :rows="4"
-            placeholder="请输入详细描述..."
+            placeholder="请输入描述..."
             allow-clear
           />
         </AFormItem>
