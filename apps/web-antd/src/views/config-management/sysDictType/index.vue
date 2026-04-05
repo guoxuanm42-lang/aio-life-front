@@ -431,6 +431,7 @@ function handleDelete(item: RowType) {
 .mobile-card-list {
   @apply flex flex-col;
 }
+
 .card-content {
   @apply text-sm;
 }
@@ -476,16 +477,16 @@ function handleDelete(item: RowType) {
 /* 强制消除搜索框下方的所有间隙 */
 :deep(.mobile-grid .vxe-grid) {
   min-height: 0 !important;
-  background: transparent !important;
   padding-bottom: 0 !important;
+  background: transparent !important;
 }
 
 :deep(.mobile-grid .vben-vxe-grid) {
-  border: none !important;
+  min-height: 0 !important;
   padding: 0 !important;
   margin-bottom: 0 !important;
   background: transparent !important;
-  min-height: 0 !important;
+  border: none !important;
 }
 
 /* 隐藏那个奇怪的背景分隔条 */
@@ -539,7 +540,7 @@ function handleDelete(item: RowType) {
 
 /* 移除卡片标题下的横线 */
 :deep(.mobile-card .ant-card-head) {
-  border-bottom: none !important;
   min-height: 40px;
+  border-bottom: none !important;
 }
 </style>

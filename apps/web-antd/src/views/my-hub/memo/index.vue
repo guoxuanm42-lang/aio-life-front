@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue';
 import { usePreferences } from '@vben/preferences';
-import { Button, Modal, Input, message, Popconfirm, Tooltip, Spin, Empty } from 'ant-design-vue';
-import { EditOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons-vue';
+import { Button, Modal, Input, message, Popconfirm, Tooltip, Spin, Empty, FloatButton } from 'ant-design-vue';
+import { EditOutlined, DeleteOutlined, ClockCircleOutlined, VerticalAlignTopOutlined } from '@ant-design/icons-vue';
 import { getMemoListApi, createMemoApi, updateMemoApi, deleteMemoApi, type Memo } from '#/api/core/memo';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import MemoFab from './MemoFab.vue';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 const memos = ref<Memo[]>([]);
 const loading = ref(false);
@@ -107,14 +107,14 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="p-2 h-full flex flex-col overflow-hidden">
+  <div class="p-5 h-full flex flex-col overflow-hidden">
     <div class="flex-1 overflow-y-auto overflow-x-hidden">
       <Spin :spinning="loading">
-        <div v-if="memos.length > 0" class="columns-2 md:columns-3 lg:columns-4 gap-2 mx-auto">
+        <div v-if="memos.length > 0" class="columns-1 sm:columns-2 lg:columns-3 xl:columns-3 gap-5 mx-auto">
           <div 
             v-for="item in memos" 
             :key="item.id" 
-            class="break-inside-avoid mb-2"
+            class="break-inside-avoid mb-5"
           >
             <div 
               class="group relative flex flex-col p-3 rounded-xl transition-all duration-300 hover:-translate-y-0.3 hover:shadow-lg border border-transparent dark:border-slate-700"
@@ -204,7 +204,13 @@ onMounted(() => {
       />
     </Modal>
     
-    <MemoFab @click="handleAdd" />
+    <GlobalFloatBtn @click="handleAdd" />
+
+    <FloatButton.BackTop :visibility-height="400" class="global-backtop-btn">
+      <template #icon>
+        <VerticalAlignTopOutlined />
+      </template>
+    </FloatButton.BackTop>
   </div>
 </template>
 

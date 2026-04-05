@@ -666,6 +666,7 @@ onMounted(() => {
 .public-category-section :deep(.ant-card-head) {
   border-bottom: 2px solid #1890ff;
 }
+
 .private-category-section :deep(.ant-card-head) {
   border-bottom: 2px solid #52c41a;
 }

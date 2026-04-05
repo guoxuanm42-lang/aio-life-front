@@ -666,91 +666,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.finance-dashboard {
-  padding: 20px;
-  background-color: #f5f5f5;
-  min-height: 100vh;
-}
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  background: white;
-  padding: 12px 12px;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.page-title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #262626;
-}
-
-.stats-row {
-  margin-bottom: 20px;
-}
-
-.data-card {
-  height: 100%;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-  max-height: 400px;
-  overflow-y: auto;
-  position: relative;
-}
-
-.table-header,
-.table-row {
-  display: flex;
-  border-bottom: 1px solid #f0f0f0;
-  padding: 8px 0;
-}
-
-.table-cell {
-  flex: 1;
-  padding: 4px 8px;
-  text-align: right;
-  font-size: 14px;
-}
-
-.table-cell:first-child {
-  text-align: left;
-  flex: 0.8;
-}
-
-.table-header {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #fafafa;
-  font-weight: 600;
-  color: #595959;
-}
-
-.table-row.positive .balance {
-  color: #52c41a;
-  font-weight: 600;
-}
-
-.table-row.negative .balance {
-  color: #ff4d4f;
-  font-weight: 600;
-}
-
-.table-row .income {
-  color: #52c41a;
-}
-
-.table-row .expense {
-  color: #ff4d4f;
-}
 
 /* 响应式设计 */
 @media (max-width: 768px) {
@@ -780,14 +696,100 @@ onMounted(() => {
   }
 
   .table-cell {
-    font-size: 12px;
     padding: 4px 6px;
+    font-size: 12px;
   }
 
   /* 优化图表配置 */
   .chart-card .ant-card-head-title {
     font-size: 14px;
   }
+}
+
+.finance-dashboard {
+  min-height: 100vh;
+  padding: 20px;
+  background-color: #f5f5f5;
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  margin-bottom: 12px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgb(0 0 0 / 10%);
+}
+
+.page-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 600;
+  color: #262626;
+}
+
+.stats-row {
+  margin-bottom: 20px;
+}
+
+.data-card {
+  height: 100%;
+}
+
+.data-table {
+  position: relative;
+  width: 100%;
+  max-height: 400px;
+  overflow-y: auto;
+  border-collapse: collapse;
+}
+
+.table-header,
+.table-row {
+  display: flex;
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.table-cell {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 14px;
+  text-align: right;
+}
+
+.table-cell:first-child {
+  flex: 0.8;
+  text-align: left;
+}
+
+.table-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  font-weight: 600;
+  color: #595959;
+  background-color: #fafafa;
+}
+
+.table-row.positive .balance {
+  font-weight: 600;
+  color: #52c41a;
+}
+
+.table-row.negative .balance {
+  font-weight: 600;
+  color: #ff4d4f;
+}
+
+.table-row .income {
+  color: #52c41a;
+}
+
+.table-row .expense {
+  color: #ff4d4f;
 }
 
 </style>

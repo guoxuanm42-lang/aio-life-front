@@ -234,8 +234,8 @@ const [Drawer, drawerApi] = useVbenDrawer({
 <style scoped>
 .continuous-mode-switch {
   position: absolute;
-  left: 16px;
   bottom: 16px;
+  left: 16px;
   z-index: 10;
 }
 </style>

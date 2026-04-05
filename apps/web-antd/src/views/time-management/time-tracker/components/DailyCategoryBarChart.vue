@@ -199,20 +199,20 @@ onMounted(() => {
 
 <style scoped>
 .daily-bar-chart-container {
-  height: 100%;
   width: 100%;
+  height: 100%;
 }
 
 .chart-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
 }
 
 .filter-indicator {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   font-size: 12px;
   color: #666;
 }

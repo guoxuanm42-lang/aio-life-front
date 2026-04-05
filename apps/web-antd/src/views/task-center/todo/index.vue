@@ -114,7 +114,7 @@
           <a-button
             type="primary"
             @click="addColumn"
-            style="margin-top: 10px; width: 100%"
+            style=" width: 100%;margin-top: 10px"
           >
             添加列
           </a-button>
@@ -189,7 +189,7 @@
         >
           <template #item="{ element: detail, index }">
             <div class="subtask-item">
-              <holder-outlined class="drag-handle" style="cursor: move; margin-right: 8px; color: #999" />
+              <holder-outlined class="drag-handle" style=" margin-right: 8px; color: #999;cursor: move" />
               <a-checkbox 
                 :checked="detail.isCompleted === 1" 
                 @update:checked="(val) => handleDetailCheck(detail, val)"
@@ -204,14 +204,14 @@
               />
               <div class="subtask-actions">
                 <a-dropdown :trigger="['click']" placement="bottomRight">
-                  <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; border-radius: 4px; user-select: none;" class="priority-tag">
+                  <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; user-select: none; border-radius: 4px;" class="priority-tag">
                     {{ getPriorityLabel(detail.priority) }}
                   </a-tag>
                   <template #overlay>
                     <a-menu @click="({ key }) => handlePriorityChange(detail, Number(key))">
-                      <a-menu-item key="20"><a-tag color="default" style="margin-right: 0; width: 100%; text-align: center;">低</a-tag></a-menu-item>
-                      <a-menu-item key="10"><a-tag color="warning" style="margin-right: 0; width: 100%; text-align: center;">中</a-tag></a-menu-item>
-                      <a-menu-item key="1"><a-tag color="error" style="margin-right: 0; width: 100%; text-align: center;">高</a-tag></a-menu-item>
+                      <a-menu-item key="20"><a-tag color="default" style=" width: 100%;margin-right: 0; text-align: center;">低</a-tag></a-menu-item>
+                      <a-menu-item key="10"><a-tag color="warning" style=" width: 100%;margin-right: 0; text-align: center;">中</a-tag></a-menu-item>
+                      <a-menu-item key="1"><a-tag color="error" style=" width: 100%;margin-right: 0; text-align: center;">高</a-tag></a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>
@@ -715,323 +715,7 @@ const handleEditColumnOk = async () => {
 </script>
 
 <style scoped>
-.kanban-board {
-  padding: 20px;
-  height: calc(100vh - 40px);
-  overflow-x: auto;
-  overflow-y: hidden;
-  display: flex;
-  flex-direction: column;
-}
 
-/* 自定义横向滚动条样式 */
-.kanban-board::-webkit-scrollbar {
-  height: 8px;
-}
-
-.kanban-board::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.kanban-board::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 4px;
-}
-
-.kanban-board::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
-}
-
-.columns-container {
-  display: flex;
-  gap: 16px;
-  height: 100%;
-  padding: 10px 10px 20px 10px; /* 底部留出滚动条空间 */
-  width: max-content;
-  min-width: 100%;
-}
-
-.kanban-column {
-  flex: 0 0 300px;
-  min-width: 300px;
-  max-width: 300px;
-  border-radius: 12px;
-  padding: 12px;
-  display: flex;
-  flex-direction: column;
-  transition: all 0.3s;
-}
-
-.column-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-  padding: 4px;
-  cursor: grab;
-}
-
-.column-header:active {
-  cursor: grabbing;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.column-title-tag {
-  font-weight: 700;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  cursor: pointer;
-  transition: all 0.3s;
-}
-
-.column-title-tag:hover {
-  filter: brightness(0.9);
-}
-
-.task-count {
-  font-size: 13px;
-  font-weight: 500;
-  color: #8c8c8c;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 0 8px;
-  border-radius: 10px;
-  min-width: 20px;
-  text-align: center;
-}
-
-.more-btn {
-  color: #8c8c8c;
-}
-
-.task-list {
-  flex: 1;
-  min-height: 50px;
-  padding: 4px;
-  overflow-y: auto;
-}
-
-.kanban-task {
-  border-radius: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-  background: #fff;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-  border: 1px solid #f0f0f0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.kanban-task:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.task-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.task-title {
-  font-weight: 600;
-  font-size: 14px;
-  color: #262626;
-  line-height: 1.5;
-  flex: 1;
-}
-
-.delete-task-btn {
-  opacity: 0;
-  transition: opacity 0.2s;
-  margin-left: 4px;
-}
-
-.kanban-task:hover .delete-task-btn {
-  opacity: 1;
-}
-
-.task-meta {
-  margin-bottom: 4px;
-}
-
-.task-detail-text {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.6;
-  background: #f8f9fa;
-  padding: 6px 10px;
-  border-radius: 6px;
-  word-break: break-all;
-}
-
-.task-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 4px;
-  padding-top: 8px;
-  border-top: 1px solid #f0f0f0;
-}
-
-.footer-left {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #8c8c8c;
-  font-size: 12px;
-}
-
-.due-date {
-  font-size: 11px;
-  color: #bfbfbf;
-}
-
-.add-task-wrapper {
-  margin-top: 4px;
-  display: flex;
-  justify-content: center;
-}
-
-.simple-add-btn {
-  height: 32px;
-  color: #bfbfbf;
-  font-size: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.simple-add-btn:hover {
-  background: rgba(0, 0, 0, 0.02);
-  color: #8c8c8c;
-}
-
-/* 隐藏不必要的样式 */
-.delete-column-btn { display: none; }
-.add-task-card { display: none; }
-
-
-.subtasks-section {
-  margin-top: 10px;
-}
-
-.subtasks-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.subtasks-title {
-  font-size: 14px;
-  font-weight: 500;
-  color: v-bind('token.colorText');
-  display: flex;
-  align-items: center;
-}
-
-.subtasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  /* max-height: 500px; */ /* Removed to allow modal body to scroll */
-  /* overflow-y: auto; */
-  padding-right: 4px;
-}
-
-.subtask-item {
-  display: flex;
-  align-items: center;
-  padding: 4px 0;
-  transition: background 0.3s;
-}
-
-.subtask-item:hover {
-  background: v-bind('token.colorFillQuaternary');
-}
-
-.subtask-item:hover .drag-handle {
-  opacity: 1;
-}
-
-.drag-handle {
-  opacity: 0;
-  transition: opacity 0.2s;
-  cursor: grab;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.sortable-ghost {
-  opacity: 0.5;
-  background: v-bind('token.colorFillSecondary');
-}
-
-.subtask-completed {
-  text-decoration: line-through;
-  color: v-bind('token.colorTextQuaternary');
-}
-
-.floating-add-column {
-  position: fixed;
-  right: 30px;
-  bottom: 30px;
-  z-index: 1000;
-}
-
-.floating-button {
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-}
-
-.floating-button:hover {
-  transform: scale(1.1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* --- Responsive Styles --- */
-.task-dates-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-.date-col {
-  flex: 1;
-}
-.date-label {
-  margin-bottom: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
-.subtask-input {
-  flex: 1;
-  margin: 0 8px;
-}
-.subtask-actions {
-  display: flex;
-  align-items: center;
-}
-.priority-tag {
-  margin-right: 8px;
-}
-.subtask-date {
-  width: 140px;
-  margin-right: 4px;
-}
 
 @media (max-width: 768px) {
   /* Task Edit Modal Responsive */
@@ -1041,12 +725,12 @@ const handleEditColumnOk = async () => {
   }
   
   .subtask-item {
+    position: relative;
     flex-wrap: wrap;
-    background: v-bind('token.colorFillQuaternary');
-    border-radius: 8px;
     padding: 8px;
     margin-bottom: 12px;
-    position: relative;
+    background: v-bind('token.colorFillQuaternary');
+    border-radius: 8px;
   }
 
   .subtask-checkbox {
@@ -1055,17 +739,17 @@ const handleEditColumnOk = async () => {
 
   .subtask-input {
     flex: 1 1 calc(100% - 60px); /* Take remaining width in top row */
-    margin: 0 0 8px 0;
     min-width: 150px;
+    margin: 0 0 8px;
   }
 
   .subtask-actions {
-    width: 100%;
     display: flex;
-    justify-content: flex-start;
-    align-items: center;
     flex-wrap: wrap;
     gap: 8px;
+    align-items: center;
+    justify-content: flex-start;
+    width: 100%;
     padding-left: 24px; /* Align with input start */
   }
 
@@ -1087,5 +771,332 @@ const handleEditColumnOk = async () => {
   .drag-handle {
     opacity: 1; /* Always show handle on mobile */
   }
+}
+
+.kanban-board {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 40px);
+  padding: 20px;
+  overflow: auto hidden;
+}
+
+/* 自定义横向滚动条样式 */
+.kanban-board::-webkit-scrollbar {
+  height: 8px;
+}
+
+.kanban-board::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.kanban-board::-webkit-scrollbar-thumb {
+  background: rgb(0 0 0 / 10%);
+  border-radius: 4px;
+}
+
+.kanban-board::-webkit-scrollbar-thumb:hover {
+  background: rgb(0 0 0 / 20%);
+}
+
+.columns-container {
+  display: flex;
+  gap: 16px;
+  width: max-content;
+  min-width: 100%;
+  height: 100%;
+  padding: 10px 10px 20px; /* 底部留出滚动条空间 */
+}
+
+.kanban-column {
+  display: flex;
+  flex: 0 0 300px;
+  flex-direction: column;
+  min-width: 300px;
+  max-width: 300px;
+  padding: 12px;
+  border-radius: 12px;
+  transition: all 0.3s;
+}
+
+.column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px;
+  margin-bottom: 12px;
+  cursor: grab;
+}
+
+.column-header:active {
+  cursor: grabbing;
+}
+
+.header-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.column-title-tag {
+  padding: 4px 12px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 20px;
+  transition: all 0.3s;
+}
+
+.column-title-tag:hover {
+  filter: brightness(0.9);
+}
+
+.task-count {
+  min-width: 20px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #8c8c8c;
+  text-align: center;
+  background: rgb(0 0 0 / 5%);
+  border-radius: 10px;
+}
+
+.more-btn {
+  color: #8c8c8c;
+}
+
+.task-list {
+  flex: 1;
+  min-height: 50px;
+  padding: 4px;
+  overflow-y: auto;
+}
+
+.kanban-task {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
+  transition: all 0.2s;
+}
+
+.kanban-task:hover {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
+  transform: translateY(-2px);
+}
+
+.task-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.task-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  color: #262626;
+}
+
+.delete-task-btn {
+  margin-left: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.kanban-task:hover .delete-task-btn {
+  opacity: 1;
+}
+
+.task-meta {
+  margin-bottom: 4px;
+}
+
+.task-detail-text {
+  padding: 6px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #8c8c8c;
+  word-break: break-all;
+  background: #f8f9fa;
+  border-radius: 6px;
+}
+
+.task-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 8px;
+  margin-top: 4px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.footer-left {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.due-date {
+  font-size: 11px;
+  color: #bfbfbf;
+}
+
+.add-task-wrapper {
+  display: flex;
+  justify-content: center;
+  margin-top: 4px;
+}
+
+.simple-add-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 32px;
+  font-size: 18px;
+  color: #bfbfbf;
+}
+
+.simple-add-btn:hover {
+  color: #8c8c8c;
+  background: rgb(0 0 0 / 2%);
+}
+
+/* 隐藏不必要的样式 */
+.delete-column-btn { display: none; }
+
+.add-task-card { display: none; }
+
+
+.subtasks-section {
+  margin-top: 10px;
+}
+
+.subtasks-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.subtasks-title {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+  font-weight: 500;
+  color: v-bind('token.colorText');
+}
+
+.subtasks-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+
+  /* max-height: 500px; */
+
+ /* Removed to allow modal body to scroll */
+
+  /* overflow-y: auto; */
+  padding-right: 4px;
+}
+
+.subtask-item {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  transition: background 0.3s;
+}
+
+.subtask-item:hover {
+  background: v-bind('token.colorFillQuaternary');
+}
+
+.subtask-item:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle {
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.sortable-ghost {
+  background: v-bind('token.colorFillSecondary');
+  opacity: 0.5;
+}
+
+.subtask-completed {
+  color: v-bind('token.colorTextQuaternary');
+  text-decoration: line-through;
+}
+
+.floating-add-column {
+  position: fixed;
+  right: 30px;
+  bottom: 30px;
+  z-index: 1000;
+}
+
+.floating-button {
+  width: 50px;
+  height: 50px;
+  font-size: 20px;
+  box-shadow: 0 2px 10px rgb(0 0 0 / 20%);
+}
+
+.floating-button:hover {
+  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
+  transform: scale(1.1);
+}
+
+/* --- Responsive Styles --- */
+.task-dates-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.date-col {
+  flex: 1;
+}
+
+.date-label {
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #666;
+}
+
+.subtask-input {
+  flex: 1;
+  margin: 0 8px;
+}
+
+.subtask-actions {
+  display: flex;
+  align-items: center;
+}
+
+.priority-tag {
+  margin-right: 8px;
+}
+
+.subtask-date {
+  width: 140px;
+  margin-right: 4px;
 }
 </style>

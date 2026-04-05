@@ -122,7 +122,7 @@ onMounted(async () => {
 
 <style scoped>
 :deep(.avatar-upload .ant-upload-select) {
-  border-radius: 50% !important;
   overflow: hidden;
+  border-radius: 50% !important;
 }
 </style>

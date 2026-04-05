@@ -461,9 +461,9 @@ onUnmounted(() => {
   left: 0;
   width: 100%;
   height: 100%;
+  background: #fff;
   border: 1px solid #f0f0f0;
   border-radius: 8px;
-  background: #fff;
 }
 
 .iframe-fallback {
@@ -476,17 +476,17 @@ onUnmounted(() => {
 }
 
 .mbti-type-large {
+  margin-bottom: 24px;
   font-size: 72px;
   font-weight: bold;
-  text-align: center;
   color: #1890ff;
-  margin-bottom: 24px;
+  text-align: center;
 }
 
 .result-actions {
   display: flex;
-  justify-content: center;
   gap: 16px;
+  justify-content: center;
   margin-top: 24px;
 }
 
@@ -498,11 +498,11 @@ onUnmounted(() => {
 
 .recent-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding: 8px;
-  border-radius: 4px;
   background: #f9f9f9;
+  border-radius: 4px;
 }
 
 .mbti-type-small {
@@ -519,8 +519,8 @@ onUnmounted(() => {
 
 .prediction-item {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   padding: 8px;
   background: #f5f5f5;
   border-radius: 4px;
@@ -539,34 +539,34 @@ onUnmounted(() => {
 
 .trait-item {
   display: flex;
-  align-items: center;
   gap: 12px;
+  align-items: center;
   padding: 8px;
   background: #fafafa;
   border-radius: 4px;
 }
 
 .trait-name {
+  font-size: 16px;
   font-weight: bold;
   color: #1890ff;
-  font-size: 16px;
 }
 
 .trait-desc {
-  color: #666;
   font-size: 13px;
+  color: #666;
 }
 
 .matches-list {
-  list-style: none;
   padding: 0;
   margin: 0;
+  list-style: none;
 }
 
 .matches-list li {
   padding: 8px 0;
-  border-bottom: 1px solid #f0f0f0;
   color: #555;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .matches-list li:last-child {
@@ -574,9 +574,9 @@ onUnmounted(() => {
 }
 
 .matches-list :deep(a) {
+  font-weight: 500;
   color: #1890ff;
   text-decoration: none;
-  font-weight: 500;
 }
 
 .matches-list :deep(a:hover) {
@@ -598,8 +598,8 @@ onUnmounted(() => {
 }
 
 .dark .test-iframe {
-  border-color: #303030;
   background: #1a1a1a;
+  border-color: #303030;
 }
 
 .dark .recent-item {

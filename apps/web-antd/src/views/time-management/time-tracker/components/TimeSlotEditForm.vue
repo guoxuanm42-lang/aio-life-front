@@ -148,10 +148,10 @@
       </Row>
 
       <Form.Item>
-        <div style="display: flex; align-items: center; gap: 8px">
-          <span style="flex-shrink: 0; color: rgba(0, 0, 0, 0.88)">时长</span>
-          <div style="display: flex; gap: 8px; flex: 1">
-            <div style="display: flex; align-items: center; gap: 4px; flex: 1">
+        <div style="display: flex; gap: 8px; align-items: center">
+          <span style="flex-shrink: 0; color: rgb(0 0 0 / 88%)">时长</span>
+          <div style="display: flex; flex: 1; gap: 8px">
+            <div style="display: flex; flex: 1; gap: 4px; align-items: center">
               <InputNumber
                 v-model:value="editableHours"
                 :min="0"
@@ -164,7 +164,7 @@
               />
               <span>时</span>
             </div>
-            <div style="display: flex; align-items: center; gap: 4px; flex: 1">
+            <div style="display: flex; flex: 1; gap: 4px; align-items: center">
               <InputNumber
                 v-model:value="editableMinutes"
                 :min="0"
@@ -185,7 +185,7 @@
       <!-- 运动相关字段 -->
       <template v-if="isExerciseCategory">
         <div style="margin-bottom: 16px;">
-          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
             <span>运动明细</span>
             <Button type="link" size="small" @click="addExercise">
               <template #icon><PlusOutlined /></template>
@@ -193,7 +193,7 @@
             </Button>
           </div>
           
-          <div v-for="(exercise, index) in formState.exercises" :key="index" style="margin-bottom: 8px; display: flex; gap: 8px; align-items: center;">
+          <div v-for="(exercise, index) in formState.exercises" :key="index" style=" display: flex; gap: 8px; align-items: center;margin-bottom: 8px;">
             <div style="flex: 2;">
               <Select
                 v-model:value="exercise.exerciseTypeId"
@@ -222,7 +222,7 @@
             </Button>
           </div>
           
-          <div v-if="formState.exercises.length === 0" style="text-align: center; color: #999; padding: 8px; border: 1px dashed #d9d9d9; border-radius: 4px; cursor: pointer;" @click="addExercise">
+          <div v-if="formState.exercises.length === 0" style=" padding: 8px; color: #999;text-align: center; cursor: pointer; border: 1px dashed #d9d9d9; border-radius: 4px;" @click="addExercise">
             点击添加运动明细
           </div>
         </div>
@@ -745,21 +745,21 @@ onUnmounted(() => {
 
 .category-option {
   display: flex;
-  align-items: center;
   gap: 6px;
+  align-items: center;
 }
 
 .color-dot {
+  flex-shrink: 0;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .category-icon {
+  flex-shrink: 0;
   width: 16px;
   height: 16px;
-  flex-shrink: 0;
   color: #666;
 }
 
@@ -769,10 +769,10 @@ onUnmounted(() => {
 
 .duration-display {
   padding: 8px 12px;
-  background: #f5f5f5;
-  border-radius: 4px;
   font-weight: 500;
   color: #262626;
+  background: #f5f5f5;
+  border-radius: 4px;
 }
 
 .time-control-group {
@@ -783,16 +783,16 @@ onUnmounted(() => {
 
 .time-adjust-buttons {
   display: flex;
-  gap: 4px;
   flex-wrap: wrap;
+  gap: 4px;
 }
 
 .time-adjust-buttons .ant-btn {
   flex: 1;
   min-width: 0;
-  font-size: 12px;
-  padding: 2px 4px;
   height: auto;
+  padding: 2px 4px;
+  font-size: 12px;
   line-height: 1.2;
 }
 

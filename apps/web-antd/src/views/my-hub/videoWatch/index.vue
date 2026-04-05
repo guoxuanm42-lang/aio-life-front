@@ -13,14 +13,15 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
   Modal,
   Popconfirm,
   Progress,
   Select,
-  Tag,
   Tabs,
+  Tag,
+  message,
 } from 'ant-design-vue';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 import {
   deleteBilibiliVideo,
@@ -54,6 +55,7 @@ export default {
     HistoryOutlined,
     ClockCircleOutlined,
     CaretRightOutlined,
+    GlobalFloatBtn,
   },
   data() {
     return {
@@ -593,12 +595,7 @@ export default {
     </div>
 
     <!-- 新增悬浮按钮 -->
-    <div
-      class="fixed right-4 sm:right-8 bottom-4 sm:bottom-8 w-12 sm:w-14 h-12 sm:h-14 bg-primary text-primary-foreground rounded-full flex items-center justify-center shadow-2xl hover:shadow-primary/40 hover:scale-110 active:scale-95 transition-all duration-300 cursor-pointer z-50 group"
-      @click="showModal"
-    >
-      <PlusOutlined class="text-xl sm:text-2xl transition-transform duration-300 group-hover:rotate-90" />
-    </div>
+    <GlobalFloatBtn @click="showModal" />
 
     <!-- 弹窗部分 -->
     <AModal
@@ -693,8 +690,8 @@ export default {
 
 <style scoped>
 .custom-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 0;
   padding: 0;
+  margin-bottom: 0;
 }
 
 .custom-tabs :deep(.ant-tabs-nav-wrap) {
@@ -724,8 +721,8 @@ export default {
 
 .line-clamp-2 {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 </style>

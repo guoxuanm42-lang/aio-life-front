@@ -168,7 +168,7 @@ onMounted(() => {
 <style scoped>
 
 .pie-chart-container {
-  height: 300px;
   width: 100%;
+  height: 300px;
 }
 </style>

@@ -643,137 +643,7 @@ defineExpose({
 </template>
 
 <style scoped>
-.income-dashboard {
-  padding: 12px;
-}
 
-.dashboard-header {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.year-selector-wrapper {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 16px;
-}
-
-.year-select {
-  width: 160px;
-}
-
-.year-label {
-  font-weight: 500;
-  color: #fff;
-  font-size: 14px;
-  white-space: nowrap;
-}
-
-.total-card {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 12px;
-  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25);
-  color: white;
-  transition: all 0.3s ease;
-}
-
-.total-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.35);
-}
-
-.total-stats {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  gap: 24px;
-  background: rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(10px);
-  border-radius: 12px;
-  padding: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.15);
-}
-
-.stat-item {
-  flex: 1;
-  text-align: center;
-}
-
-.stat-label {
-  font-size: 14px;
-  opacity: 0.85;
-  margin-bottom: 8px;
-  font-weight: 500;
-  letter-spacing: 0.3px;
-  color: #fff;
-}
-
-.stat-value {
-  font-size: 36px;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  line-height: 1.2;
-  background: linear-gradient(135deg, #ffffff 0%, #e0e7ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  color: #fff; /* Fallback */
-}
-
-.stat-divider {
-  width: 1px;
-  height: 60px;
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 0.5px;
-}
-
-.chart-container {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  grid-template-rows: auto auto;
-  gap: 12px;
-  height: auto;
-}
-
-.chart-item {
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  height: 400px;
-  overflow: hidden; /* 防止内容溢出 */
-}
-
-/* 月份收入图单独占据一行 */
-.chart-item:nth-child(4) {
-  grid-column: 1 / -1;
-  height: 320px;
-}
-
-.chart-item h3 {
-  margin: 0 0 10px 0;
-  font-size: 16px;
-  font-weight: 600;
-  text-align: center;
-  flex-shrink: 0;
-}
-
-.chart-item :deep(.ant-card-body) {
-  padding: 0;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.chart-item :deep(.echarts-ui),
-.chart-item :deep(.ant-card-body) > div:not(h3) {
-  flex: 1;
-  min-height: 0;
-}
 
 @media (max-width: 1400px) {
   .chart-container {
@@ -814,13 +684,13 @@ defineExpose({
   .stat-divider {
     width: 100%;
     height: 1px;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgb(255 255 255 / 20%);
   }
 
   .year-selector-wrapper {
-    width: 100%;
     justify-content: center;
-    background: rgba(255, 255, 255, 0.1);
+    width: 100%;
+    background: rgb(255 255 255 / 10%);
     border-radius: 8px;
   }
 
@@ -840,5 +710,137 @@ defineExpose({
   .stat-label {
     font-size: 13px;
   }
+}
+
+.income-dashboard {
+  padding: 12px;
+}
+
+.dashboard-header {
+  display: flex;
+  gap: 24px;
+  align-items: stretch;
+  justify-content: space-between;
+}
+
+.year-selector-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+}
+
+.year-select {
+  width: 160px;
+}
+
+.year-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+}
+
+.total-card {
+  padding: 16px;
+  margin-bottom: 12px;
+  color: white;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgb(102 126 234 / 25%);
+  transition: all 0.3s ease;
+}
+
+.total-card:hover {
+  box-shadow: 0 12px 40px rgb(102 126 234 / 35%);
+  transform: translateY(-2px);
+}
+
+.total-stats {
+  display: flex;
+  flex: 1;
+  gap: 24px;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px;
+  background: rgb(255 255 255 / 10%);
+  border: 1px solid rgb(255 255 255 / 15%);
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-label {
+  margin-bottom: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  letter-spacing: 0.3px;
+  opacity: 0.85;
+}
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff; /* Fallback */
+  letter-spacing: 0.5px;
+  background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
+  background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 60px;
+  background: rgb(255 255 255 / 20%);
+  border-radius: 0.5px;
+}
+
+.chart-container {
+  display: grid;
+  grid-template-rows: auto auto;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  height: auto;
+}
+
+.chart-item {
+  height: 400px;
+  overflow: hidden; /* 防止内容溢出 */
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
+}
+
+/* 月份收入图单独占据一行 */
+.chart-item:nth-child(4) {
+  grid-column: 1 / -1;
+  height: 320px;
+}
+
+.chart-item h3 {
+  flex-shrink: 0;
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.chart-item :deep(.ant-card-body) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 0;
+}
+
+.chart-item :deep(.echarts-ui),
+.chart-item :deep(.ant-card-body) > div:not(h3) {
+  flex: 1;
+  min-height: 0;
 }
 </style>

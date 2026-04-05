@@ -132,9 +132,9 @@ defineExpose({
 }
 
 .filter-active {
+  position: relative;
   color: var(--ant-primary-color);
   border-color: var(--ant-primary-color);
-  position: relative;
 }
 
 .filter-badge {
@@ -143,9 +143,9 @@ defineExpose({
   right: -2px;
   width: 8px;
   height: 8px;
-  border-radius: 50%;
   background-color: #ff4d4f;
   border: 1px solid #fff;
+  border-radius: 50%;
 }
 
 .filter-popover {
@@ -154,12 +154,12 @@ defineExpose({
 
 .filter-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding-bottom: 8px;
-  border-bottom: 1px solid #f0f0f0;
   margin-bottom: 8px;
   font-weight: 500;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .category-list {
@@ -172,12 +172,12 @@ defineExpose({
 }
 
 .group-title {
+  padding: 4px 8px;
+  margin-bottom: 4px;
   font-size: 12px;
   color: #999;
-  padding: 4px 8px;
   background: #fafafa;
   border-radius: 4px;
-  margin-bottom: 4px;
 }
 
 .category-item {
@@ -198,11 +198,11 @@ defineExpose({
 }
 
 .color-indicator {
+  flex-shrink: 0;
   width: 12px;
   height: 12px;
-  border-radius: 50%;
   margin-right: 8px;
-  flex-shrink: 0;
+  border-radius: 50%;
 }
 
 .category-name {
@@ -213,13 +213,13 @@ defineExpose({
 }
 
 .override-tag {
-  font-size: 10px;
-  background: #fff7e6;
-  color: #1890ff;
-  border: 1px solid #91d5ff;
   padding: 0 4px;
-  border-radius: 2px;
   margin-right: 8px;
+  font-size: 10px;
+  color: #1890ff;
+  background: #fff7e6;
+  border: 1px solid #91d5ff;
+  border-radius: 2px;
 }
 
 .check-icon {
@@ -227,8 +227,8 @@ defineExpose({
 }
 
 .empty-text {
-  text-align: center;
-  color: #999;
   padding: 16px 0;
+  color: #999;
+  text-align: center;
 }
 </style>

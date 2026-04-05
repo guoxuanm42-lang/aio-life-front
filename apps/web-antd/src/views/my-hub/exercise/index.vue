@@ -776,10 +776,10 @@ const tableReload = () => {
       <!-- 图表容器 -->
       <div class="chart-container">
         <Card class="chart-item">
-          <EchartsUI ref="lineChartRef" style="height: 300px; width: 100%;" />
+          <EchartsUI ref="lineChartRef" style=" width: 100%;height: 300px;" />
         </Card>
         <Card class="chart-item">
-          <EchartsUI ref="pieChartRef" style="height: 300px; width: 100%;" />
+          <EchartsUI ref="pieChartRef" style=" width: 100%;height: 300px;" />
         </Card>
       </div>
     </div>
@@ -873,6 +873,25 @@ const tableReload = () => {
 </template>
 
 <style scoped>
+
+
+@media (max-width: 1200px) {
+  .chart-container {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .chart-item {
+    height: 350px;
+  }
+}
+
+@media (max-width: 768px) {
+  .total-amount {
+    font-size: 24px;
+  }
+}
+
 .exercise-wrapper {
   padding: 12px;
 }
@@ -893,9 +912,9 @@ const tableReload = () => {
 }
 
 :deep(.mobile-row .vxe-body--column) {
+  height: 48px !important;
   padding-top: 8px !important;
   padding-bottom: 8px !important;
-  height: 48px !important;
 }
 
 /* 隐藏移动端的排序图标以节省空间，或者保留但变小 */
@@ -904,12 +923,12 @@ const tableReload = () => {
 }
 
 .total-card {
-  background: linear-gradient(135deg, #4ecdc4 0%, #26a69a 100%);
-  border-radius: 12px;
   padding: 12px;
   margin-bottom: 12px;
-  box-shadow: 0 4px 20px rgba(78, 205, 196, 0.3);
   color: white;
+  background: linear-gradient(135deg, #4ecdc4 0%, #26a69a 100%);
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgb(78 205 196 / 30%);
 }
 
 .total-content {
@@ -924,9 +943,9 @@ const tableReload = () => {
 }
 
 .total-label {
+  margin-bottom: 8px;
   font-size: 16px;
   opacity: 0.9;
-  margin-bottom: 8px;
 }
 
 .total-amount {
@@ -943,66 +962,50 @@ const tableReload = () => {
 }
 
 .chart-item {
-  /* background: #fff; */
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   min-width: 0; /* 防止 grid item 溢出 */
   overflow: hidden;
+
+  /* background: #fff; */
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 10%);
 }
 
 .chart-item :deep(.ant-card-body) {
-  padding: 12px;
   height: 100%;
+  padding: 12px;
 }
 
 .chart-item :deep(.echarts-ui) {
   height: 300px;
 }
 
-@media (max-width: 1200px) {
-  .chart-container {
-    grid-template-columns: 1fr;
-    height: auto;
-  }
-
-  .chart-item {
-    height: 350px;
-  }
-}
-
-@media (max-width: 768px) {
-  .total-amount {
-    font-size: 24px;
-  }
-}
-
 .mobile-card-item {
-  background: #fff;
-  border-radius: 8px;
   padding: 12px;
   margin-bottom: 8px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  background: #fff;
   border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 5%);
 }
 
 .card-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
+  justify-content: space-between;
   padding-bottom: 8px;
+  margin-bottom: 8px;
   border-bottom: 1px solid #f0f0f0;
 }
 
 .card-title {
-  font-weight: 600;
   font-size: 16px;
+  font-weight: 600;
   color: #333;
 }
 
 .card-date {
-  color: #999;
   font-size: 12px;
+  color: #999;
 }
 
 .card-body {
@@ -1016,21 +1019,21 @@ const tableReload = () => {
 }
 
 .card-row .label {
-  color: #666;
-  width: 50px;
   flex-shrink: 0;
+  width: 50px;
+  color: #666;
 }
 
 .card-row .value {
-  color: #333;
   flex: 1;
+  color: #333;
 }
 
 .card-footer {
   display: flex;
-  justify-content: flex-end;
   gap: 8px;
-  border-top: 1px dashed #f0f0f0;
+  justify-content: flex-end;
   padding-top: 8px;
+  border-top: 1px dashed #f0f0f0;
 }
 </style>

@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRaw } from 'vue';
 import { query as queryThink, save as saveThink, update as updateThink, deleteData as deleteThink } from '#/api/core/think';
-import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin } from 'ant-design-vue';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue';
+import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin, FloatButton } from 'ant-design-vue';
+import { PlusOutlined, DeleteOutlined, VerticalAlignTopOutlined } from '@ant-design/icons-vue';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 interface Event {
   id: number;
@@ -203,18 +204,6 @@ onMounted(async () => {
 
 <template>
   <div class="think-page">
-    <div class="header">
-      <div class="header-left">
-        <div class="subtitle">记录每次思考，捕捉灵感瞬间。</div>
-      </div>
-      <div class="header-right">
-        <Button type="primary" @click="openAddModal">
-          <template #icon><PlusOutlined /></template>
-          添加新思考
-        </Button>
-      </div>
-    </div>
-
     <Spin :spinning="loading">
       <template v-if="thoughts.length === 0">
         <div class="empty-wrap">
@@ -238,11 +227,19 @@ onMounted(async () => {
           <div class="card-content">{{ thought.content }}</div>
           <div class="card-footer">
             <span class="card-date">{{ formatDate(thought.createTime) }}</span>
-            <Tag color="blue">事件 {{ (thought.events || []).length }}</Tag>
+            <Tag color="blue" v-if="(thought.events || []).length > 0">事件 {{ (thought.events || []).length }}</Tag>
           </div>
         </Card>
       </div>
     </Spin>
+
+    <GlobalFloatBtn @click="openAddModal" />
+
+    <FloatButton.BackTop :visibility-height="400" class="global-backtop-btn">
+      <template #icon>
+        <VerticalAlignTopOutlined />
+      </template>
+    </FloatButton.BackTop>
 
     <Modal v-model:open="showModal" :title="modalTitle" :footer="null" :maskClosable="false" @cancel="closeCardModal">
       <Form layout="vertical">
@@ -290,75 +287,73 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+
+
 .think-page {
-  padding: 24px;
   max-width: 1200px;
+  padding: 24px;
   margin: 0 auto;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding: 24px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #f0f5ff 0%, #fff 100%);
-  border: 1px solid rgba(230, 244, 255, 0.8);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #1f1f1f;
-  letter-spacing: -0.5px;
-}
-
-.subtitle {
-  color: #666;
-  font-size: 14px;
-}
-
 .empty-wrap {
+  padding: 60px 20px;
+  text-align: center;
   background: #fff;
   border: 1px dashed #d9d9d9;
   border-radius: 12px;
-  padding: 60px 20px;
-  text-align: center;
 }
 
 .cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  columns: 1;
   gap: 20px;
 }
 
+@media (min-width: 640px) {
+  .cards-grid {
+    columns: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cards-grid {
+    columns: 3;
+  }
+}
+
+/* Mobile Adaptation */
+@media (max-width: 768px) {
+  .think-page {
+    padding: 16px;
+  }
+
+  .cards-grid {
+    columns: 1;
+    gap: 16px;
+  }
+
+  .thought-card :deep(.ant-card-body) {
+    padding: 16px;
+  }
+
+  .card-content {
+    -webkit-line-clamp: 4;
+    font-size: 14px;
+  }
+}
+
 .thought-card {
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s ease;
+  margin-bottom: 20px;
   background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+  break-inside: avoid;
 }
 
 .thought-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
   border-color: #e6f4ff;
+  box-shadow: 0 12px 24px rgb(0 0 0 / 6%);
+  transform: translateY(-4px);
 }
 
 .thought-card :deep(.ant-card-body) {
@@ -369,21 +364,21 @@ onMounted(async () => {
 }
 
 .card-content {
-  flex: 1;
-  font-size: 15px;
-  color: #262626;
-  line-height: 1.6;
   display: -webkit-box;
-  -webkit-line-clamp: 6;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  flex: 1;
   margin-bottom: 16px;
+  overflow: hidden;
+  -webkit-line-clamp: 6;
+  font-size: 15px;
+  line-height: 1.6;
+  color: #262626;
+  -webkit-box-orient: vertical;
 }
 
 .card-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   padding-top: 12px;
   border-top: 1px solid #f5f5f5;
 }
@@ -394,16 +389,16 @@ onMounted(async () => {
 }
 
 .event-item {
-  margin-bottom: 16px;
   padding: 12px;
+  margin-bottom: 16px;
   background: #f9f9f9;
   border-radius: 8px;
 }
 
 .event-row {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
 }
 
 .event-time {
@@ -418,42 +413,17 @@ onMounted(async () => {
   margin-top: 24px;
 }
 
-/* Mobile Adaptation */
-@media (max-width: 768px) {
-  .think-page {
-    padding: 16px;
-  }
+/* 隐藏原生 textarea 滚动条但保留功能，使 UI 更简洁 */
+textarea::-webkit-scrollbar {
+  width: 6px;
+}
 
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 16px;
-    margin-bottom: 16px;
-    border-radius: 12px;
-  }
+textarea::-webkit-scrollbar-thumb {
+  background: rgb(156 163 175 / 50%);
+  border-radius: 4px;
+}
 
-  .header-right {
-    width: 100%;
-    margin-top: 16px;
-  }
-
-  .header-right .ant-btn {
-    width: 100%;
-    height: 40px;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .thought-card :deep(.ant-card-body) {
-    padding: 16px;
-  }
-
-  .card-content {
-    font-size: 14px;
-    -webkit-line-clamp: 4;
-  }
+textarea:hover::-webkit-scrollbar-thumb {
+  background: rgb(156 163 175 / 80%);
 }
 </style>

@@ -846,83 +846,99 @@ onUnmounted(() => {
 .prose {
   max-width: none;
 }
+
 .prose :deep(p) {
-  margin-bottom: 0.75rem;
   margin-top: 0.75rem;
+  margin-bottom: 0.75rem;
 }
+
 .prose :deep(h1) {
-  font-size: 1.5rem;
-  font-weight: 700;
   margin-top: 1.25rem;
   margin-bottom: 0.75rem;
+  font-size: 1.5rem;
+  font-weight: 700;
 }
+
 .prose :deep(h2) {
-  font-size: 1.25rem;
-  font-weight: 600;
   margin-top: 1rem;
   margin-bottom: 0.5rem;
-}
-.prose :deep(h3) {
-  font-size: 1.125rem;
+  font-size: 1.25rem;
   font-weight: 600;
+}
+
+.prose :deep(h3) {
   margin-top: 0.875rem;
   margin-bottom: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 600;
 }
+
 .prose :deep(code) {
-  background-color: #f3f4f6;
   padding: 0.125rem 0.375rem;
-  border-radius: 0.375rem;
-  font-size: 0.875rem;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  font-size: 0.875rem;
+  background-color: #f3f4f6;
+  border-radius: 0.375rem;
 }
+
 .prose :deep(pre) {
-  background-color: #1f2937;
-  color: #e5e7eb;
   padding: 1rem;
-  border-radius: 0.5rem;
-  overflow-x: auto;
   margin: 0.75rem 0;
+  overflow-x: auto;
+  color: #e5e7eb;
+  background-color: #1f2937;
+  border-radius: 0.5rem;
 }
+
 .prose :deep(pre code) {
-  background-color: transparent;
   padding: 0;
+  background-color: transparent;
 }
+
 .prose :deep(ul) {
   padding-left: 1.5rem;
   margin: 0.5rem 0;
 }
+
 .prose :deep(ol) {
   padding-left: 1.5rem;
   margin: 0.5rem 0;
 }
+
 .prose :deep(li) {
   margin: 0.25rem 0;
 }
+
 .prose :deep(blockquote) {
-  border-left: 4px solid #3b82f6;
   padding-left: 1rem;
   margin: 0.75rem 0;
-  color: #4b5563;
   font-style: italic;
+  color: #4b5563;
+  border-left: 4px solid #3b82f6;
 }
+
 .prose :deep(a) {
   color: #3b82f6;
   text-decoration: underline;
 }
+
 .prose :deep(a:hover) {
   color: #1d4ed8;
 }
+
 .prose :deep(table) {
   width: 100%;
-  border-collapse: collapse;
   margin: 0.75rem 0;
+  border-collapse: collapse;
 }
+
 .prose :deep(th), .prose :deep(td) {
-  border: 1px solid #d1d5db;
   padding: 0.5rem;
+  border: 1px solid #d1d5db;
 }
+
 .prose :deep(th) {
-  background-color: #f3f4f6;
   font-weight: 600;
+  background-color: #f3f4f6;
 }
 </style>

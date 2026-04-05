@@ -760,19 +760,7 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-/* 自定义滚动条样式，使其更简洁 */
-.overflow-x-auto::-webkit-scrollbar {
-  height: 4px;
-}
 
-.overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
-}
-
-.dark .overflow-x-auto::-webkit-scrollbar-thumb {
-  background-color: rgba(255, 255, 255, 0.1);
-}
 
 /* 手机端隐藏滚动条 */
 @media (max-width: 768px) {
@@ -785,4 +773,19 @@ onMounted(async () => {
     display: none;
   }
 }
+
+.overflow-x-auto::-webkit-scrollbar {
+  height: 4px;
+}
+
+.overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: rgb(0 0 0 / 10%);
+  border-radius: 2px;
+}
+
+.dark .overflow-x-auto::-webkit-scrollbar-thumb {
+  background-color: rgb(255 255 255 / 10%);
+}
+
+/* 自定义滚动条样式，使其更简洁 */
 </style>

@@ -192,22 +192,22 @@ const cancelEdit = () => {
 
 /* 减轻列表项边框颜色 */
 :deep(.ant-list-split .ant-list-item) {
-  border-block-end: 1px solid rgba(0, 0, 0, 0.03) !important;
+  border-block-end: 1px solid rgb(0 0 0 / 3%) !important;
   transition: all 0.2s ease;
 }
 
 :deep(.dark .ant-list-split .ant-list-item) {
-  border-block-end: 1px solid rgba(255, 255, 255, 0.05) !important;
+  border-block-end: 1px solid rgb(255 255 255 / 5%) !important;
 }
 
 /* 选中项的边框优化 */
 :deep(.ant-list-item.bg-blue-50\/50) {
-  border-left: 2px solid #3b82f6;
   padding-left: 14px !important;
+  border-left: 2px solid #3b82f6;
 }
 
 :deep(.dark .ant-list-item.bg-blue-50\/50) {
-  background-color: rgba(59, 130, 246, 0.1) !important;
+  background-color: rgb(59 130 246 / 10%) !important;
 }
 
 /* 隐藏最后一个元素的边框 */
@@ -225,19 +225,19 @@ const cancelEdit = () => {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgb(0 0 0 / 5%);
   border-radius: 10px;
 }
 
 :deep(.dark) .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgb(255 255 255 / 10%);
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
+  background: rgb(0 0 0 / 10%);
 }
 
 :deep(.dark) .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgb(255 255 255 / 20%);
 }
 </style>
