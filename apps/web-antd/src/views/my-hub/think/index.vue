@@ -92,10 +92,6 @@ const addEvent = () => {
   });
 };
 
-const removeEvent = (index: number) => {
-  form.events.splice(index, 1);
-};
-
 const removeEventById = (id: number) => {
   const idx = form.events.findIndex((e) => e.id === id);
   if (idx !== -1) form.events.splice(idx, 1);
@@ -145,6 +141,7 @@ const saveCard = async () => {
     }
 
     closeCardModal();
+    message.success('保存成功');
   } catch (e) {
     message.error('保存失败');
   }
@@ -162,14 +159,16 @@ const handleDelete = async (id: number) => {
 };
 
 const formatDate = (dateString: string) => {
-  const options: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  };
-  return new Date(dateString).toLocaleDateString('zh-CN', options);
+  const date = new Date(dateString);
+  const padZero = (num: number) => num.toString().padStart(2, '0');
+  
+  const year = date.getFullYear();
+  const month = padZero(date.getMonth() + 1);
+  const day = padZero(date.getDate());
+  const hours = padZero(date.getHours());
+  const minutes = padZero(date.getMinutes());
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
 // 生命周期
@@ -205,12 +204,12 @@ onMounted(async () => {
 <template>
   <div class="think-page">
     <Spin :spinning="loading">
-      <template v-if="thoughts.length === 0">
+      <template v-if="thoughts.length === 0 && !loading">
         <div class="empty-wrap">
-          <Empty description="还没有任何思考记录">
-            <Button type="primary" @click="openAddModal">
+          <Empty description="还没有任何思考记录，点击右下角或下方按钮添加">
+            <Button type="primary" shape="round" size="large" @click="openAddModal">
               <template #icon><PlusOutlined /></template>
-              添加新思考
+              记录闪念
             </Button>
           </Empty>
         </div>
@@ -221,13 +220,16 @@ onMounted(async () => {
           v-for="thought in thoughts"
           :key="thought.id"
           hoverable
+          :bordered="false"
           class="thought-card"
           @click="openEditModal(thought.id)"
         >
           <div class="card-content">{{ thought.content }}</div>
           <div class="card-footer">
             <span class="card-date">{{ formatDate(thought.createTime) }}</span>
-            <Tag color="blue" v-if="(thought.events || []).length > 0">事件 {{ (thought.events || []).length }}</Tag>
+            <div class="event-badge" v-if="(thought.events || []).length > 0">
+              {{ (thought.events || []).length }}
+            </div>
           </div>
         </Card>
       </div>
@@ -241,26 +243,45 @@ onMounted(async () => {
       </template>
     </FloatButton.BackTop>
 
-    <Modal v-model:open="showModal" :title="modalTitle" :footer="null" :maskClosable="false" @cancel="closeCardModal">
-      <Form layout="vertical">
-        <Form.Item label="思考内容" required>
-          <Input.TextArea v-model:value="form.content" :rows="4" placeholder="写下你的思考..." />
+    <Modal 
+      v-model:open="showModal" 
+      :title="modalTitle" 
+      :footer="null" 
+      :maskClosable="false" 
+      :destroyOnClose="true"
+      centered
+      @cancel="closeCardModal"
+    >
+      <Form layout="vertical" class="modern-form">
+        <Form.Item required>
+          <Input.TextArea 
+            v-model:value="form.content" 
+            :auto-size="{ minRows: 4, maxRows: 12 }" 
+            placeholder="这一刻的想法..." 
+            class="content-textarea"
+            :bordered="false"
+          />
         </Form.Item>
 
-        <Form.Item label="关联事件">
-          <div v-for="event in [...form.events].reverse()" :key="event.id" class="event-item">
-            <div class="event-row">
-              <Input v-model:value="event.content" placeholder="事件..." />
-              <Button type="text" danger @click="removeEventById(event.id)" v-if="form.events.length > 1">
-                <template #icon><DeleteOutlined /></template>
-              </Button>
+        <Form.Item>
+          <div class="events-section">
+            <div class="events-header">
+              <span class="events-title">关联事件流</span>
             </div>
-            <div class="event-time">{{ formatDate(event.create_time) }}</div>
+            <div v-for="event in [...form.events].reverse()" :key="event.id" class="event-item">
+              <div class="event-row">
+                <Input v-model:value="event.content" placeholder="记录相关事件..." :bordered="false" class="event-input" />
+                <Button type="text" danger shape="circle" @click="removeEventById(event.id)" v-if="form.events.length > 1">
+                  <template #icon><DeleteOutlined /></template>
+                </Button>
+              </div>
+              <div class="event-time">{{ formatDate(event.create_time) }}</div>
+            </div>
+            <Button type="dashed" block @click="addEvent" class="add-event-btn">
+              <template #icon><PlusOutlined /></template>
+              补充事件
+            </Button>
           </div>
-          <Button type="dashed" block @click="addEvent">
-            <template #icon><PlusOutlined /></template>
-            添加事件
-          </Button>
         </Form.Item>
 
         <div class="form-actions" :style="{ justifyContent: currentEditId ? 'space-between' : 'flex-end' }">
@@ -271,14 +292,14 @@ onMounted(async () => {
             cancel-text="取消"
             @confirm="handleDelete(currentEditId!)"
           >
-            <Button danger>
+            <Button danger type="text">
               <template #icon><DeleteOutlined /></template>
               删除
             </Button>
           </Popconfirm>
           <Space>
-            <Button @click="closeCardModal">取消</Button>
-            <Button type="primary" @click="saveCard">保存</Button>
+            <Button @click="closeCardModal" shape="round">取消</Button>
+            <Button type="primary" @click="saveCard" shape="round">保存</Button>
           </Space>
         </div>
       </Form>
@@ -287,25 +308,24 @@ onMounted(async () => {
 </template>
 
 <style scoped>
-
-
 .think-page {
-  max-width: 1200px;
+  max-width: 1400px;
   padding: 24px;
   margin: 0 auto;
 }
 
 .empty-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
   padding: 60px 20px;
-  text-align: center;
-  background: #fff;
-  border: 1px dashed #d9d9d9;
-  border-radius: 12px;
+  background: transparent;
 }
 
 .cards-grid {
   columns: 1;
-  gap: 20px;
+  gap: 24px;
 }
 
 @media (min-width: 640px) {
@@ -320,6 +340,12 @@ onMounted(async () => {
   }
 }
 
+@media (min-width: 1280px) {
+  .cards-grid {
+    columns: 4;
+  }
+}
+
 /* Mobile Adaptation */
 @media (max-width: 768px) {
   .think-page {
@@ -327,72 +353,109 @@ onMounted(async () => {
   }
 
   .cards-grid {
-    columns: 1;
     gap: 16px;
   }
 
   .thought-card :deep(.ant-card-body) {
-    padding: 16px;
-  }
-
-  .card-content {
-    -webkit-line-clamp: 4;
-    font-size: 14px;
+    padding: 20px;
   }
 }
 
 .thought-card {
-  margin-bottom: 20px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
-  transition: all 0.3s ease;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   break-inside: avoid;
+  overflow: hidden;
+  /* 使用透明度颜色适应夜间模式 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
 }
 
 .thought-card:hover {
-  border-color: #e6f4ff;
-  box-shadow: 0 12px 24px rgb(0 0 0 / 6%);
-  transform: translateY(-4px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
 }
 
 .thought-card :deep(.ant-card-body) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 20px;
+  padding: 24px;
 }
 
 .card-content {
   display: -webkit-box;
   flex: 1;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   overflow: hidden;
-  -webkit-line-clamp: 6;
   font-size: 15px;
-  line-height: 1.6;
-  color: #262626;
+  line-height: 1.7;
+  -webkit-line-clamp: 10;
   -webkit-box-orient: vertical;
+  word-break: break-word;
+  white-space: pre-wrap;
+  opacity: 0.85; /* 文字颜色自适应 */
 }
 
 .card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid #f5f5f5;
+  padding-top: 8px;
 }
 
 .card-date {
+  font-size: 13px;
+  opacity: 0.45;
+}
+
+.event-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   font-size: 12px;
-  color: #999;
+  font-weight: 500;
+  color: var(--ant-color-primary, #1677ff);
+  background: var(--ant-color-primary-bg, #e6f4ff);
+  border-radius: 50%;
+}
+
+/* Modal 内部样式 */
+.modern-form .content-textarea {
+  padding: 12px 16px;
+  font-size: 16px;
+  line-height: 1.6;
+  background: rgba(128, 128, 128, 0.04);
+  border-radius: 12px;
+  resize: none;
+}
+
+.modern-form .content-textarea:focus {
+  background: rgba(128, 128, 128, 0.08);
+}
+
+.events-section {
+  margin-top: 8px;
+}
+
+.events-header {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.65;
 }
 
 .event-item {
-  padding: 12px;
-  margin-bottom: 16px;
-  background: #f9f9f9;
-  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: rgba(128, 128, 128, 0.04);
+  border-radius: 12px;
+  transition: background 0.3s;
+}
+
+.event-item:hover {
+  background: rgba(128, 128, 128, 0.08);
 }
 
 .event-row {
@@ -401,10 +464,22 @@ onMounted(async () => {
   align-items: center;
 }
 
+.event-input {
+  padding: 4px 8px;
+  font-size: 14px;
+  background: transparent !important;
+}
+
 .event-time {
-  margin-top: 8px;
+  margin-top: 6px;
+  margin-left: 8px;
   font-size: 12px;
-  color: #999;
+  opacity: 0.45;
+}
+
+.add-event-btn {
+  border-radius: 12px;
+  opacity: 0.8;
 }
 
 .form-actions {
@@ -413,17 +488,17 @@ onMounted(async () => {
   margin-top: 24px;
 }
 
-/* 隐藏原生 textarea 滚动条但保留功能，使 UI 更简洁 */
+/* 隐藏原生 textarea 滚动条但保留功能 */
 textarea::-webkit-scrollbar {
-  width: 6px;
+  width: 4px;
 }
 
 textarea::-webkit-scrollbar-thumb {
-  background: rgb(156 163 175 / 50%);
+  background: rgba(128, 128, 128, 0.2);
   border-radius: 4px;
 }
 
 textarea:hover::-webkit-scrollbar-thumb {
-  background: rgb(156 163 175 / 80%);
+  background: rgba(128, 128, 128, 0.4);
 }
 </style>
