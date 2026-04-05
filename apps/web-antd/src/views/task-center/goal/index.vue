@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed, ref, onMounted, watch } from 'vue';
+import type { Rule } from 'ant-design-vue/es/form';
 
-import {
-  SearchOutlined,
-  CalendarOutlined,
-} from '@ant-design/icons-vue';
+import type { GoalEntity, GoalQueryParams } from '#/api/core/goal';
+
+import { onMounted, ref, watch } from 'vue';
+
+import { CalendarOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import {
   Button as AButton,
   DatePicker as ADatePicker,
@@ -13,28 +14,26 @@ import {
   FormItem as AFormItem,
   Input as AInput,
   InputNumber as AInputNumber,
-  Modal,
+  Progress as AProgress,
   Select as ASelect,
   SelectOption as ASelectOption,
-  Textarea as ATextarea,
-  Tag as ATag,
-  Progress as AProgress,
-  message,
   Spin as ASpin,
-  Slider as ASlider,
+  Tag as ATag,
+  message,
+  Modal,
 } from 'ant-design-vue';
-import type { Rule } from 'ant-design-vue/es/form';
 import dayjs, { Dayjs } from 'dayjs';
+import quarterOfYear from 'dayjs/plugin/quarterOfYear';
 
 import {
-  getGoalList,
   createGoal,
-  updateGoal,
   deleteGoals,
-  type GoalEntity,
-  type GoalQueryParams,
+  getGoalList,
+  updateGoal,
 } from '#/api/core/goal';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
+
+dayjs.extend(quarterOfYear);
 
 interface FormState {
   id?: number;
@@ -87,7 +86,7 @@ const rules: Record<string, Rule[]> = {
 };
 
 // Computed properties for UI mapping
-const typeMap: Record<number, { label: string; color: string }> = {
+const typeMap: Record<number, { color: string; label: string }> = {
   1: { label: '日', color: 'green' },
   2: { label: '周', color: 'cyan' },
   3: { label: '月', color: 'blue' },
@@ -100,7 +99,7 @@ const typeMap: Record<number, { label: string; color: string }> = {
   10: { label: '终生', color: 'geekblue' },
 };
 
-const statusMap: Record<number, { label: string; color: string }> = {
+const statusMap: Record<number, { color: string; label: string }> = {
   0: { label: '待开始', color: 'default' },
   1: { label: '进行中', color: 'processing' },
   2: { label: '已完成', color: 'success' },
@@ -113,60 +112,86 @@ const autoCalculateDates = (type: number) => {
   let endDate: Dayjs;
 
   switch (type) {
-    case 1: // 日目标
+    case 1: {
+      // 日目标
       startDate = now.startOf('day');
       endDate = now.endOf('day');
       break;
-    case 2: // 周目标
+    }
+    case 2: {
+      // 周目标
       startDate = now.startOf('week');
       endDate = now.endOf('week');
       break;
-    case 3: // 月度目标
+    }
+    case 3: {
+      // 月度目标
       startDate = now.startOf('month');
       endDate = now.endOf('month');
       break;
-    case 4: // 季度目标
+    }
+    case 4: {
+      // 季度目标
       startDate = now.startOf('quarter');
       endDate = now.endOf('quarter');
       break;
-    case 5: // 半年目标
+    }
+    case 5: {
+      // 半年目标
       const isFirstHalf = now.month() < 6;
-      startDate = isFirstHalf ? now.month(0).startOf('month') : now.month(6).startOf('month');
-      endDate = isFirstHalf ? now.month(5).endOf('month') : now.month(11).endOf('month');
+      startDate = isFirstHalf
+        ? now.month(0).startOf('month')
+        : now.month(6).startOf('month');
+      endDate = isFirstHalf
+        ? now.month(5).endOf('month')
+        : now.month(11).endOf('month');
       break;
-    case 6: // 年度目标
+    }
+    case 6: {
+      // 年度目标
       startDate = now.startOf('year');
       endDate = now.endOf('year');
       break;
-    case 7: // 三年目标
+    }
+    case 7: {
+      // 三年目标
       startDate = now.startOf('day');
       endDate = now.add(3, 'year').endOf('day');
       break;
-    case 8: // 五年目标
+    }
+    case 8: {
+      // 五年目标
       startDate = now.startOf('day');
       endDate = now.add(5, 'year').endOf('day');
       break;
-    case 9: // 十年目标
+    }
+    case 9: {
+      // 十年目标
       startDate = now.startOf('day');
       endDate = now.add(10, 'year').endOf('day');
       break;
-    case 10: // 人生目标
-      startDate = now.startOf('day');
-      endDate = now.year(2050).month(11).date(31).endOf('day');
+    }
+    case 10: {
+      // 人生目标
       break;
-    default:
+    }
+    default: {
       return;
+    }
   }
 
   formState.value.startDate = startDate;
   formState.value.endDate = endDate;
 };
 
-watch(() => formState.value.type, (newType) => {
-  if (newType && modalVisible.value) {
-    autoCalculateDates(newType);
-  }
-});
+watch(
+  () => formState.value.type,
+  (newType) => {
+    if (newType && modalVisible.value) {
+      autoCalculateDates(newType);
+    }
+  },
+);
 
 // Load Data
 const loadData = async () => {
@@ -312,7 +337,10 @@ const handleSave = async () => {
 
 const calculateProgress = (item: GoalEntity) => {
   if (item.targetValue && item.targetValue > 0) {
-    return Math.min(100, Math.round((item.currentValue || 0) / item.targetValue * 100));
+    return Math.min(
+      100,
+      Math.round(((item.currentValue || 0) / item.targetValue) * 100),
+    );
   }
   return 0;
 };
@@ -330,14 +358,23 @@ const parseTags = (tagsStr?: string): string[] => {
 
 const getStatusBadgeColor = (status: number) => {
   switch (status) {
-    case 0: return 'bg-gray-400';
-    case 1: return 'bg-blue-500';
-    case 2: return 'bg-green-500';
-    case 3: return 'bg-red-500';
-    default: return 'bg-gray-400';
+    case 0: {
+      return 'bg-gray-400';
+    }
+    case 1: {
+      return 'bg-blue-500';
+    }
+    case 2: {
+      return 'bg-green-500';
+    }
+    case 3: {
+      return 'bg-red-500';
+    }
+    default: {
+      return 'bg-gray-400';
+    }
   }
 };
-
 </script>
 
 <template>
@@ -401,36 +438,56 @@ const getStatusBadgeColor = (status: number) => {
 
     <!-- Card Grid -->
     <ASpin :spinning="loading">
-      <div v-if="goals.length === 0 && !loading" class="py-20 text-center text-gray-400">
+      <div
+        v-if="goals.length === 0 && !loading"
+        class="py-20 text-center text-gray-400"
+      >
         <AEmpty description="暂无目标记录" />
       </div>
 
-      <div v-else class="grid grid-cols-2 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+      <div
+        v-else
+        class="grid grid-cols-2 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      >
         <div
           v-for="item in goals"
           :key="item.id"
-          class="group relative flex flex-col justify-between rounded-2xl border border-border bg-card p-4 sm:p-6 cursor-pointer apple-card"
+          class="apple-card group relative flex cursor-pointer flex-col justify-between rounded-2xl border border-border bg-card p-4 sm:p-6"
           @click="handleEdit(item)"
           @contextmenu.prevent="handleDelete(item.id!)"
         >
           <!-- Card Header -->
           <div>
             <div class="mb-3 flex items-start justify-between">
-              <ATag :color="typeMap[item.type]?.color || 'default'" class="m-0 border-0 font-medium">
+              <ATag
+                :color="typeMap[item.type]?.color || 'default'"
+                class="m-0 border-0 font-medium"
+              >
                 {{ typeMap[item.type]?.label }}
               </ATag>
               <div class="flex items-center gap-1.5">
-                <div class="w-2 h-2 rounded-full" :class="getStatusBadgeColor(item.status)"></div>
-                <span class="text-xs text-muted-foreground">{{ statusMap[item.status]?.label }}</span>
+                <div
+                  class="h-2 w-2 rounded-full"
+                  :class="getStatusBadgeColor(item.status)"
+                ></div>
+                <span class="text-xs text-muted-foreground">{{
+                  statusMap[item.status]?.label
+                }}</span>
               </div>
             </div>
 
-            <h3 class="mb-2 text-lg font-bold text-card-foreground line-clamp-2" :title="item.title">
+            <h3
+              class="mb-2 line-clamp-2 text-lg font-bold text-card-foreground"
+              :title="item.title"
+            >
               {{ item.title }}
             </h3>
 
             <!-- Tags -->
-            <div class="mb-3 flex flex-wrap gap-1.5" v-if="item.tags && parseTags(item.tags).length > 0">
+            <div
+              class="mb-3 flex flex-wrap gap-1.5"
+              v-if="item.tags && parseTags(item.tags).length > 0"
+            >
               <span
                 v-for="tag in parseTags(item.tags)"
                 :key="tag"
@@ -440,23 +497,38 @@ const getStatusBadgeColor = (status: number) => {
               </span>
             </div>
 
-            <p class="mb-4 text-sm text-muted-foreground line-clamp-3" v-if="item.description">
+            <p
+              class="mb-4 line-clamp-3 text-sm text-muted-foreground"
+              v-if="item.description"
+            >
               {{ item.description }}
             </p>
           </div>
 
           <!-- Card Footer -->
           <div class="mt-4">
-            <div class="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+            <div
+              class="mb-2 flex items-center justify-between text-xs text-muted-foreground"
+            >
               <div class="flex items-center gap-1">
                 <CalendarOutlined />
                 <span v-if="item.startDate || item.endDate">
-                  {{ item.startDate ? dayjs(item.startDate).format('MM-DD') : '不限' }} ~
-                  {{ item.endDate ? dayjs(item.endDate).format('MM-DD') : '不限' }}
+                  {{
+                    item.startDate
+                      ? dayjs(item.startDate).format('MM-DD')
+                      : '不限'
+                  }}
+                  ~
+                  {{
+                    item.endDate ? dayjs(item.endDate).format('MM-DD') : '不限'
+                  }}
                 </span>
                 <span v-else>无期限</span>
               </div>
-              <span class="font-medium" :class="{'text-success': item.status === 2}">
+              <span
+                class="font-medium"
+                :class="{ 'text-success': item.status === 2 }"
+              >
                 {{ calculateProgress(item) }}%
               </span>
             </div>
@@ -464,7 +536,13 @@ const getStatusBadgeColor = (status: number) => {
               :percent="calculateProgress(item)"
               :show-info="false"
               size="small"
-              :status="item.status === 2 ? 'success' : (item.status === 3 ? 'exception' : 'active')"
+              :status="
+                item.status === 2
+                  ? 'success'
+                  : item.status === 3
+                    ? 'exception'
+                    : 'active'
+              "
             />
           </div>
         </div>
@@ -490,22 +568,23 @@ const getStatusBadgeColor = (status: number) => {
           <div></div>
           <div class="flex gap-2">
             <AButton @click="modalVisible = false">取消</AButton>
-            <AButton type="primary" :loading="submitLoading" @click="handleSave">确定</AButton>
+            <AButton
+              type="primary"
+              :loading="submitLoading"
+              @click="handleSave"
+            >
+              确定
+            </AButton>
           </div>
         </div>
       </template>
-      <AForm
-        ref="formRef"
-        :model="formState"
-        :rules="rules"
-        layout="vertical"
-      >
+      <AForm ref="formRef" :model="formState" :rules="rules" layout="vertical">
         <AFormItem label="目标标题" name="title">
           <AInput
             v-model:value="formState.title"
             placeholder="请输入目标标题"
             allow-clear
-            @pressEnter="handleSave"
+            @press-enter="handleSave"
           />
         </AFormItem>
 
@@ -529,25 +608,25 @@ const getStatusBadgeColor = (status: number) => {
             <ASelect v-model:value="formState.status" placeholder="请选择">
               <ASelectOption :value="0">
                 <span class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-gray-400"></span>
+                  <span class="h-2 w-2 rounded-full bg-gray-400"></span>
                   待开始
                 </span>
               </ASelectOption>
               <ASelectOption :value="1">
                 <span class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-blue-500"></span>
+                  <span class="h-2 w-2 rounded-full bg-blue-500"></span>
                   进行中
                 </span>
               </ASelectOption>
               <ASelectOption :value="2">
                 <span class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-green-500"></span>
+                  <span class="h-2 w-2 rounded-full bg-green-500"></span>
                   已完成
                 </span>
               </ASelectOption>
               <ASelectOption :value="3">
                 <span class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-red-500"></span>
+                  <span class="h-2 w-2 rounded-full bg-red-500"></span>
                   已放弃
                 </span>
               </ASelectOption>
