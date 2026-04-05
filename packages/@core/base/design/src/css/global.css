@@ -193,8 +193,8 @@
 
   /* 全局悬浮添加按钮 (FloatButton) 统一样式 */
   .global-float-btn {
-    right: 24px !important;
-    bottom: 24px !important;
+    right: 30px !important;
+    bottom: 30px !important;
     background-color: transparent !important;
   }
 

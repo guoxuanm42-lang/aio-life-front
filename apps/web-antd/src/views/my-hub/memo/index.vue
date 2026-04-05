@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted, reactive } from 'vue';
 import { usePreferences } from '@vben/preferences';
-import { Button, Modal, Input, message, Popconfirm, Tooltip, Spin, Empty, FloatButton } from 'ant-design-vue';
-import { EditOutlined, DeleteOutlined, ClockCircleOutlined, VerticalAlignTopOutlined } from '@ant-design/icons-vue';
+import { Button, Modal, Input, message, Popconfirm, Tooltip, Spin, Empty } from 'ant-design-vue';
+import { EditOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons-vue';
 import { getMemoListApi, createMemoApi, updateMemoApi, deleteMemoApi, type Memo } from '#/api/core/memo';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -205,12 +205,6 @@ onMounted(() => {
     </Modal>
     
     <GlobalFloatBtn @click="handleAdd" />
-
-    <FloatButton.BackTop :visibility-height="400" class="global-backtop-btn">
-      <template #icon>
-        <VerticalAlignTopOutlined />
-      </template>
-    </FloatButton.BackTop>
   </div>
 </template>
 

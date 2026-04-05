@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRaw } from 'vue';
 import { query as queryThink, save as saveThink, update as updateThink, deleteData as deleteThink } from '#/api/core/think';
-import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin, FloatButton } from 'ant-design-vue';
-import { PlusOutlined, DeleteOutlined, VerticalAlignTopOutlined } from '@ant-design/icons-vue';
+import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin } from 'ant-design-vue';
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 interface Event {
@@ -235,13 +235,7 @@ onMounted(async () => {
       </div>
     </Spin>
 
-    <GlobalFloatBtn @click="openAddModal" />
-
-    <FloatButton.BackTop :visibility-height="400" class="global-backtop-btn">
-      <template #icon>
-        <VerticalAlignTopOutlined />
-      </template>
-    </FloatButton.BackTop>
+    <GlobalFloatBtn @click="openCreateModal" />
 
     <Modal 
       v-model:open="showModal" 
