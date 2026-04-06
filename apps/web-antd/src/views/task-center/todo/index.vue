@@ -203,6 +203,18 @@
                 @blur="handleDetailBlur(detail)"
               />
               <div class="subtask-actions">
+                <a-button 
+                  type="text" 
+                  size="small" 
+                  class="subtask-star-btn"
+                  @click="handleStar(detail)"
+                >
+                  <template #icon>
+                    <StarOutlined 
+                      :style="{ color: detail.isStarred === 1 ? '#faad14' : '#d9d9d9' }" 
+                    />
+                  </template>
+                </a-button>
                 <a-dropdown :trigger="['click']" placement="bottomRight">
                   <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; user-select: none; border-radius: 4px;" class="priority-tag">
                     {{ getPriorityLabel(detail.priority) }}
@@ -327,10 +339,10 @@ import { Button as AButton, Input as AInput, Textarea as ATextarea, Modal as AMo
 
 import { getTaskColumnList, saveColumn, updateColumn, deleteColumn, reSortColumn} from '#/api/core/todo';
 
-import { getTaskList, saveTask, updateTask, deleteTask, reSortTask, getTaskDetail, addTaskDetail, updateTaskDetail, deleteTaskDetail, reSortTaskDetail } from '#/api/core/todo';
+import { getTaskList, saveTask, updateTask, deleteTask, reSortTask, getTaskDetail, addTaskDetail, updateTaskDetail, deleteTaskDetail, reSortTaskDetail, starTaskDetail, unstarTaskDetail } from '#/api/core/todo';
 
 import dayjs from 'dayjs';
-import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, EditOutlined, MoreOutlined, CalendarOutlined, ClockCircleOutlined, UserOutlined, HolderOutlined } from '@ant-design/icons-vue';
+import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, EditOutlined, MoreOutlined, CalendarOutlined, ClockCircleOutlined, UserOutlined, HolderOutlined, StarOutlined } from '@ant-design/icons-vue';
 import { Popover as APopover } from 'ant-design-vue';
 import { Modal } from 'ant-design-vue';
 
@@ -622,6 +634,16 @@ const getPriorityLabel = (priority: number) => {
   if (priority === 1) return '高';
   if (priority === 10) return '中';
   return '低';
+};
+
+const handleStar = async (detail: Detail) => {
+  if (detail.isStarred === 1) {
+    detail.isStarred = 0;
+    await unstarTaskDetail(detail.id);
+  } else {
+    detail.isStarred = 1;
+    await starTaskDetail(detail.id);
+  }
 };
 
 const refreshTask = async (taskId: number) => {
@@ -1098,5 +1120,9 @@ const handleEditColumnOk = async () => {
 .subtask-date {
   width: 140px;
   margin-right: 4px;
+}
+
+.subtask-star-btn {
+  margin-right: 8px;
 }
 </style>

@@ -26,6 +26,7 @@ export interface Detail {
   content: string;
   isCompleted: number; // 0: uncompleted, 1: completed
   priority: number; // 1: very important, 10: important, 20: normal
+  isStarred?: number; // 0: not starred, 1: starred
   startTime?: string;
   endTime?: string;
 }
@@ -68,6 +69,14 @@ export async function deleteTaskDetail(id: string | number) {
 
 export async function reSortTaskDetail(data: any) {
   return await requestClient.post('/taskDetails/reSort', data);
+}
+
+export async function starTaskDetail(id: number) {
+  return await requestClient.post<boolean>(`/taskDetails/star/${id}`);
+}
+
+export async function unstarTaskDetail(id: number) {
+  return await requestClient.post<boolean>(`/taskDetails/unstar/${id}`);
 }
 
 export async function saveTask(data: any) {
