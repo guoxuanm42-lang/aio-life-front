@@ -8,9 +8,6 @@
       <div class="header-right">
         <!-- 按钮区 -->
         <div class="actions">
-          <Button type="primary" @click="router.push('/time-management/time-tracker/category-config')" :disabled="loading" :size="isMobile ? 'small' : 'middle'">
-            <template #icon><SettingOutlined /></template>
-          </Button>
           <Button type="primary" danger @click="openDeleteConfirmModal" :disabled="loading" :size="isMobile ? 'small' : 'middle'">
             <template #icon><DeleteOutlined /></template>
           </Button>
@@ -395,7 +392,7 @@
 
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { SettingOutlined, PlusOutlined, LeftOutlined, RightOutlined, DeleteOutlined } from '@ant-design/icons-vue';
+import { PlusOutlined, LeftOutlined, RightOutlined, DeleteOutlined } from '@ant-design/icons-vue';
 import { Button, Modal, message, DatePicker, Spin, Radio, theme } from 'ant-design-vue';
 import { createIconifyIcon } from '@vben/icons';
 import { useRouter } from 'vue-router';

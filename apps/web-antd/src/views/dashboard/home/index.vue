@@ -387,7 +387,7 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
       <div v-if="watchedTasks.length > 0 || !watchedLoading" class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all dark:border-gray-800 dark:bg-gray-800/50">
         <div class="mb-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-base font-semibold">关注的待办</span>
+            <span class="text-base font-semibold">关注待办</span>
           </div>
           <div v-if="watchedTasks.length > 0" class="text-xs text-gray-400">
             {{ watchedTasks.length }} 个任务
