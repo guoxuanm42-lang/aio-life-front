@@ -74,6 +74,14 @@
                 {{ record.name }}
               </div>
             </template>
+            <template v-else-if="column.key === 'timeType'">
+              <Tag
+                :color="TIME_TYPE_CONFIG[record.timeType as 1 | 2 | 3]?.color || '#8c8c8c'"
+                class="text-xs"
+              >
+                {{ TIME_TYPE_CONFIG[record.timeType as 1 | 2 | 3]?.label || '未设置' }}
+              </Tag>
+            </template>
             <template v-else-if="column.key === 'isTrackTime'">
               <Switch
                 :checked="record.isTrackTime"
@@ -251,6 +259,14 @@
             :un-checked-value="0"
           />
         </Form.Item>
+
+        <Form.Item label="时间类型" name="timeType">
+          <Radio.Group v-model:value="formState.timeType">
+            <Radio.Button v-for="(config, type) in TIME_TYPE_CONFIG" :key="type" :value="Number(type)">
+              {{ config.label }}
+            </Radio.Button>
+          </Radio.Group>
+        </Form.Item>
       </Form>
     </Modal>
 
@@ -298,6 +314,7 @@ import {
   Input,
   Modal,
   Popconfirm,
+  Radio,
   Select,
   Switch,
   Table,
@@ -333,6 +350,7 @@ import {
   PRESET_ICONS,
 } from '../config';
 import type { MergedCategory } from '../types';
+import { TimeType, TIME_TYPE_CONFIG } from '../types';
 
 const router = useRouter();
 
@@ -351,7 +369,8 @@ const hiddenCategories = computed(() => mergedCategories.value.filter(c => c.isH
 const columns = [
   { title: '', dataIndex: 'drag', key: 'drag', width: 50, align: 'center' },
   { title: '图标', dataIndex: 'icon', key: 'icon', width: 80, align: 'center' },
-  { title: '名称', dataIndex: 'name', key: 'name', width: 180, align: 'center' },
+  { title: '名称', dataIndex: 'name', key: 'name', width: 140, align: 'center' },
+  { title: '时间类型', key: 'timeType', width: 100, align: 'center' },
   { title: '卡片统计', dataIndex: 'isTrackTime', key: 'isTrackTime', width: 100, align: 'center' },
   { title: '操作', key: 'actions', width: 150, align: 'center' },
 ];
@@ -382,6 +401,7 @@ const formState = ref<TimeTrackerCategoryEntity>({
   isTrackTime: 1,
   isEnabled: 1,
   sort: 0,
+  timeType: TimeType.REQUIRED,
 });
 
 const rules = {
@@ -422,6 +442,7 @@ const fetchCategories = async () => {
         icon: item.icon,
         description: item.description,
         isTrackTime: item.isTrackTime === 1,
+        timeType: item.timeType as 1 | 2 | 3 | undefined,
         categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
         isOverridden: isOverride,
         isHidden: false,
@@ -491,6 +512,7 @@ const handleEdit = (record: MergedCategory) => {
     isTrackTime: record.isTrackTime ? 1 : 0,
     isEnabled: record.isHidden ? 0 : 1,
     sort: record.sort,
+    timeType: record.timeType ?? TimeType.REQUIRED,
   };
   isOverrideMode.value = false;
   selectedIconSet.value = extractIconSet(record.icon);

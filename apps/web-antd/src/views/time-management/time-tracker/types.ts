@@ -1,3 +1,17 @@
+// 时间类型枚举
+export enum TimeType {
+  REQUIRED = 1,
+  POSITIVE = 2,
+  NEGATIVE = 3,
+}
+
+// 时间类型配置
+export const TIME_TYPE_CONFIG = {
+  [TimeType.REQUIRED]: { label: '必须', color: '#8c8c8c' },
+  [TimeType.POSITIVE]: { label: '积极', color: '#52c41a' },
+  [TimeType.NEGATIVE]: { label: '休闲', color: '#f5222d' },
+} as const;
+
 // 时间段类型定义
 export interface TimeSlot {
   id: string;
@@ -24,6 +38,7 @@ export interface TimeSlotCategory {
   icon?: string;  // 图标名称(Iconify格式)
   description?: string;
   isTrackTime?: boolean;
+  timeType?: 1 | 2 | 3;  // 时间类型: 1-必须, 2-积极, 3-休闲
   // 新增字段
   categoryType?: 'public' | 'private';  // 分类来源类型
   originalId?: string;  // 原始公共分类ID（仅覆盖记录）

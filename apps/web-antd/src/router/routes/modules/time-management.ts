@@ -20,7 +20,7 @@ const routes: RouteRecordRaw[] = [
           maxIdleTime: 60,
         },
         name: 'TimeTracker',
-        path: '/time-management/time-tracker',
+        path: '/time/time-tracker',
         component: () => import('#/views/time-management/time-tracker/index.vue'),
       },
       {
@@ -31,7 +31,7 @@ const routes: RouteRecordRaw[] = [
           keepAlive: true,
         },
         name: 'TimeTrackerDashboard',
-        path: '/time-management/dashboard',
+        path: '/time/dashboard',
         component: () => import('#/views/time-management/dashboard/index.vue'),
       },
       {
@@ -41,7 +41,7 @@ const routes: RouteRecordRaw[] = [
           backTop: false,
         },
         name: 'CategoryConfig',
-        path: '/time-management/my-categories',
+        path: '/time/my-categories',
         component: () =>
           import('#/views/time-management/time-tracker/category-config/index.vue'),
       },
@@ -53,7 +53,7 @@ const routes: RouteRecordRaw[] = [
           authority: ['admin'],
         },
         name: 'TimeTrackerCategoryAdmin',
-        path: '/time-management/category-admin',
+        path: '/time/category-admin',
         component: () =>
           import('#/views/time-management/time-tracker/admin/index.vue'),
       },

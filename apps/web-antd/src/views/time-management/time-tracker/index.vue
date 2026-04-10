@@ -296,6 +296,16 @@
                 </div>
               </div>
             </div>
+
+            <!-- 时间类型分布饼图 -->
+            <TimeTypePieChart
+              v-if="selectedFilterCategoryIds.length === 0"
+              :time-slots="timeSlots"
+              :categories="config.categories"
+              :selected-date="selectedDate"
+              :selected-filter-category-ids="selectedFilterCategoryIds"
+            />
+
             <!-- 在周/月视图且有分类筛选时显示每日分类柱状图 -->
             <DailyCategoryBarChart
               v-if="(statMode === 'week' || statMode === 'month') && selectedFilterCategoryIds.length > 0"
@@ -400,6 +410,7 @@ import dayjs from 'dayjs';
 import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { TimeSlot, DragOperation } from './types';
+import { TimeType, TIME_TYPE_CONFIG } from './types';
 
 import { defaultConfig } from './config';
 import {
@@ -414,6 +425,7 @@ import {
   snapToGrid,
 } from './utils';
 import TimeTrackerModal from './components/TimeTrackerModal.vue';
+import TimeTypePieChart from './components/TimeTypePieChart.vue';
 import TimeCategoryPieChart from './components/TimeCategoryPieChart.vue';
 import TimeCategoryStackedAreaChart from './components/TimeCategoryStackedAreaChart.vue';
 import TimeCategoryBarChart from './components/TimeCategoryBarChart.vue';
@@ -488,13 +500,14 @@ const loadCategories = async () => {
         const isPublic = Number(item.userId) === 0;
         const isOverride = !!item.templateId;
         return {
-          id: item.id as string, // 保持与历史记录一致，使用 id 作为分类标识
-          realId: item.id as string, // 保留真实的数据库 ID
+          id: item.id as string,
+          realId: item.id as string,
           name: item.name,
           color: item.color,
           icon: item.icon,
           description: item.description,
           isTrackTime: item.isTrackTime === 1,
+          timeType: item.timeType as 1 | 2 | 3 | undefined,
           categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
           isOverridden: isOverride,
           isHidden: false,

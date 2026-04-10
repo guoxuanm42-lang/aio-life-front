@@ -6,19 +6,20 @@ import { requestClient } from '#/api/request';
 export interface TimeTrackerCategoryEntity {
   id?: string;
   userId?: string;
-  templateId?: string | null;  // 新增：模板ID，指向被覆盖的公共分类ID
+  templateId?: string | null;
   name: string;
   color: string;
-  icon?: string;  // 图标名称(Iconify格式)
+  icon?: string;
   description?: string;
   isTrackTime?: number;
   sort?: number;
-  isDeleted?: number;    // 逻辑删除标记
-  isEnabled?: number;    // 是否启用：1-启用，0-禁用
+  isDeleted?: number;
+  isEnabled?: number;
+  timeType?: 1 | 2 | 3;  // 时间类型: 1-必须, 2-积极, 3-休闲
   // 客户端计算字段（不发送到后端）
-  _categoryType?: 'public' | 'private' | 'override';  // 分类类型标识
-  _originalName?: string;  // 原始名称（仅覆盖记录使用）
-  _isHidden?: boolean;    // 是否被用户隐藏
+  _categoryType?: 'public' | 'private' | 'override';
+  _originalName?: string;
+  _isHidden?: boolean;
 }
 
 /**
