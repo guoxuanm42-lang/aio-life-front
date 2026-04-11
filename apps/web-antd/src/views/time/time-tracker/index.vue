@@ -1771,7 +1771,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   grid-template-columns: 45px 1fr;
   height: 45px;
   border-bottom: 1px solid v-bind('token.colorSplit');
-  background: v-bind('token.colorBgLayout');
+  background: v-bind('token.colorBgContainer');
 }
 
 .day-column-header {
@@ -1814,7 +1814,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   grid-template-columns: 45px repeat(var(--month-day-count, 30), 1fr);
   height: 45px;
   border-bottom: 1px solid v-bind('token.colorSplit');
-  background: v-bind('token.colorBgLayout');
+  background: v-bind('token.colorBgContainer');
   overflow: hidden;
 }
 
@@ -1883,7 +1883,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   grid-template-columns: 45px repeat(7, 1fr);
   height: 45px;
   border-bottom: 1px solid v-bind('token.colorSplit');
-  background: v-bind('token.colorBgLayout');
+  background: v-bind('token.colorBgContainer');
 }
 
 .time-scale-header {
@@ -1965,7 +1965,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
 .time-scale {
   position: relative;
   width: 45px;
-  background: v-bind('token.colorBgLayout');
+  background: v-bind('token.colorBgContainer');
   border-right: 1px solid v-bind('token.colorSplit');
   flex-shrink: 0;
 }

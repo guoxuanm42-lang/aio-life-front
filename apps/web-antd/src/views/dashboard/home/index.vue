@@ -22,7 +22,7 @@ import {
 } from '#/constants/action';
 
 import ExerciseAddModal from '../../my-hub/exercise/components/ExerciseAddModal.vue';
-import TimeTrackerModal from '../../time-management/time-tracker/components/TimeTrackerModal.vue';
+import TimeTrackerModal from '../../time/time-tracker/components/TimeTrackerModal.vue';
 import AnalysisCard from './components/analysis-card.vue';
 
 interface OverviewItem {

@@ -1,5 +1,5 @@
 <template>
-  <Card :title="title" :bordered="bordered" class="pie-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+  <Card class="pie-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
     <div class="pie-chart-container">
       <EchartsUI ref="chartRef" />
     </div>
@@ -9,50 +9,39 @@
 <script setup lang="ts">
 import type { EchartsUIType } from '@vben/plugins/echarts';
 import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
-import { TimeType, TIME_TYPE_CONFIG } from '../types';
+import { getCategoryColor, getCategoryName } from '../config';
 
 import { computed, onMounted, ref, watch } from 'vue';
 import { Card } from 'ant-design-vue';
-import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import dayjs from 'dayjs';
+import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 interface Props {
   timeSlots: TimeSlot[];
   categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   selectedFilterCategoryIds?: string[] | null;
-  title?: string;
-  bordered?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  title: '类型统计',
-  bordered: true,
-  selectedFilterCategoryIds: () => [],
-});
+const props = defineProps<Props>();
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
-// 计算每个时间类型的总时长
-const timeTypeDurations = computed(() => {
-  const durations = {
-    [TimeType.REQUIRED]: 0,
-    [TimeType.POSITIVE]: 0,
-    [TimeType.NEGATIVE]: 0,
-  };
+// 计算每个分类的总时长
+const categoryDurations = computed(() => {
+  const durations: Record<string, number> = {};
 
   props.timeSlots.forEach(slot => {
     // 如果有分类过滤，且当前 slot 不属于过滤分类，则跳过
     if (props.selectedFilterCategoryIds && props.selectedFilterCategoryIds.length > 0 && !props.selectedFilterCategoryIds.includes(slot.categoryId)) {
       return;
     }
-    
-    const category = props.categories.find(c => c.id === slot.categoryId);
-    const timeType = category?.timeType;
-    
-    if (timeType && durations[timeType as TimeType] !== undefined) {
-      durations[timeType as TimeType] += (slot.endTime - slot.startTime + 1);
+    const duration = slot.endTime - slot.startTime + 1;
+    if (durations[slot.categoryId] !== undefined) {
+      durations[slot.categoryId] = (durations[slot.categoryId] || 0) + duration;
+    } else {
+      durations[slot.categoryId] = duration;
     }
   });
 
@@ -61,23 +50,16 @@ const timeTypeDurations = computed(() => {
 
 // 生成饼图数据
 const pieChartData = computed(() => {
-  const data = [
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.REQUIRED].label, 
-      value: timeTypeDurations.value[TimeType.REQUIRED],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.REQUIRED].color }
-    },
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.POSITIVE].label, 
-      value: timeTypeDurations.value[TimeType.POSITIVE],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.POSITIVE].color }
-    },
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.NEGATIVE].label, 
-      value: timeTypeDurations.value[TimeType.NEGATIVE],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.NEGATIVE].color }
-    }
-  ].filter(item => item.value > 0);
+  const data = props.categories.map(category => {
+    const duration = categoryDurations.value[category.id] || 0;
+    return {
+      name: getCategoryName(category.id, props.categories),
+      value: duration,
+      itemStyle: {
+        color: getCategoryColor(category.id, props.categories)
+      }
+    };
+  }).filter(item => item.value > 0); // 只显示有数据的分类
 
   return data;
 });
@@ -96,34 +78,49 @@ const renderPieChart = () => {
         const percentage = params.percent;
 
         return `${params.name}<br/>
-                ${hours}小时${minutes}分钟 (${percentage}%)`;
+                ${hours}小时${minutes}分钟 (${percentage}%)<br/>
+                总时长: ${duration}分钟`;
       }
     },
     legend: {
-      orient: 'horizontal' as const,
-      bottom: 5,
-      left: 'center',
+      orient: 'vertical' as const,
+      right: 5,
+      top: 'center',
       textStyle: {
-        fontSize: 12
+        fontSize: 11
       }
     },
     series: [
       {
-        name: '时间类型',
+        name: '时间分类',
         type: 'pie' as const,
         radius: ['50%', '85%'],
-        center: ['50%', '45%'],
+        center: ['42%', '45%'],
         avoidLabelOverlap: true,
         itemStyle: {
-          borderRadius: 10,
+          borderRadius: 8,
           borderColor: '#fff',
           borderWidth: 2
         },
         label: {
           show: true,
           position: 'outside' as const,
-          formatter: '{b}: {d}%',
-          fontSize: 11
+          formatter: (params: any) => {
+            const percentage = params.percent;
+            return `${params.name}\n${percentage}%`;
+          },
+          fontSize: 10,
+          fontWeight: 'normal' as const,
+          color: '#666',
+          minMargin: 5,
+          overflow: 'truncate' as const,
+          width: 60,
+        },
+        labelLine: {
+          show: true,
+          length: 5,
+          length2: 8,
+          smooth: true
         },
         emphasis: {
           label: {
@@ -152,6 +149,7 @@ onMounted(() => {
 
 <style scoped>
 .pie-chart-card {
+  width: 100%;
   min-width: 300px;
   flex: 2;
 }

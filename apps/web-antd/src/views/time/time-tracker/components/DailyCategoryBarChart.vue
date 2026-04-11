@@ -192,21 +192,33 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="daily-bar-chart-container">
-    <EchartsUI ref="chartRef" />
-  </div>
+  <Card class="daily-bar-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+    <div class="daily-bar-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
 </template>
 
 <style scoped>
+.daily-bar-chart-card {
+  width: 100%;
+  min-width: 300px;
+  flex: 2;
+}
+
 .daily-bar-chart-container {
   width: 100%;
-  height: 100%;
+  height: 280px;
 }
 
 .chart-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
 }
 
 .filter-indicator {

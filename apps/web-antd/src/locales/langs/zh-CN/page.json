@@ -11,5 +11,53 @@
     "title": "概览",
     "analytics": "分析页",
     "workspace": "工作台"
+  },
+  "honor": {
+    "title": "荣誉中心",
+    "addHonor": "添加荣誉",
+    "editHonor": "编辑荣誉",
+    "noRecords": "暂无荣誉记录",
+    "deleteConfirm": "确定要删除这条荣誉记录吗？",
+    "deleteSuccess": "删除成功",
+    "deleteFailed": "删除失败",
+    "updateSuccess": "更新成功",
+    "createSuccess": "添加成功",
+    "topUpdated": "置顶状态已更新",
+    "filters": {
+      "keyword": "搜索标题、描述、机构...",
+      "category": "分类筛选",
+      "level": "级别筛选",
+      "clear": "清除筛选"
+    },
+    "form": {
+      "title": "荣誉标题",
+      "titlePlaceholder": "请输入荣誉标题，如：国家奖学金",
+      "honorDate": "获得日期",
+      "honorDatePlaceholder": "选择日期",
+      "level": "荣誉级别",
+      "levelPlaceholder": "请选择级别",
+      "issuer": "颁发机构",
+      "issuerPlaceholder": "请输入颁发机构/组织",
+      "category": "分类",
+      "categoryPlaceholder": "选择预设分类",
+      "customCategory": "自定义分类",
+      "customCategoryPlaceholder": "不选择预设分类时可输入",
+      "tags": "标签",
+      "tagsPlaceholder": "请输入标签，多个标签请用逗号分隔",
+      "description": "描述",
+      "descriptionPlaceholder": "请输入详细描述...",
+      "isPublic": "公开设置",
+      "public": "公开 - 其他用户可见",
+      "private": "私密 - 仅自己可见"
+    },
+    "level": {
+      "school": "校级",
+      "district": "区级",
+      "city": "市级",
+      "province": "省级",
+      "national": "国家级",
+      "international": "国际级",
+      "other": "其他"
+    }
   }
 }

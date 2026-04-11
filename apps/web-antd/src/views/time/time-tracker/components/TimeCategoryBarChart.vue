@@ -136,14 +136,26 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="bar-chart-container">
-    <EchartsUI ref="chartRef" />
-  </div>
+  <Card class="bar-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+    <div class="bar-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
 </template>
 
 <style scoped>
+.bar-chart-card {
+  width: 100%;
+  min-width: 300px;
+  flex: 2;
+}
+
 .bar-chart-container {
   width: 100%;
-  height: 100%;
+  height: 280px;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
 }
 </style>

@@ -1,7 +1,9 @@
 <template>
-  <div class="chart-container">
-    <EchartsUI ref="chartRef" />
-  </div>
+  <Card class="chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+    <div class="chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -241,8 +243,18 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.chart-card {
+  width: 100%;
+  min-width: 300px;
+  flex: 2;
+}
+
 .chart-container {
   width: 100%;
-  height: 100%;
+  height: 280px;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
 }
 </style>

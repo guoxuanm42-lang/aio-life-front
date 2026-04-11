@@ -21,7 +21,7 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'TimeTracker',
         path: '/time/time-tracker',
-        component: () => import('#/views/time-management/time-tracker/index.vue'),
+        component: () => import('#/views/time/time-tracker/index.vue'),
       },
       {
         meta: {
@@ -32,7 +32,7 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'TimeTrackerDashboard',
         path: '/time/dashboard',
-        component: () => import('#/views/time-management/dashboard/index.vue'),
+        component: () => import('#/views/time/dashboard/index.vue'),
       },
       {
         meta: {
@@ -43,7 +43,7 @@ const routes: RouteRecordRaw[] = [
         name: 'CategoryConfig',
         path: '/time/my-categories',
         component: () =>
-          import('#/views/time-management/time-tracker/category-config/index.vue'),
+          import('#/views/time/time-tracker/category-config/index.vue'),
       },
       {
         meta: {
@@ -54,8 +54,7 @@ const routes: RouteRecordRaw[] = [
         },
         name: 'TimeTrackerCategoryAdmin',
         path: '/time/category-admin',
-        component: () =>
-          import('#/views/time-management/time-tracker/admin/index.vue'),
+        component: () => import('#/views/time/time-tracker/admin/index.vue'),
       },
     ],
   },
