@@ -108,10 +108,15 @@ async function handleCompleteTask(detail: WatchedTaskDetail) {
 }
 
 function getPriorityColor(priority: number): string {
-  if (priority <= 3) return 'bg-red-500';
-  if (priority <= 6) return 'bg-orange-500';
-  if (priority <= 10) return 'bg-green-500';
+  if (priority === 1) return 'bg-red-500';
+  if (priority === 10) return 'bg-orange-500';
   return 'bg-gray-400';
+}
+
+function getPriorityLabel(priority: number): string {
+  if (priority === 1) return '高';
+  if (priority === 10) return '中';
+  return '低';
 }
 
 function formatTimeRange(startTime?: string, endTime?: string): string {
@@ -387,7 +392,10 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
       <div v-if="watchedTasks.length > 0 || !watchedLoading" class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all dark:border-gray-800 dark:bg-gray-800/50">
         <div class="mb-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
-            <span class="text-base font-semibold">关注待办</span>
+            <span
+              class="cursor-pointer select-none text-base font-semibold"
+              @click="loadWatchedTasks"
+            >关注待办</span>
           </div>
           <div v-if="watchedTasks.length > 0" class="text-xs text-gray-400">
             {{ watchedTasks.length }} 个任务
@@ -410,11 +418,11 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
           <div
             v-for="(task, index) in watchedTasks"
             :key="task.id"
-            class="group relative flex items-start gap-3 rounded-xl p-2.5 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/50"
+            class="group relative flex items-center gap-3 rounded-xl p-2.5 transition-all hover:bg-gray-50 dark:hover:bg-gray-800/50"
             :style="{ animationDelay: `${index * 50}ms` }"
           >
             <button
-              class="mt-0.5 flex-shrink-0 rounded border-2 border-gray-200 p-0.5 transition-all hover:border-green-400 hover:bg-green-50 focus:outline-none focus:ring-0 focus:ring-offset-0 active:outline-none dark:border-gray-600 dark:hover:border-green-500 dark:hover:bg-green-900/20"
+              class="flex-shrink-0 rounded border-2 border-gray-200 p-0.5 transition-all hover:border-green-400 hover:bg-green-50 focus:outline-none focus:ring-0 focus:ring-offset-0 active:outline-none dark:border-gray-600 dark:hover:border-green-500 dark:hover:bg-green-900/20"
               :class="{ 'border-green-500 bg-green-500': task.isCompleted === 1 }"
               @click="handleCompleteTask(task)"
             >
@@ -424,24 +432,29 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
               <div v-else class="size-3"></div>
             </button>
 
-            <div class="min-w-0 flex-1">
-              <div
+            <div class="min-w-0 flex flex-wrap items-center gap-2">
+              <span
+                v-if="task.priority"
+                :class="getPriorityColor(task.priority)"
+                class="rounded px-1.5 py-0.5 text-[10px] font-medium text-white"
+              >
+                {{ getPriorityLabel(task.priority) }}
+              </span>
+              <span
                 class="text-sm font-medium leading-snug text-gray-700 dark:text-gray-200"
                 :class="{ 'text-gray-400 line-through': task.isCompleted === 1 }"
               >
                 {{ task.content }}
-              </div>
-              <div v-if="task.taskName || task.startTime || task.endTime" class="mt-1.5 flex flex-wrap items-center gap-2">
-                <span v-if="task.taskName" class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
-                  {{ task.taskName }}
-                </span>
-                <span v-if="task.startTime || task.endTime" class="inline-flex items-center gap-1 text-[10px] text-gray-400">
-                  <svg class="size-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                  </svg>
-                  {{ formatTimeRange(task.startTime, task.endTime) }}
-                </span>
-              </div>
+              </span>
+              <span v-if="task.taskName" class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+                {{ task.taskName }}
+              </span>
+              <span v-if="task.startTime || task.endTime" class="inline-flex items-center gap-1 text-[10px] text-gray-400">
+                <svg class="size-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                </svg>
+                {{ formatTimeRange(task.startTime, task.endTime) }}
+              </span>
             </div>
           </div>
         </div>

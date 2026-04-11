@@ -1,8 +1,26 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRaw } from 'vue';
-import { query as queryThink, save as saveThink, update as updateThink, deleteData as deleteThink } from '#/api/core/think';
-import { Button, Card, Modal, Input, Form, Empty, Space, message, Popconfirm, Spin } from 'ant-design-vue';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue';
+
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
+import {
+  Button,
+  Card,
+  Empty,
+  Form,
+  Input,
+  message,
+  Modal,
+  Popconfirm,
+  Space,
+  Spin,
+} from 'ant-design-vue';
+
+import {
+  deleteData as deleteThink,
+  query as queryThink,
+  save as saveThink,
+  update as updateThink,
+} from '#/api/core/think';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 interface Event {
@@ -69,7 +87,10 @@ const openEditModal = (id: number | string) => {
       evs.length > 0
         ? evs.map((e) => ({
             ...e,
-            create_time: (e as any)?.create_time ?? (e as any)?.createTime ?? new Date().toISOString(),
+            create_time:
+              (e as any)?.create_time ??
+              (e as any)?.createTime ??
+              new Date().toISOString(),
           }))
         : [
             {
@@ -106,14 +127,16 @@ const saveCard = async () => {
     return;
   }
 
-  const validEvents = form.events.filter((event) => event.content.trim() !== '');
+  const validEvents = form.events.filter(
+    (event) => event.content.trim() !== '',
+  );
 
   // 构造提交数据
   const payload: any = {
     content: form.content.trim(),
     events: validEvents.map((e) => ({ ...e })),
   };
-  
+
   // 只有在编辑模式下才传 id
   if (currentEditId.value !== null) {
     payload.id = currentEditId.value;
@@ -128,18 +151,25 @@ const saveCard = async () => {
     const normalized = {
       ...saved,
       id: saved?.id ?? currentEditId.value, // 确保 ID 不丢失
-      content: saved?.content ?? saved?.text ?? saved?.title ?? saved?.summary ?? form.content.trim(),
+      content:
+        saved?.content ??
+        saved?.text ??
+        saved?.title ??
+        saved?.summary ??
+        form.content.trim(),
       events: Array.isArray(saved?.events)
         ? (saved as any).events.map((e: any) => ({
             ...e,
-            create_time: e?.create_time ?? e?.createTime ?? new Date().toISOString(),
+            create_time:
+              e?.create_time ?? e?.createTime ?? new Date().toISOString(),
           }))
         : validEvents.map((e) => ({
             ...e,
             create_time: e?.create_time ?? new Date().toISOString(),
           })),
       date: saved?.date ?? new Date().toISOString(),
-      createTime: saved?.createTime ?? saved?.create_time ?? new Date().toISOString(),
+      createTime:
+        saved?.createTime ?? saved?.create_time ?? new Date().toISOString(),
     };
 
     if (currentEditId.value === null) {
@@ -151,7 +181,7 @@ const saveCard = async () => {
 
     closeCardModal();
     message.success('保存成功');
-  } catch (e) {
+  } catch {
     message.error('保存失败');
   }
 };
@@ -162,7 +192,7 @@ const handleDelete = async (id: number | string) => {
     thoughts.value = thoughts.value.filter((t) => t.id !== id);
     message.success('删除成功');
     closeCardModal();
-  } catch (e) {
+  } catch {
     message.error('删除失败');
   }
 };
@@ -186,19 +216,25 @@ const loadThoughts = async () => {
   try {
     const res = await queryThink({ page: 1, pageSize: 50, condition: {} });
     const list = (res && (res.items ?? res)) || [];
-    thoughts.value = list.map((t: any) => ({
-      ...t,
-      content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
-      events: Array.isArray(t?.events)
-        ? t.events.map((e: any) => ({
-            ...e,
-            create_time: e?.create_time ?? e?.createTime ?? new Date().toISOString(),
-          }))
-        : [],
-      date: t?.date ?? new Date().toISOString(),
-      createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
-    })).sort((a: Thought, b: Thought) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime());
-  } catch (error) {
+    thoughts.value = list
+      .map((t: any) => ({
+        ...t,
+        content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
+        events: Array.isArray(t?.events)
+          ? t.events.map((e: any) => ({
+              ...e,
+              create_time:
+                e?.create_time ?? e?.createTime ?? new Date().toISOString(),
+            }))
+          : [],
+        date: t?.date ?? new Date().toISOString(),
+        createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
+      }))
+      .toSorted(
+        (a: Thought, b: Thought) =>
+          new Date(b.createTime).getTime() - new Date(a.createTime).getTime(),
+      );
+  } catch {
     message.error('加载失败');
   } finally {
     loading.value = false;
@@ -216,7 +252,12 @@ onMounted(async () => {
       <template v-if="thoughts.length === 0 && !loading">
         <div class="empty-wrap">
           <Empty description="还没有任何思考记录，点击右下角或下方按钮添加">
-            <Button type="primary" shape="round" size="large" @click="openAddModal">
+            <Button
+              type="primary"
+              shape="round"
+              size="large"
+              @click="openAddModal"
+            >
               <template #icon><PlusOutlined /></template>
               记录闪念
             </Button>
@@ -250,8 +291,8 @@ onMounted(async () => {
       v-model:open="showModal"
       :title="modalTitle"
       :footer="null"
-      :maskClosable="false"
-      :destroyOnClose="true"
+      :mask-closable="false"
+      :destroy-on-close="true"
       centered
       @cancel="closeCardModal"
     >
@@ -271,10 +312,25 @@ onMounted(async () => {
             <div class="events-header">
               <span class="events-title">关联事件流</span>
             </div>
-            <div v-for="event in [...form.events].reverse()" :key="event.id" class="event-item">
+            <div
+              v-for="event in [...form.events].reverse()"
+              :key="event.id"
+              class="event-item"
+            >
               <div class="event-row">
-                <Input v-model:value="event.content" placeholder="记录相关事件..." :bordered="false" class="event-input" />
-                <Button type="text" danger shape="circle" @click="removeEventById(event.id)" v-if="form.events.length > 1">
+                <Input
+                  v-model:value="event.content"
+                  placeholder="记录相关事件..."
+                  :bordered="false"
+                  class="event-input"
+                />
+                <Button
+                  type="text"
+                  danger
+                  shape="circle"
+                  @click="removeEventById(event.id)"
+                  v-if="form.events.length > 1"
+                >
                   <template #icon><DeleteOutlined /></template>
                 </Button>
               </div>
@@ -287,7 +343,12 @@ onMounted(async () => {
           </div>
         </Form.Item>
 
-        <div class="form-actions" :style="{ justifyContent: currentEditId ? 'space-between' : 'flex-end' }">
+        <div
+          class="form-actions"
+          :style="{
+            justifyContent: currentEditId ? 'space-between' : 'flex-end',
+          }"
+        >
           <Popconfirm
             v-if="currentEditId"
             title="确定要删除这条思考吗？"
