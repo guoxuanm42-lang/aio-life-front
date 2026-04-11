@@ -1,7 +1,9 @@
 <template>
-  <div class="pie-chart-container">
-    <EchartsUI ref="chartRef" />
-  </div>
+  <Card :title="title" :bordered="bordered" class="pie-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+    <div class="pie-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
 </template>
 
 <script setup lang="ts">
@@ -10,6 +12,7 @@ import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
 import { TimeType, TIME_TYPE_CONFIG } from '../types';
 
 import { computed, onMounted, ref, watch } from 'vue';
+import { Card } from 'ant-design-vue';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import dayjs from 'dayjs';
 
@@ -18,9 +21,15 @@ interface Props {
   categories: (TimeSlotCategory | MergedCategory)[];
   selectedDate: dayjs.Dayjs;
   selectedFilterCategoryIds?: string[] | null;
+  title?: string;
+  bordered?: boolean;
 }
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  title: '类型统计',
+  bordered: true,
+  selectedFilterCategoryIds: () => [],
+});
 
 const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
@@ -78,15 +87,6 @@ const renderPieChart = () => {
   if (!chartRef.value) return;
 
   const options = {
-    title: {
-      text: '时间类型分布',
-      left: 'center',
-      top: 10,
-      textStyle: {
-        fontSize: 14,
-        fontWeight: 'bold'
-      }
-    },
     tooltip: {
       trigger: 'item' as const,
       formatter: (params: any) => {
@@ -101,7 +101,7 @@ const renderPieChart = () => {
     },
     legend: {
       orient: 'horizontal' as const,
-      bottom: 10,
+      bottom: 5,
       left: 'center',
       textStyle: {
         fontSize: 12
@@ -111,8 +111,8 @@ const renderPieChart = () => {
       {
         name: '时间类型',
         type: 'pie' as const,
-        radius: ['40%', '70%'],
-        center: ['50%', '50%'],
+        radius: ['50%', '85%'],
+        center: ['50%', '45%'],
         avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 10,
@@ -151,12 +151,17 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.pie-chart-card {
+  min-width: 300px;
+  flex: 2;
+}
+
 .pie-chart-container {
   width: 100%;
-  height: 300px;
-  background: #fff;
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-  margin-top: 10px;
+  height: 280px;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
 }
 </style>

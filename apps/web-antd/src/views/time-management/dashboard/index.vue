@@ -42,26 +42,37 @@
         />
       </div>
 
-      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <!-- 概览统计 -->
-        <Card title="时间概览" :bordered="false" class="shadow-sm">
-          <div class="flex h-[400px] flex-col">
-            <div class="flex-1">
-              <TimeCategoryPieChart
-                v-if="timeSlots.length > 0"
-                :time-slots="timeSlots"
-                :categories="categories"
-                :selected-date="selectedDate"
-                :selected-filter-category-ids="selectedFilterCategoryIds"
-              />
-              <Empty v-else description="暂无数据" class="mt-10" />
-            </div>
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <!-- 分类概览 -->
+        <Card title="分类分布" :bordered="false" class="shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+          <div class="h-[280px]">
+            <TimeCategoryPieChart
+              v-if="timeSlots.length > 0"
+              :time-slots="timeSlots"
+              :categories="categories"
+              :selected-date="selectedDate"
+              :selected-filter-category-ids="selectedFilterCategoryIds"
+            />
+            <Empty v-else description="暂无数据" class="mt-10" />
           </div>
         </Card>
 
-        <!-- 分类统计 -->
-        <Card :title="barChartTitle" :bordered="false" class="shadow-sm">
-          <div class="h-[400px]">
+        <!-- 类型概览 -->
+        <TimeTypePieChart
+          v-if="timeSlots.length > 0"
+          :time-slots="timeSlots"
+          :categories="categories"
+          :selected-date="selectedDate"
+          :selected-filter-category-ids="selectedFilterCategoryIds"
+          :bordered="false"
+        />
+        <Card v-else title="类型统计" :bordered="false" class="shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+          <Empty description="暂无数据" class="mt-10" />
+        </Card>
+
+        <!-- 详细统计 -->
+        <Card :title="barChartTitle" :bordered="false" class="shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
+          <div class="h-[280px]">
             <template v-if="timeSlots.length > 0">
               <DailyCategoryBarChart
                 v-if="statMode !== 'day' && selectedFilterCategoryIds.length > 0"
@@ -84,7 +95,7 @@
         </Card>
 
         <!-- 趋势分析 (周/月) -->
-        <Card v-if="statMode !== 'day'" title="时间趋势" :bordered="false" class="lg:col-span-2 shadow-sm" :body-style="{ paddingBottom: '12px' }">
+        <Card v-if="statMode !== 'day'" title="时间趋势" :bordered="false" class="lg:col-span-3 shadow-sm" :body-style="{ paddingBottom: '12px' }">
           <div class="h-[320px]">
             <TimeCategoryStackedAreaChart
               v-if="timeSlots.length > 0"
@@ -97,7 +108,6 @@
             <Empty v-else description="暂无数据" class="mt-20" />
           </div>
         </Card>
-
       </div>
     </Spin>
   </div>
@@ -114,6 +124,7 @@ import { listCategories } from '#/api/core/time-tracker-category';
 import { formatDuration } from '../time-tracker/utils';
 import { defaultConfig } from '../time-tracker/config';
 import TimeCategoryPieChart from '../time-tracker/components/TimeCategoryPieChart.vue';
+import TimeTypePieChart from '../time-tracker/components/TimeTypePieChart.vue';
 import TimeCategoryBarChart from '../time-tracker/components/TimeCategoryBarChart.vue';
 import TimeCategoryStackedAreaChart from '../time-tracker/components/TimeCategoryStackedAreaChart.vue';
 import DailyCategoryBarChart from '../time-tracker/components/DailyCategoryBarChart.vue';
@@ -206,6 +217,7 @@ const loadCategories = async () => {
           color: cat.color,
           description: cat.description || '',
           isTrackTime: !!cat.isTrackTime,
+          timeType: cat.timeType as 1 | 2 | 3 | undefined,
           categoryType: isPublic ? 'public' : (isOverride ? 'public' : 'private'),
           isOverridden: isOverride,
         };

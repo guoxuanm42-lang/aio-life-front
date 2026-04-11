@@ -82,21 +82,21 @@ const renderPieChart = () => {
     },
     legend: {
       orient: 'vertical' as const,
-      right: 10,
+      right: 5,
       top: 'center',
       textStyle: {
-        fontSize: 12
+        fontSize: 11
       }
     },
     series: [
       {
         name: '时间分类',
         type: 'pie' as const,
-        radius: ['40%', '70%'],
-        center: ['40%', '50%'],
+        radius: ['50%', '85%'],
+        center: ['42%', '45%'],
         avoidLabelOverlap: true,
         itemStyle: {
-          borderRadius: 10,
+          borderRadius: 8,
           borderColor: '#fff',
           borderWidth: 2
         },
@@ -104,30 +104,20 @@ const renderPieChart = () => {
           show: true,
           position: 'outside' as const,
           formatter: (params: any) => {
-            const duration = params.value;
-            const hours = Math.floor(duration / 60);
-            const minutes = duration % 60;
             const percentage = params.percent;
-
-            if (duration >= 60) {
-              // 如果时长超过1小时，显示小时和分钟
-              return `${params.name}\n${hours}h${minutes}m (${percentage}%)`;
-            } else {
-              // 如果时长不足1小时，只显示分钟
-              return `${params.name}\n${minutes}m (${percentage}%)`;
-            }
+            return `${params.name}\n${percentage}%`;
           },
           fontSize: 10,
           fontWeight: 'normal' as const,
-          color: '#333',
+          color: '#666',
           minMargin: 5,
           overflow: 'truncate' as const,
-          width: 80,
+          width: 60,
         },
         labelLine: {
           show: true,
-          length: 10,
-          length2: 10,
+          length: 5,
+          length2: 8,
           smooth: true
         },
         emphasis: {
