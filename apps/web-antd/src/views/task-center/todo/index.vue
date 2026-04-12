@@ -801,6 +801,7 @@ const handleEditColumnOk = async () => {
   height: calc(100vh - 40px);
   padding: 20px;
   overflow: auto hidden;
+  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
 }
 
 /* 自定义横向滚动条样式 */
@@ -813,40 +814,41 @@ const handleEditColumnOk = async () => {
 }
 
 .kanban-board::-webkit-scrollbar-thumb {
-  background: rgb(0 0 0 / 10%);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: 4px;
+  transition: background 0.2s ease;
 }
 
 .kanban-board::-webkit-scrollbar-thumb:hover {
-  background: rgb(0 0 0 / 20%);
+  background: rgba(0, 0, 0, 0.15);
 }
 
 .columns-container {
   display: flex;
-  gap: 16px;
+  gap: 20px;
   width: max-content;
   min-width: 100%;
   height: 100%;
-  padding: 10px 10px 20px; /* 底部留出滚动条空间 */
+  padding: 10px 10px 20px;
 }
 
 .kanban-column {
   display: flex;
-  flex: 0 0 300px;
+  flex: 0 0 320px;
   flex-direction: column;
-  min-width: 300px;
-  max-width: 300px;
-  padding: 12px;
-  border-radius: 12px;
-  transition: all 0.3s;
+  min-width: 320px;
+  max-width: 320px;
+  padding: 16px;
+  border-radius: 16px;
+  transition: all 0.3s ease;
 }
 
 .column-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 4px;
-  margin-bottom: 12px;
+  padding: 4px 0;
+  margin-bottom: 16px;
   cursor: grab;
 }
 
@@ -856,17 +858,17 @@ const handleEditColumnOk = async () => {
 
 .header-left {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
 }
 
 .column-title-tag {
-  padding: 4px 12px;
+  padding: 6px 14px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   border-radius: 20px;
-  transition: all 0.3s;
+  transition: all 0.3s ease;
 }
 
 .column-title-tag:hover {
@@ -875,12 +877,12 @@ const handleEditColumnOk = async () => {
 
 .task-count {
   min-width: 20px;
-  padding: 0 8px;
-  font-size: 13px;
-  font-weight: 500;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
   color: #8c8c8c;
   text-align: center;
-  background: rgb(0 0 0 / 5%);
+  background: rgba(0, 0, 0, 0.04);
   border-radius: 10px;
 }
 
@@ -891,33 +893,33 @@ const handleEditColumnOk = async () => {
 .task-list {
   flex: 1;
   min-height: 50px;
-  padding: 4px;
   overflow-y: auto;
+  padding: 4px 0;
 }
 
 .kanban-task {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  margin-bottom: 12px;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
   cursor: pointer;
   background: #fff;
-  border: 1px solid #f0f0f0;
-  border-radius: 8px;
-  box-shadow: 0 1px 4px rgb(0 0 0 / 5%);
-  transition: all 0.2s;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.03);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .kanban-task:hover {
-  box-shadow: 0 4px 12px rgb(0 0 0 / 10%);
-  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 .task-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 8px;
 }
 
 .task-title {
@@ -925,17 +927,20 @@ const handleEditColumnOk = async () => {
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
-  color: #262626;
+  color: #1a1a1a;
+  letter-spacing: -0.01em;
 }
 
 .delete-task-btn {
   margin-left: 4px;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  transform: scale(0.9);
 }
 
 .kanban-task:hover .delete-task-btn {
   opacity: 1;
+  transform: scale(1);
 }
 
 .task-meta {
@@ -948,8 +953,8 @@ const handleEditColumnOk = async () => {
   line-height: 1.6;
   color: #8c8c8c;
   word-break: break-all;
-  background: #f8f9fa;
-  border-radius: 6px;
+  background: #fafafa;
+  border-radius: 8px;
 }
 
 .task-footer {
@@ -958,20 +963,27 @@ const handleEditColumnOk = async () => {
   justify-content: space-between;
   padding-top: 8px;
   margin-top: 4px;
-  border-top: 1px solid #f0f0f0;
+  font-size: 12px;
+  color: #8c8c8c;
 }
 
 .footer-left {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   align-items: center;
   font-size: 12px;
   color: #8c8c8c;
 }
 
+.footer-left .prop-icon {
+  font-size: 13px;
+  opacity: 0.7;
+}
+
 .due-date {
-  font-size: 11px;
-  color: #bfbfbf;
+  font-size: 12px;
+  color: #a0a0a0;
+  font-weight: 500;
 }
 
 .add-task-wrapper {
@@ -1078,12 +1090,13 @@ const handleEditColumnOk = async () => {
   width: 50px;
   height: 50px;
   font-size: 20px;
-  box-shadow: 0 2px 10px rgb(0 0 0 / 20%);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .floating-button:hover {
-  box-shadow: 0 4px 12px rgb(0 0 0 / 30%);
-  transform: scale(1.1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  transform: scale(1.08) translateY(-2px);
 }
 
 /* --- Responsive Styles --- */

@@ -296,7 +296,7 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
     color: '#1fdaca',
     icon: 'mdi:history',
     title: '时迹',
-    url: '/time-management/time-tracker',
+    url: '/time/time-tracker',
   },
   {
     color: '#bf0c2c',
