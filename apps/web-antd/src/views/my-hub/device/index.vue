@@ -1,6 +1,9 @@
 <script>
 // 添加moment导入
-import { DeleteOutlined, VerticalAlignTopOutlined } from '@ant-design/icons-vue';
+import {
+  DeleteOutlined,
+  VerticalAlignTopOutlined,
+} from '@ant-design/icons-vue';
 import {
   Button,
   Card,
@@ -10,11 +13,11 @@ import {
   Form,
   Input,
   InputNumber,
+  message,
   Modal,
   Popconfirm,
   Row,
   Select,
-  message,
 } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
@@ -271,7 +274,14 @@ export default {
         @cancel="handleCancel"
       >
         <template #footer>
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%">
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              width: 100%;
+            "
+          >
             <div>
               <APopconfirm
                 v-if="newDevice.id"
@@ -297,10 +307,7 @@ export default {
             <AInput v-model:value="newDevice.name" />
           </AFormItem>
           <AFormItem label="配置">
-            <AInput
-              v-model:value="newDevice.spec"
-              placeholder=""
-            />
+            <AInput v-model:value="newDevice.spec" placeholder="" />
           </AFormItem>
           <AFormItem label="价格">
             <AInputNumber
@@ -308,8 +315,8 @@ export default {
               style="width: 100%"
             />
           </AFormItem>
-          <a-row :gutter="16">
-            <a-col :span="12">
+          <ARow :gutter="16">
+            <ACol :span="12">
               <AFormItem label="购买日期">
                 <ADatePicker
                   format="YYYY-MM-DD"
@@ -317,8 +324,8 @@ export default {
                   style="width: 100%"
                 />
               </AFormItem>
-            </a-col>
-            <a-col :span="12">
+            </ACol>
+            <ACol :span="12">
               <AFormItem label="退役日期">
                 <ADatePicker
                   format="YYYY-MM-DD"
@@ -327,8 +334,8 @@ export default {
                   placeholder="留空则计算至今日"
                 />
               </AFormItem>
-            </a-col>
-          </a-row>
+            </ACol>
+          </ARow>
           <AFormItem label="设备类型">
             <ASelect
               v-model:value="newDevice.type"
@@ -401,12 +408,7 @@ export default {
               cancel-text="取消"
               @confirm="handleDelete(item)"
             >
-              <AButton
-                class="delete-btn"
-                type="text"
-                danger
-                @click.stop
-              >
+              <AButton class="delete-btn" type="text" danger @click.stop>
                 <DeleteOutlined />
               </AButton>
             </APopconfirm>
@@ -434,8 +436,6 @@ export default {
 </template>
 
 <style scoped>
-
-
 @media screen and (max-width: 768px) {
   /* 覆盖 Ant Design Card 样式 */
   :deep(.ant-card-body) {
@@ -486,8 +486,6 @@ export default {
   .purchase-date {
     display: none;
   }
-
-
 
   .status-badge {
     top: 5px;

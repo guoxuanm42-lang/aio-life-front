@@ -1,11 +1,14 @@
 <script lang="ts" setup>
-import { onMounted, onUnmounted, ref, type Component } from 'vue';
+import type { Component } from 'vue';
+
+import type { WorkbenchQuickNavItem } from '@vben/common-ui';
+
+import type { WatchedTaskDetail } from '#/api/core/dashboard';
+
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import {
-  WorkbenchQuickNav,
-  type WorkbenchQuickNavItem,
-} from '@vben/common-ui';
+import { WorkbenchQuickNav } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
 import { openWindow } from '@vben/utils';
 
@@ -13,7 +16,6 @@ import {
   getDashboardCardDetail,
   getDashboardTasks,
   getWatchedTaskDetails,
-  type WatchedTaskDetail,
 } from '#/api/core/dashboard';
 import { updateTaskDetail } from '#/api/core/todo';
 import {
@@ -217,7 +219,9 @@ onMounted(async () => {
     tasks.forEach(async (task) => {
       try {
         const res = await getDashboardCardDetail(task.type);
-        const index = overviewItems.value.findIndex((i) => i.type === task.type);
+        const index = overviewItems.value.findIndex(
+          (i) => i.type === task.type,
+        );
         if (index !== -1) {
           overviewItems.value[index] = {
             ...overviewItems.value[index],
@@ -389,13 +393,17 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
         @click="navTo"
         @long-press="handleQuickNavLongPress"
       />
-      <div v-if="watchedTasks.length > 0 || !watchedLoading" class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all dark:border-gray-800 dark:bg-gray-800/50">
+      <div
+        v-if="watchedTasks.length > 0 || !watchedLoading"
+        class="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all dark:border-gray-800 dark:bg-gray-800/50"
+      >
         <div class="mb-4 flex items-center justify-between">
           <div class="flex items-center gap-2">
             <span
               class="cursor-pointer select-none text-base font-semibold"
               @click="loadWatchedTasks"
-            >关注待办</span>
+              >关注待办</span
+            >
           </div>
           <div v-if="watchedTasks.length > 0" class="text-xs text-gray-400">
             {{ watchedTasks.length }} 个任务
@@ -403,12 +411,27 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
         </div>
 
         <div v-if="watchedLoading" class="py-10 text-center">
-          <div class="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500"></div>
+          <div
+            class="mx-auto h-6 w-6 animate-spin rounded-full border-2 border-gray-200 border-t-amber-500"
+          ></div>
         </div>
 
-        <div v-else-if="watchedTasks.length === 0" class="rounded-xl border border-dashed border-gray-200 py-10 text-center dark:border-gray-700">
-          <svg class="mx-auto mb-2 size-10 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/>
+        <div
+          v-else-if="watchedTasks.length === 0"
+          class="rounded-xl border border-dashed border-gray-200 py-10 text-center dark:border-gray-700"
+        >
+          <svg
+            class="mx-auto mb-2 size-10 text-gray-300 dark:text-gray-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="1.5"
+              d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"
+            />
           </svg>
           <p class="text-sm text-gray-400">暂无关注的待办</p>
           <p class="mt-1 text-xs text-gray-400">在任务详情中点击星标关注</p>
@@ -423,16 +446,29 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
           >
             <button
               class="flex-shrink-0 rounded border-2 border-gray-200 p-0.5 transition-all hover:border-green-400 hover:bg-green-50 focus:outline-none focus:ring-0 focus:ring-offset-0 active:outline-none dark:border-gray-600 dark:hover:border-green-500 dark:hover:bg-green-900/20"
-              :class="{ 'border-green-500 bg-green-500': task.isCompleted === 1 }"
+              :class="{
+                'border-green-500 bg-green-500': task.isCompleted === 1,
+              }"
               @click="handleCompleteTask(task)"
             >
-              <svg v-if="task.isCompleted === 1" class="size-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"/>
+              <svg
+                v-if="task.isCompleted === 1"
+                class="size-3 text-white"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="3"
+                  d="M5 13l4 4L19 7"
+                />
               </svg>
               <div v-else class="size-3"></div>
             </button>
 
-            <div class="min-w-0 flex flex-wrap items-center gap-2">
+            <div class="flex min-w-0 flex-wrap items-center gap-2">
               <span
                 v-if="task.priority"
                 :class="getPriorityColor(task.priority)"
@@ -442,16 +478,34 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
               </span>
               <span
                 class="text-sm font-medium leading-snug text-gray-700 dark:text-gray-200"
-                :class="{ 'text-gray-400 line-through': task.isCompleted === 1 }"
+                :class="{
+                  'text-gray-400 line-through': task.isCompleted === 1,
+                }"
               >
                 {{ task.content }}
               </span>
-              <span v-if="task.taskName" class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400">
+              <span
+                v-if="task.taskName"
+                class="rounded-md bg-gray-100 px-1.5 py-0.5 text-[10px] font-medium text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+              >
                 {{ task.taskName }}
               </span>
-              <span v-if="task.startTime || task.endTime" class="inline-flex items-center gap-1 text-[10px] text-gray-400">
-                <svg class="size-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              <span
+                v-if="task.startTime || task.endTime"
+                class="inline-flex items-center gap-1 text-[10px] text-gray-400"
+              >
+                <svg
+                  class="size-2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
                 </svg>
                 {{ formatTimeRange(task.startTime, task.endTime) }}
               </span>
@@ -464,9 +518,6 @@ function handleQuickNavLongPress(nav: WorkbenchQuickNavItem) {
       ref="timeTrackerModalRef"
       @success="handleTimeTrackerSuccess"
     />
-    <ExerciseAddModal
-      ref="exerciseModalRef"
-      @success="handleExerciseSuccess"
-    />
+    <ExerciseAddModal ref="exerciseModalRef" @success="handleExerciseSuccess" />
   </div>
 </template>

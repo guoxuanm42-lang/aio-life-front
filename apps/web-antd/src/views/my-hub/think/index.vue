@@ -392,31 +392,13 @@ onMounted(async () => {
   gap: 24px;
 }
 
-@media (min-width: 640px) {
-  .cards-grid {
-    columns: 2;
-  }
-}
-
-@media (min-width: 1024px) {
-  .cards-grid {
-    columns: 3;
-  }
-}
-
-@media (min-width: 1280px) {
-  .cards-grid {
-    columns: 4;
-  }
-}
-
 .thought-card {
   margin-bottom: 24px;
   border-radius: 16px;
   transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
   break-inside: avoid;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 8px rgb(0, 0, 0, 0.04);
 }
 
 /* Mobile Adaptation */
@@ -439,8 +421,26 @@ onMounted(async () => {
   }
 }
 
+@media (min-width: 640px) {
+  .cards-grid {
+    columns: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cards-grid {
+    columns: 3;
+  }
+}
+
+@media (min-width: 1280px) {
+  .cards-grid {
+    columns: 4;
+  }
+}
+
 .thought-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
 
 .thought-card :deep(.ant-card-body) {
@@ -494,13 +494,13 @@ onMounted(async () => {
   padding: 12px 16px;
   font-size: 16px;
   line-height: 1.6;
-  background: rgba(128, 128, 128, 0.04);
-  border-radius: 12px;
   resize: none;
+  background: rgb(128 128 128 / 4%);
+  border-radius: 12px;
 }
 
 .modern-form .content-textarea:focus {
-  background: rgba(128, 128, 128, 0.08);
+  background: rgb(128 128 128 / 8%);
 }
 
 .events-section {
@@ -517,13 +517,13 @@ onMounted(async () => {
 .event-item {
   padding: 12px 16px;
   margin-bottom: 12px;
-  background: rgba(128, 128, 128, 0.04);
+  background: rgb(128 128 128 / 4%);
   border-radius: 12px;
   transition: background 0.3s;
 }
 
 .event-item:hover {
-  background: rgba(128, 128, 128, 0.08);
+  background: rgb(128 128 128 / 8%);
 }
 
 .event-row {
@@ -562,11 +562,11 @@ textarea::-webkit-scrollbar {
 }
 
 textarea::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.2);
+  background: rgb(128 128 128 / 20%);
   border-radius: 4px;
 }
 
 textarea:hover::-webkit-scrollbar-thumb {
-  background: rgba(128, 128, 128, 0.4);
+  background: rgb(128 128 128 / 40%);
 }
 </style>

@@ -1,350 +1,55 @@
-<template>
-  <div class="kanban-board">
-    <draggable
-      v-model="columns"
-      group="columns"
-      @end="onColumnDragEnd"
-      item-key="id"
-      class="columns-container"
-      handle=".column-header"
-    >
-      <template #item="{ element: column, index }">
-        <div class="kanban-column" :style="{ backgroundColor: getColumnStyle(column, index).bg }">
-          <div class="column-header">
-            <div class="header-left">
-              <span 
-                class="column-title-tag"
-                :style="{ 
-                  backgroundColor: getColumnStyle(column, index).headerBg,
-                  color: getColumnStyle(column, index).headerColor
-                }"
-                @click="openEditColumnModal(column)"
-              >
-                {{ column.title }}
-              </span>
-              <span class="task-count">{{ column.tasks.length }}</span>
-            </div>
-            
-            <a-dropdown :trigger="['click']">
-              <a-button type="text" size="small" class="more-btn">
-                <template #icon><more-outlined /></template>
-              </a-button>
-              <template #overlay>
-                <a-menu>
-                  <a-menu-item key="edit" @click="openEditColumnModal(column)">
-                    <edit-outlined /> 编辑
-                  </a-menu-item>
-                  <a-menu-item key="delete" danger @click="confirmDeleteColumn(column.id)">
-                    <delete-outlined /> 删除
-                  </a-menu-item>
-                </a-menu>
-              </template>
-            </a-dropdown>
-          </div>
-          <draggable
-            v-model="column.tasks"
-            group="tasks"
-            @end="onDragEnd"
-            item-key="id"
-            :data-column-id="column.id"
-            class="task-list"
-          >
-            <template #item="{ element }">
-              <div class="kanban-task" :data-task-id="element.id" @click="openEditModal(element)">
-                <div class="task-header">
-                  <span class="task-title">{{ element.content }}</span>
-                  <a-popconfirm
-                    title="确定要删除这个任务吗?"
-                    ok-text="确定"
-                    cancel-text="取消"
-                    trigger="click"
-                    @confirm="deleteTaskFunc(element.id)"
-                  >
-                    <a-button
-                      type="text"
-                      size="small"
-                      danger
-                      class="delete-task-btn"
-                      @click.stop
-                    >
-                      <template #icon><delete-outlined /></template>
-                    </a-button>
-                  </a-popconfirm>
-                </div>
-                
-                <div class="task-meta" v-if="element.detail">
-                  <div class="task-detail-text">
-                    {{ element.detail.length > 50 ? element.detail.substring(0, 50) + '...' : element.detail }}
-                  </div>
-                </div>
-
-                <div class="task-footer">
-                  <div class="footer-left">
-                    <clock-circle-outlined class="prop-icon" />
-                    <span class="uncompleted-count">待办: {{ element.unCompletedCount || 0 }}</span>
-                  </div>
-                  <span class="due-date">{{ formatDate(element.dueDate) }}</span>
-                </div>
-              </div>
-            </template>
-            <template #footer>
-              <div class="add-task-wrapper">
-                 <a-button type="text" block class="simple-add-btn" @click="addTask(column.id)">
-                  <template #icon><plus-outlined /></template>
-                </a-button>
-              </div>
-            </template>
-          </draggable>
-        </div>
-      </template>
-    </draggable>
-
-    <div class="floating-add-column">
-      <a-popover
-        placement="topRight"
-        trigger="click"
-        :autoFocus="false"
-      >
-        <template #content>
-          <a-input
-            v-model:value="newColumnName"
-            placeholder="新列名称"
-            @click.stop
-          />
-          <a-button
-            type="primary"
-            @click="addColumn"
-            style=" width: 100%;margin-top: 10px"
-          >
-            添加列
-          </a-button>
-        </template>
-        <a-button type="primary" shape="circle" class="floating-button">
-          <template #icon><plus-outlined /></template>
-        </a-button>
-      </a-popover>
-    </div>
-
-    <a-modal
-      v-model:open="editModalVisible"
-      title="编辑任务"
-      width="1000px"
-      :style="{ top: '20px' }"
-      :bodyStyle="{ height: 'calc(100vh - 150px)', overflowY: 'auto' }"
-      @ok="handleEditOk"
-      @cancel="handleEditCancel"
-    >
-      <a-input
-        v-model:value="editingTask.content"
-        placeholder="任务标题"
-        size="large"
-        :bordered="false"
-        :style="{
-          padding: '15px 0px',
-        }"
-      />
-
-      <div class="task-dates-row">
-        <div class="date-col">
-            <div class="date-label">开始时间</div>
-            <a-date-picker show-time v-model:value="editingTask.startTime" placeholder="开始时间" style="width: 100%" />
-        </div>
-        <div class="date-col">
-            <div class="date-label">结束时间</div>
-            <a-date-picker show-time v-model:value="editingTask.endTime" placeholder="结束时间" style="width: 100%" />
-        </div>
-        <div class="date-col">
-             <div class="date-label">目标完成时间</div>
-             <a-date-picker show-time v-model:value="editingTask.dueDate" placeholder="目标完成时间" style="width: 100%" />
-        </div>
-      </div>
-
-      <a-textarea
-        v-model:value="editingTask.detail"
-        placeholder="任务备注"
-        :rows="3"
-        style="margin-bottom: 20px"
-      />
-
-      <div class="subtasks-section">
-        <div class="subtasks-header">
-          <span class="subtasks-title">
-            <check-circle-outlined style="margin-right: 8px" />
-            任务明细
-          </span>
-          <a-button type="link" size="small" @click="addDetail">
-            <template #icon><plus-outlined /></template>
-            添加
-          </a-button>
-        </div>
-        
-        <draggable
-          v-if="editingTask.details"
-          v-model="editingTask.details"
-          item-key="id"
-          handle=".drag-handle"
-          class="subtasks-list"
-          ghost-class="sortable-ghost"
-          @end="onDetailDragEnd"
-        >
-          <template #item="{ element: detail, index }">
-            <div class="subtask-item">
-              <holder-outlined class="drag-handle" style=" margin-right: 8px; color: #999;cursor: move" />
-              <a-checkbox 
-                :checked="detail.isCompleted === 1" 
-                @update:checked="(val) => handleDetailCheck(detail, val)"
-                class="subtask-checkbox"
-              />
-              <a-input 
-                v-model:value="detail.content" 
-                :bordered="false"
-                placeholder="输入任务内容..."
-                :class="['subtask-input', { 'subtask-completed': detail.isCompleted === 1 }]"
-                @blur="handleDetailBlur(detail)"
-              />
-              <div class="subtask-actions">
-                <a-button 
-                  type="text" 
-                  size="small" 
-                  class="subtask-star-btn"
-                  @click="handleStar(detail)"
-                >
-                  <template #icon>
-                    <StarOutlined 
-                      :style="{ color: detail.isStarred === 1 ? '#faad14' : '#d9d9d9' }" 
-                    />
-                  </template>
-                </a-button>
-                <a-dropdown :trigger="['click']" placement="bottomRight">
-                  <a-tag :color="getPriorityColor(detail.priority)" style="cursor: pointer; user-select: none; border-radius: 4px;" class="priority-tag">
-                    {{ getPriorityLabel(detail.priority) }}
-                  </a-tag>
-                  <template #overlay>
-                    <a-menu @click="({ key }) => handlePriorityChange(detail, Number(key))">
-                      <a-menu-item key="20"><a-tag color="default" style=" width: 100%;margin-right: 0; text-align: center;">低</a-tag></a-menu-item>
-                      <a-menu-item key="10"><a-tag color="warning" style=" width: 100%;margin-right: 0; text-align: center;">中</a-tag></a-menu-item>
-                      <a-menu-item key="1"><a-tag color="error" style=" width: 100%;margin-right: 0; text-align: center;">高</a-tag></a-menu-item>
-                    </a-menu>
-                  </template>
-                </a-dropdown>
-                <a-date-picker 
-                  show-time 
-                  size="small" 
-                  v-model:value="detail.startTime" 
-                  placeholder="开始" 
-                  class="subtask-date"
-                  :bordered="false"
-                  @change="handleDetailBlur(detail)"
-                />
-                <a-date-picker 
-                  show-time 
-                  size="small" 
-                  v-model:value="detail.endTime" 
-                  placeholder="结束" 
-                  class="subtask-date"
-                  :bordered="false"
-                  @change="handleDetailBlur(detail)"
-                />
-                <a-popconfirm
-                  title="确定要删除这条明细吗?"
-                  ok-text="确定"
-                  cancel-text="取消"
-                  trigger="click"
-                  @confirm="removeDetail(index, detail)"
-                >
-                  <a-button type="text" danger size="small" class="subtask-delete-btn">
-                    <template #icon><delete-outlined /></template>
-                  </a-button>
-                </a-popconfirm>
-              </div>
-            </div>
-          </template>
-        </draggable>
-      </div>
-    </a-modal>
-
-    <!-- 添加任务明细弹窗 -->
-    <a-modal
-      v-model:open="addDetailModalVisible"
-      title="添加"
-      @ok="handleAddDetailOk"
-      @cancel="addDetailModalVisible = false"
-    >
-      <div style="display: flex; flex-direction: column; gap: 15px; padding: 10px 0;">
-        <div>
-          <div style="margin-bottom: 5px; font-size: 12px; color: #666;">任务内容</div>
-          <a-input
-            v-model:value="newDetail.content"
-            placeholder="输入任务内容..."
-            auto-focus
-          />
-        </div>
-        <div class="task-dates-row">
-          <div class="date-col">
-            <div class="date-label">优先级</div>
-            <a-select v-model:value="newDetail.priority" style="width: 100%">
-              <a-select-option :value="20" label="低"><a-tag color="default" style="margin-right: 0;">低</a-tag></a-select-option>
-              <a-select-option :value="10" label="中"><a-tag color="warning" style="margin-right: 0;">中</a-tag></a-select-option>
-              <a-select-option :value="1" label="高"><a-tag color="error" style="margin-right: 0;">高</a-tag></a-select-option>
-            </a-select>
-          </div>
-          <div class="date-col">
-            <div class="date-label">开始时间</div>
-            <a-date-picker
-              show-time
-              v-model:value="newDetail.startTime"
-              placeholder="开始时间"
-              style="width: 100%"
-            />
-          </div>
-          <div class="date-col">
-            <div class="date-label">结束时间</div>
-            <a-date-picker
-              show-time
-              v-model:value="newDetail.endTime"
-              placeholder="结束时间"
-              style="width: 100%"
-            />
-          </div>
-        </div>
-      </div>
-    </a-modal>
-
-    <a-modal
-      v-model:open="editColumnModalVisible"
-      title="编辑"
-      @ok="handleEditColumnOk"
-    >
-      <a-input
-        v-model:value="editingColumn.title"
-        placeholder="列名称"
-        style="margin-bottom: 10px"
-      />
-      <div style="display: flex; align-items: center; margin-bottom: 10px">
-        <span style="margin-right: 10px">背景颜色:</span>
-        <a-input :style="{ backgroundColor: editingColumn.bgColor || token.colorBgContainer, color: token.colorText }"
-          v-model:value="editingColumn.bgColor"
-          placeholder="输入颜色代码"
-          style="width: 120px; margin-right: 10px"
-        />
-      </div>
-    </a-modal>
-  </div>
-</template>
-
 <script lang="ts" setup>
-import { ref, onMounted } from 'vue';
-import draggable from 'vuedraggable';
-import { Button as AButton, Input as AInput, Textarea as ATextarea, Modal as AModal, DatePicker as ADatePicker, Popconfirm as APopconfirm, Checkbox as ACheckbox, theme, Dropdown as ADropdown, Menu as AMenu, MenuItem as AMenuItem, Tag as ATag, Select as ASelect, SelectOption as ASelectOption } from 'ant-design-vue';
+import { onMounted, ref } from 'vue';
 
-import { getTaskColumnList, saveColumn, updateColumn, deleteColumn, reSortColumn} from '#/api/core/todo';
-
-import { getTaskList, saveTask, updateTask, deleteTask, reSortTask, getTaskDetail, addTaskDetail, updateTaskDetail, deleteTaskDetail, reSortTaskDetail, starTaskDetail, unstarTaskDetail } from '#/api/core/todo';
-
+import {
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  HolderOutlined,
+  MoreOutlined,
+  PlusOutlined,
+  StarOutlined,
+} from '@ant-design/icons-vue';
+import {
+  Button as AButton,
+  Checkbox as ACheckbox,
+  DatePicker as ADatePicker,
+  Dropdown as ADropdown,
+  Input as AInput,
+  Menu as AMenu,
+  MenuItem as AMenuItem,
+  Modal as AModal,
+  Popconfirm as APopconfirm,
+  Popover as APopover,
+  Select as ASelect,
+  SelectOption as ASelectOption,
+  Tag as ATag,
+  Textarea as ATextarea,
+  theme,
+} from 'ant-design-vue';
 import dayjs from 'dayjs';
-import { PlusOutlined, DeleteOutlined, CheckCircleOutlined, EditOutlined, MoreOutlined, CalendarOutlined, ClockCircleOutlined, UserOutlined, HolderOutlined, StarOutlined } from '@ant-design/icons-vue';
-import { Popover as APopover } from 'ant-design-vue';
-import { Modal } from 'ant-design-vue';
+import draggable from 'vuedraggable';
+
+import {
+  addTaskDetail,
+  deleteColumn,
+  deleteTask,
+  deleteTaskDetail,
+  getTaskColumnList,
+  getTaskDetail,
+  getTaskList,
+  reSortColumn,
+  reSortTask,
+  reSortTaskDetail,
+  saveColumn,
+  saveTask,
+  starTaskDetail,
+  unstarTaskDetail,
+  updateColumn,
+  updateTask,
+  updateTaskDetail,
+} from '#/api/core/todo';
 
 interface Detail {
   id: number;
@@ -374,37 +79,68 @@ const { token } = useToken();
 
 // 预定义列主题颜色（仿照设计图）
 const columnThemes = [
-  { bg: '#eff3f9', headerBg: '#dae5f5', headerColor: '#5285c5', label: '未开始' }, // 蓝
-  { bg: '#fff9e6', headerBg: '#fff2cc', headerColor: '#d4a017', label: '修复中' }, // 黄
-  { bg: '#f0f0ff', headerBg: '#e6e6ff', headerColor: '#6c5ce7', label: '验证中' }, // 紫
-  { bg: '#eff9ef', headerBg: '#dcf0dc', headerColor: '#4b9e4b', label: '已完成' }, // 绿
+  {
+    bg: '#eff3f9',
+    headerBg: '#dae5f5',
+    headerColor: '#5285c5',
+    label: '未开始',
+  }, // 蓝
+  {
+    bg: '#fff9e6',
+    headerBg: '#fff2cc',
+    headerColor: '#d4a017',
+    label: '修复中',
+  }, // 黄
+  {
+    bg: '#f0f0ff',
+    headerBg: '#e6e6ff',
+    headerColor: '#6c5ce7',
+    label: '验证中',
+  }, // 紫
+  {
+    bg: '#eff9ef',
+    headerBg: '#dcf0dc',
+    headerColor: '#4b9e4b',
+    label: '已完成',
+  }, // 绿
 ];
 
 // 获取列样式的辅助函数
 const getColumnStyle = (column: any, index: number) => {
   const themeIndex = index % columnThemes.length;
-  const currentTheme = columnThemes[themeIndex] || columnThemes[0] || { bg: '#eff3f9', headerBg: '#dae5f5', headerColor: '#5285c5' };
-  
+  const currentTheme = columnThemes[themeIndex] ||
+    columnThemes[0] || {
+      bg: '#eff3f9',
+      headerBg: '#dae5f5',
+      headerColor: '#5285c5',
+    };
+
   // 优先使用列自身配置的 bgColor
   const bg = column.bgColor || currentTheme.bg;
-  
+
   // 如果是自定义背景色，标题标签使用半透明遮罩以适应各种背景，否则使用主题配套颜色
-  const headerBg = column.bgColor ? 'rgba(0, 0, 0, 0.06)' : currentTheme.headerBg;
-  const headerColor = column.bgColor ? 'rgba(0, 0, 0, 0.65)' : currentTheme.headerColor;
+  const headerBg = column.bgColor
+    ? 'rgba(0, 0, 0, 0.06)'
+    : currentTheme.headerBg;
+  const headerColor = column.bgColor
+    ? 'rgba(0, 0, 0, 0.65)'
+    : currentTheme.headerColor;
 
   return {
     bg,
     headerBg,
-    headerColor
+    headerColor,
   };
 };
 
-const columns = ref<Array<{
-  id: number;
-  title: string;
-  tasks: Task[];
-  bgColor?: string;
-}>>([]);
+const columns = ref<
+  Array<{
+    bgColor?: string;
+    id: number;
+    tasks: Task[];
+    title: string;
+  }>
+>([]);
 
 onMounted(async () => {
   // 初始化列
@@ -412,34 +148,34 @@ onMounted(async () => {
   console.log('getTaskColumnList', res);
   columns.value = res.items.map((item: any) => ({
     ...item,
-    tasks: item.tasks || []
+    tasks: item.tasks || [],
   }));
 
   getTaskList({}).then((res) => {
     console.log('getTaskList', res);
     columns.value.forEach((column) => {
-      column.tasks = res.items.filter((item: { columnId: number; }) => item.columnId === column.id);
-    })
-  })
+      column.tasks = res.items.filter(
+        (item: { columnId: number }) => item.columnId === column.id,
+      );
+    });
+  });
 });
-
 
 const newColumnName = ref('');
 
 const addTask = async (columnId: number) => {
-  const column = columns.value.find(col => col.id === columnId);
+  const column = columns.value.find((col) => col.id === columnId);
   if (column) {
     const newTask: Task = {
       id: 0,
       content: '新任务',
       detail: '',
       createdAt: new Date(),
-      columnId: columnId
+      columnId,
     };
     const savedTask = await saveTask(newTask);
     column.tasks.push(savedTask);
   }
-
 };
 
 // 添加列
@@ -447,23 +183,23 @@ const addColumn = async () => {
   if (!newColumnName.value.trim()) return;
 
   // 生成一个随机id
-  const newColumnId = Math.floor(Math.random() * 1000000);
+  const newColumnId = Math.floor(Math.random() * 1_000_000);
   let newColumn = {
     id: newColumnId,
     title: newColumnName.value,
-    tasks: []
-  }
+    tasks: [],
+  };
 
   columns.value.push(newColumn);
-  newColumn = await saveColumn(newColumn)
+  newColumn = await saveColumn(newColumn);
 
   newColumnName.value = '';
 };
 
 const onDragEnd = (event: any) => {
   console.log('完整拖拽事件:', event);
-  const fromColumnId = Number(event.from.getAttribute('data-column-id'));
-  const toColumnId = Number(event.to.getAttribute('data-column-id'));
+  const fromColumnId = Number(event.from.dataset.columnId);
+  const toColumnId = Number(event.to.dataset.columnId);
   const taskId = Number(event.item.dataset.taskId);
 
   console.log('移动前列ID:', fromColumnId);
@@ -473,14 +209,14 @@ const onDragEnd = (event: any) => {
   console.log('新位置:', event.newIndex);
 
   // 获取目标列
-  const toColumn = columns.value.find(col => col.id === toColumnId);
+  const toColumn = columns.value.find((col) => col.id === toColumnId);
   if (!toColumn) return;
 
   // 准备重排序数据
   const sortedTasks = toColumn.tasks.map((task, index) => ({
     id: task.id,
     columnId: toColumnId,
-    sortOrder: index + 1
+    sortOrder: index + 1,
   }));
   console.log('排序后的数据:', sortedTasks);
 
@@ -541,9 +277,9 @@ const openEditModal = async (task: Task) => {
   editingTask.value = {
     ...task,
     details: [], // 先清空，等待加载
-    startTime: startTime,
-    endTime: endTime,
-    dueDate: dueDate,
+    startTime,
+    endTime,
+    dueDate,
   };
   editModalVisible.value = true;
 
@@ -569,7 +305,7 @@ const handleAddDetailOk = async () => {
   if (!newDetail.value.content?.trim()) {
     return;
   }
-  
+
   if (!editingTask.value.details) {
     editingTask.value.details = [];
   }
@@ -652,8 +388,8 @@ const refreshTask = async (taskId: number) => {
     if (res.items) {
       const task = res.items.find((t: any) => t.id === taskId);
       if (task) {
-        columns.value.forEach(col => {
-          const idx = col.tasks.findIndex(t => t.id === taskId);
+        columns.value.forEach((col) => {
+          const idx = col.tasks.findIndex((t) => t.id === taskId);
           if (idx !== -1) {
             col.tasks[idx] = task;
           }
@@ -671,13 +407,13 @@ const handleEditCancel = () => {
 
 // 编辑任务
 const handleEditOk = async () => {
-  const column = columns.value.find(col =>
-    col.tasks.some(task => task.id === editingTask.value.id)
+  const column = columns.value.find((col) =>
+    col.tasks.some((task) => task.id === editingTask.value.id),
   );
 
   if (column) {
     const taskIndex = column.tasks.findIndex(
-      task => task.id === editingTask.value.id
+      (task) => task.id === editingTask.value.id,
     );
     if (taskIndex !== -1) {
       column.tasks[taskIndex] = { ...editingTask.value };
@@ -697,19 +433,21 @@ const confirmDeleteColumn = (columnId: number) => {
     cancelText: '取消',
     onOk() {
       deleteColumnMethod(columnId);
-    }
+    },
   });
 };
 
 const deleteColumnMethod = (columnId: number) => {
-  deleteColumn({id: columnId});
-  columns.value = columns.value.filter(col => col.id !== columnId);
+  deleteColumn({ id: columnId });
+  columns.value = columns.value.filter((col) => col.id !== columnId);
 };
 
 const deleteTaskFunc = async (taskId: number) => {
-  await deleteTask({id: taskId});
-  columns.value.forEach(column => {
-    column.tasks = column.tasks.filter((task: { id: number }) => task.id !== taskId);
+  await deleteTask({ id: taskId });
+  columns.value.forEach((column) => {
+    column.tasks = column.tasks.filter(
+      (task: { id: number }) => task.id !== taskId,
+    );
   });
 };
 
@@ -717,16 +455,20 @@ const editColumnModalVisible = ref(false);
 const editingColumn = ref({
   id: null,
   title: '',
-  bgColor: '#fff'
+  bgColor: '#fff',
 });
 
-const openEditColumnModal = (column: { id: null; title: string; bgColor: string; } | { id: null; title: string; bgColor: string; }) => {
+const openEditColumnModal = (
+  column:
+    | { bgColor: string; id: null; title: string }
+    | { bgColor: string; id: null; title: string },
+) => {
   editingColumn.value = { ...column };
   editColumnModalVisible.value = true;
 };
 
 const handleEditColumnOk = async () => {
-  const column = columns.value.find(col => col.id === editingColumn.value.id);
+  const column = columns.value.find((col) => col.id === editingColumn.value.id);
   if (column) {
     column.title = editingColumn.value.title;
     column.bgColor = editingColumn.value.bgColor;
@@ -736,16 +478,458 @@ const handleEditColumnOk = async () => {
 };
 </script>
 
+<template>
+  <div class="kanban-board">
+    <draggable
+      v-model="columns"
+      group="columns"
+      @end="onColumnDragEnd"
+      item-key="id"
+      class="columns-container"
+      handle=".column-header"
+    >
+      <template #item="{ element: column, index }">
+        <div
+          class="kanban-column"
+          :style="{ backgroundColor: getColumnStyle(column, index).bg }"
+        >
+          <div class="column-header">
+            <div class="header-left">
+              <span
+                class="column-title-tag"
+                :style="{
+                  backgroundColor: getColumnStyle(column, index).headerBg,
+                  color: getColumnStyle(column, index).headerColor,
+                }"
+                @click="openEditColumnModal(column)"
+              >
+                {{ column.title }}
+              </span>
+              <span class="task-count">{{ column.tasks.length }}</span>
+            </div>
+
+            <ADropdown :trigger="['click']">
+              <AButton type="text" size="small" class="more-btn">
+                <template #icon><MoreOutlined /></template>
+              </AButton>
+              <template #overlay>
+                <AMenu>
+                  <AMenuItem key="edit" @click="openEditColumnModal(column)">
+                    <EditOutlined /> 编辑
+                  </AMenuItem>
+                  <AMenuItem
+                    key="delete"
+                    danger
+                    @click="confirmDeleteColumn(column.id)"
+                  >
+                    <DeleteOutlined /> 删除
+                  </AMenuItem>
+                </AMenu>
+              </template>
+            </ADropdown>
+          </div>
+          <draggable
+            v-model="column.tasks"
+            group="tasks"
+            @end="onDragEnd"
+            item-key="id"
+            :data-column-id="column.id"
+            class="task-list"
+          >
+            <template #item="{ element }">
+              <div
+                class="kanban-task"
+                :data-task-id="element.id"
+                @click="openEditModal(element)"
+              >
+                <div class="task-header">
+                  <span class="task-title">{{ element.content }}</span>
+                  <APopconfirm
+                    title="确定要删除这个任务吗?"
+                    ok-text="确定"
+                    cancel-text="取消"
+                    trigger="click"
+                    @confirm="deleteTaskFunc(element.id)"
+                  >
+                    <AButton
+                      type="text"
+                      size="small"
+                      danger
+                      class="delete-task-btn"
+                      @click.stop
+                    >
+                      <template #icon><DeleteOutlined /></template>
+                    </AButton>
+                  </APopconfirm>
+                </div>
+
+                <div class="task-meta" v-if="element.detail">
+                  <div class="task-detail-text">
+                    {{
+                      element.detail.length > 50
+                        ? `${element.detail.substring(0, 50)}...`
+                        : element.detail
+                    }}
+                  </div>
+                </div>
+
+                <div class="task-footer">
+                  <div class="footer-left">
+                    <ClockCircleOutlined class="prop-icon" />
+                    <span class="uncompleted-count"
+                      >待办: {{ element.unCompletedCount || 0 }}</span
+                    >
+                  </div>
+                  <span class="due-date">{{
+                    formatDate(element.dueDate)
+                  }}</span>
+                </div>
+              </div>
+            </template>
+            <template #footer>
+              <div class="add-task-wrapper">
+                <AButton
+                  type="text"
+                  block
+                  class="simple-add-btn"
+                  @click="addTask(column.id)"
+                >
+                  <template #icon><PlusOutlined /></template>
+                </AButton>
+              </div>
+            </template>
+          </draggable>
+        </div>
+      </template>
+    </draggable>
+
+    <div class="floating-add-column">
+      <APopover placement="topRight" trigger="click" :auto-focus="false">
+        <template #content>
+          <AInput
+            v-model:value="newColumnName"
+            placeholder="新列名称"
+            @click.stop
+          />
+          <AButton
+            type="primary"
+            @click="addColumn"
+            style="width: 100%; margin-top: 10px"
+          >
+            添加列
+          </AButton>
+        </template>
+        <AButton type="primary" shape="circle" class="floating-button">
+          <template #icon><PlusOutlined /></template>
+        </AButton>
+      </APopover>
+    </div>
+
+    <AModal
+      v-model:open="editModalVisible"
+      title="编辑任务"
+      width="1000px"
+      :style="{ top: '20px' }"
+      :body-style="{ height: 'calc(100vh - 150px)', overflowY: 'auto' }"
+      @ok="handleEditOk"
+      @cancel="handleEditCancel"
+    >
+      <AInput
+        v-model:value="editingTask.content"
+        placeholder="任务标题"
+        size="large"
+        :bordered="false"
+        :style="{
+          padding: '15px 0px',
+        }"
+      />
+
+      <div class="task-dates-row">
+        <div class="date-col">
+          <div class="date-label">开始时间</div>
+          <ADatePicker
+            show-time
+            v-model:value="editingTask.startTime"
+            placeholder="开始时间"
+            style="width: 100%"
+          />
+        </div>
+        <div class="date-col">
+          <div class="date-label">结束时间</div>
+          <ADatePicker
+            show-time
+            v-model:value="editingTask.endTime"
+            placeholder="结束时间"
+            style="width: 100%"
+          />
+        </div>
+        <div class="date-col">
+          <div class="date-label">目标完成时间</div>
+          <ADatePicker
+            show-time
+            v-model:value="editingTask.dueDate"
+            placeholder="目标完成时间"
+            style="width: 100%"
+          />
+        </div>
+      </div>
+
+      <ATextarea
+        v-model:value="editingTask.detail"
+        placeholder="任务备注"
+        :rows="3"
+        style="margin-bottom: 20px"
+      />
+
+      <div class="subtasks-section">
+        <div class="subtasks-header">
+          <span class="subtasks-title">
+            <CheckCircleOutlined style="margin-right: 8px" />
+            任务明细
+          </span>
+          <AButton type="link" size="small" @click="addDetail">
+            <template #icon><PlusOutlined /></template>
+            添加
+          </AButton>
+        </div>
+
+        <draggable
+          v-if="editingTask.details"
+          v-model="editingTask.details"
+          item-key="id"
+          handle=".drag-handle"
+          class="subtasks-list"
+          ghost-class="sortable-ghost"
+          @end="onDetailDragEnd"
+        >
+          <template #item="{ element: detail, index }">
+            <div class="subtask-item">
+              <HolderOutlined
+                class="drag-handle"
+                style="margin-right: 8px; color: #999; cursor: move"
+              />
+              <ACheckbox
+                :checked="detail.isCompleted === 1"
+                @update:checked="(val) => handleDetailCheck(detail, val)"
+                class="subtask-checkbox"
+              />
+              <AInput
+                v-model:value="detail.content"
+                :bordered="false"
+                placeholder="输入任务内容..."
+                class="subtask-input"
+                :class="[{ 'subtask-completed': detail.isCompleted === 1 }]"
+                @blur="handleDetailBlur(detail)"
+              />
+              <div class="subtask-actions">
+                <AButton
+                  type="text"
+                  size="small"
+                  class="subtask-star-btn"
+                  @click="handleStar(detail)"
+                >
+                  <template #icon>
+                    <StarOutlined
+                      :style="{
+                        color: detail.isStarred === 1 ? '#faad14' : '#d9d9d9',
+                      }"
+                    />
+                  </template>
+                </AButton>
+                <ADropdown :trigger="['click']" placement="bottomRight">
+                  <ATag
+                    :color="getPriorityColor(detail.priority)"
+                    style="
+                      cursor: pointer;
+                      user-select: none;
+                      border-radius: 4px;
+                    "
+                    class="priority-tag"
+                  >
+                    {{ getPriorityLabel(detail.priority) }}
+                  </ATag>
+                  <template #overlay>
+                    <AMenu
+                      @click="
+                        ({ key }) => handlePriorityChange(detail, Number(key))
+                      "
+                    >
+                      <AMenuItem key="20">
+                        <ATag
+                          color="default"
+                          style="
+                            width: 100%;
+                            margin-right: 0;
+                            text-align: center;
+                          "
+                        >
+                          低
+                        </ATag>
+                      </AMenuItem>
+                      <AMenuItem key="10">
+                        <ATag
+                          color="warning"
+                          style="
+                            width: 100%;
+                            margin-right: 0;
+                            text-align: center;
+                          "
+                        >
+                          中
+                        </ATag>
+                      </AMenuItem>
+                      <AMenuItem key="1">
+                        <ATag
+                          color="error"
+                          style="
+                            width: 100%;
+                            margin-right: 0;
+                            text-align: center;
+                          "
+                        >
+                          高
+                        </ATag>
+                      </AMenuItem>
+                    </AMenu>
+                  </template>
+                </ADropdown>
+                <ADatePicker
+                  show-time
+                  size="small"
+                  v-model:value="detail.startTime"
+                  placeholder="开始"
+                  class="subtask-date"
+                  :bordered="false"
+                  @change="handleDetailBlur(detail)"
+                />
+                <ADatePicker
+                  show-time
+                  size="small"
+                  v-model:value="detail.endTime"
+                  placeholder="结束"
+                  class="subtask-date"
+                  :bordered="false"
+                  @change="handleDetailBlur(detail)"
+                />
+                <APopconfirm
+                  title="确定要删除这条明细吗?"
+                  ok-text="确定"
+                  cancel-text="取消"
+                  trigger="click"
+                  @confirm="removeDetail(index, detail)"
+                >
+                  <AButton
+                    type="text"
+                    danger
+                    size="small"
+                    class="subtask-delete-btn"
+                  >
+                    <template #icon><DeleteOutlined /></template>
+                  </AButton>
+                </APopconfirm>
+              </div>
+            </div>
+          </template>
+        </draggable>
+      </div>
+    </AModal>
+
+    <!-- 添加任务明细弹窗 -->
+    <AModal
+      v-model:open="addDetailModalVisible"
+      title="添加"
+      @ok="handleAddDetailOk"
+      @cancel="addDetailModalVisible = false"
+    >
+      <div
+        style="
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+          padding: 10px 0;
+        "
+      >
+        <div>
+          <div style="margin-bottom: 5px; font-size: 12px; color: #666">
+            任务内容
+          </div>
+          <AInput
+            v-model:value="newDetail.content"
+            placeholder="输入任务内容..."
+            auto-focus
+          />
+        </div>
+        <div class="task-dates-row">
+          <div class="date-col">
+            <div class="date-label">优先级</div>
+            <ASelect v-model:value="newDetail.priority" style="width: 100%">
+              <ASelectOption :value="20" label="低">
+                <ATag color="default" style="margin-right: 0"> 低 </ATag>
+              </ASelectOption>
+              <ASelectOption :value="10" label="中">
+                <ATag color="warning" style="margin-right: 0"> 中 </ATag>
+              </ASelectOption>
+              <ASelectOption :value="1" label="高">
+                <ATag color="error" style="margin-right: 0"> 高 </ATag>
+              </ASelectOption>
+            </ASelect>
+          </div>
+          <div class="date-col">
+            <div class="date-label">开始时间</div>
+            <ADatePicker
+              show-time
+              v-model:value="newDetail.startTime"
+              placeholder="开始时间"
+              style="width: 100%"
+            />
+          </div>
+          <div class="date-col">
+            <div class="date-label">结束时间</div>
+            <ADatePicker
+              show-time
+              v-model:value="newDetail.endTime"
+              placeholder="结束时间"
+              style="width: 100%"
+            />
+          </div>
+        </div>
+      </div>
+    </AModal>
+
+    <AModal
+      v-model:open="editColumnModalVisible"
+      title="编辑"
+      @ok="handleEditColumnOk"
+    >
+      <AInput
+        v-model:value="editingColumn.title"
+        placeholder="列名称"
+        style="margin-bottom: 10px"
+      />
+      <div style="display: flex; align-items: center; margin-bottom: 10px">
+        <span style="margin-right: 10px">背景颜色:</span>
+        <AInput
+          :style="{
+            backgroundColor: editingColumn.bgColor || token.colorBgContainer,
+            color: token.colorText,
+          }"
+          v-model:value="editingColumn.bgColor"
+          placeholder="输入颜色代码"
+          style="width: 120px; margin-right: 10px"
+        />
+      </div>
+    </AModal>
+  </div>
+</template>
+
 <style scoped>
-
-
 @media (max-width: 768px) {
   /* Task Edit Modal Responsive */
   .task-dates-row {
     flex-direction: column;
     gap: 15px;
   }
-  
+
   .subtask-item {
     position: relative;
     flex-wrap: wrap;
@@ -779,7 +963,7 @@ const handleEditColumnOk = async () => {
     width: 130px; /* Give it a fixed small width on mobile instead of flex */
     margin-right: 0;
   }
-  
+
   .priority-tag {
     margin-right: 0;
   }
@@ -814,13 +998,13 @@ const handleEditColumnOk = async () => {
 }
 
 .kanban-board::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.08);
+  background: rgb(0 0 0 / 8%);
   border-radius: 4px;
   transition: background 0.2s ease;
 }
 
 .kanban-board::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.15);
+  background: rgb(0 0 0 / 15%);
 }
 
 .columns-container {
@@ -882,7 +1066,7 @@ const handleEditColumnOk = async () => {
   font-weight: 600;
   color: #8c8c8c;
   text-align: center;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgb(0 0 0 / 4%);
   border-radius: 10px;
 }
 
@@ -893,8 +1077,8 @@ const handleEditColumnOk = async () => {
 .task-list {
   flex: 1;
   min-height: 50px;
-  overflow-y: auto;
   padding: 4px 0;
+  overflow-y: auto;
 }
 
 .kanban-task {
@@ -907,19 +1091,23 @@ const handleEditColumnOk = async () => {
   background: #fff;
   border: none;
   border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 2px 6px rgba(0, 0, 0, 0.03);
+  box-shadow:
+    0 1px 3px rgb(0 0 0 / 4%),
+    0 2px 6px rgb(0 0 0 / 3%);
   transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .kanban-task:hover {
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08), 0 2px 4px rgba(0, 0, 0, 0.04);
+  box-shadow:
+    0 4px 12px rgb(0 0 0 / 8%),
+    0 2px 4px rgb(0 0 0 / 4%);
 }
 
 .task-header {
   display: flex;
+  gap: 8px;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 8px;
 }
 
 .task-title {
@@ -934,8 +1122,10 @@ const handleEditColumnOk = async () => {
 .delete-task-btn {
   margin-left: 4px;
   opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
   transform: scale(0.9);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .kanban-task:hover .delete-task-btn {
@@ -982,8 +1172,8 @@ const handleEditColumnOk = async () => {
 
 .due-date {
   font-size: 12px;
-  color: #a0a0a0;
   font-weight: 500;
+  color: #a0a0a0;
 }
 
 .add-task-wrapper {
@@ -1007,10 +1197,13 @@ const handleEditColumnOk = async () => {
 }
 
 /* 隐藏不必要的样式 */
-.delete-column-btn { display: none; }
+.delete-column-btn {
+  display: none;
+}
 
-.add-task-card { display: none; }
-
+.add-task-card {
+  display: none;
+}
 
 .subtasks-section {
   margin-top: 10px;
@@ -1038,7 +1231,7 @@ const handleEditColumnOk = async () => {
 
   /* max-height: 500px; */
 
- /* Removed to allow modal body to scroll */
+  /* Removed to allow modal body to scroll */
 
   /* overflow-y: auto; */
   padding-right: 4px;
@@ -1090,12 +1283,12 @@ const handleEditColumnOk = async () => {
   width: 50px;
   height: 50px;
   font-size: 20px;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .floating-button:hover {
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
   transform: scale(1.08) translateY(-2px);
 }
 

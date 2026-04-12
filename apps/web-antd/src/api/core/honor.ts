@@ -72,7 +72,9 @@ export async function updateHonorRecord(data: HonorRecordEntity) {
  * 批量删除荣誉记录
  */
 export async function deleteHonorRecords(idList: number[]) {
-  return await requestClient.post<void>('/honorRecords/batchDelete', { idList });
+  return await requestClient.post<void>('/honorRecords/batchDelete', {
+    idList,
+  });
 }
 
 /**

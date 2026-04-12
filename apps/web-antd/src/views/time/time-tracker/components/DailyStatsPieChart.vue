@@ -1,19 +1,14 @@
-<template>
-  <Card class="pie-chart-card">
-    <div class="pie-chart-container">
-      <EchartsUI ref="chartRef" />
-    </div>
-  </Card>
-</template>
-
 <script setup lang="ts">
 import type { EchartsUIType } from '@vben/plugins/echarts';
+
 import type { TimeSlot, TimeSlotCategory } from '../types';
 
 import { computed, onMounted, ref, watch } from 'vue';
+
+import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
+
 import { Card } from 'ant-design-vue';
 import dayjs from 'dayjs';
-import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 interface Props {
   timeSlots: TimeSlot[];
@@ -29,8 +24,14 @@ const chartRef = ref<EchartsUIType>();
 const { renderEcharts } = useEcharts(chartRef);
 
 const selectedFilterCategories = computed(() => {
-  if (!props.selectedFilterCategoryIds || props.selectedFilterCategoryIds.length === 0) return [];
-  return props.categories.filter((cat) => props.selectedFilterCategoryIds?.includes(cat.id));
+  if (
+    !props.selectedFilterCategoryIds ||
+    props.selectedFilterCategoryIds.length === 0
+  )
+    return [];
+  return props.categories.filter((cat) =>
+    props.selectedFilterCategoryIds?.includes(cat.id),
+  );
 });
 
 // 按天统计时长
@@ -67,24 +68,28 @@ const dailyStatsData = computed(() => {
     }
 
     if (data[slot.date] !== undefined) {
-      data[slot.date] = (data[slot.date] || 0) + (slot.endTime - slot.startTime + 1);
+      data[slot.date] =
+        (data[slot.date] || 0) + (slot.endTime - slot.startTime + 1);
     }
   });
 
   // 转换为饼图数据格式
-  return days.map(date => {
-    const duration = data[date] || 0;
-    const day = dayjs(date);
-    const name = props.statMode === 'week'
-      ? `${['日', '一', '二', '三', '四', '五', '六'][day.day()] || ''}`
-      : `${day.date()}`;
+  return days
+    .map((date) => {
+      const duration = data[date] || 0;
+      const day = dayjs(date);
+      const name =
+        props.statMode === 'week'
+          ? `${['日', '一', '二', '三', '四', '五', '六'][day.day()] || ''}`
+          : `${day.date()}`;
 
-    return {
-      name,
-      value: duration,
-      date // 保存原始日期用于tooltip
-    };
-  }).filter(item => item.value > 0); // 只显示有数据的天
+      return {
+        name,
+        value: duration,
+        date, // 保存原始日期用于tooltip
+      };
+    })
+    .filter((item) => item.value > 0); // 只显示有数据的天
 });
 
 // 渲染饼图
@@ -104,7 +109,7 @@ const renderPieChart = () => {
         return `${dayjs(date).format('YYYY-MM-DD')} (${params.name})<br/>
                 ${hours}小时${minutes}分钟 (${percentage}%)<br/>
                 总时长: ${duration}分钟`;
-      }
+      },
     },
     legend: {
       type: 'scroll' as const,
@@ -112,8 +117,8 @@ const renderPieChart = () => {
       right: 10,
       top: 'center',
       textStyle: {
-        fontSize: 12
-      }
+        fontSize: 12,
+      },
     },
     series: [
       {
@@ -125,7 +130,7 @@ const renderPieChart = () => {
         itemStyle: {
           borderRadius: 10,
           borderColor: '#fff',
-          borderWidth: 2
+          borderWidth: 2,
         },
         label: {
           show: true,
@@ -136,17 +141,15 @@ const renderPieChart = () => {
             const minutes = duration % 60;
             const percentage = params.percent;
 
-            if (duration >= 60) {
-              return `${params.name}\n${hours}h${minutes}m`;
-            } else {
-              return `${params.name}\n${minutes}m`;
-            }
+            return duration >= 60
+              ? `${params.name}\n${hours}h${minutes}m`
+              : `${params.name}\n${minutes}m`;
           },
-          fontSize: 10
+          fontSize: 10,
         },
-        data: dailyStatsData.value
-      }
-    ]
+        data: dailyStatsData.value,
+      },
+    ],
   };
 
   renderEcharts(options as any);
@@ -165,8 +168,15 @@ onMounted(() => {
 });
 </script>
 
-<style scoped>
+<template>
+  <Card class="pie-chart-card">
+    <div class="pie-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
+</template>
 
+<style scoped>
 .pie-chart-container {
   width: 100%;
   height: 300px;

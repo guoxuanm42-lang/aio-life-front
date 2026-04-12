@@ -14,13 +14,11 @@ import {
   VerticalAlignTopOutlined,
 } from '@ant-design/icons-vue';
 import {
-  Badge,
   Button,
   Empty,
   FloatButton,
   Popconfirm,
   Spin,
-  Tag,
   Tooltip,
 } from 'ant-design-vue';
 
@@ -176,7 +174,7 @@ const gridOptions: VxeGridProps<RowType> = {
         const values = isMobile.value
           ? await gridApi.formApi.getValues()
           : formValues;
-        
+
         console.log('Query Values:', values);
 
         const res = await query({
@@ -274,7 +272,7 @@ const tableReload = () => {
 let longPressTimer: any = null;
 let isLongPress = false;
 let isMoving = false;
-const activeDeleteId = ref<string | null>(null);
+const activeDeleteId = ref<null | string>(null);
 
 function handleTouchStart(item: RowType) {
   isLongPress = false;
@@ -352,7 +350,7 @@ function handleDelete(item: RowType) {
         <div
           v-for="(item, index) in tableData"
           :key="item.dictCode"
-          class="active:scale-[0.98] relative cursor-pointer p-5 transition-transform duration-100"
+          class="relative cursor-pointer p-5 transition-transform duration-100 active:scale-[0.98]"
           :class="{
             'border-t border-zinc-100 dark:border-zinc-800/50': index !== 0,
           }"
@@ -380,7 +378,7 @@ function handleDelete(item: RowType) {
                 danger
                 shape="round"
                 size="large"
-                class="!flex !items-center !gap-2 shadow-lg scale-110"
+                class="!flex scale-110 !items-center !gap-2 shadow-lg"
                 @touchstart.stop="() => {}"
                 @click.stop="() => {}"
               >
@@ -569,7 +567,7 @@ function handleDelete(item: RowType) {
 }
 
 :deep(.mobile-form-wrapper .ant-form-item) {
-  @apply mb-2 !mr-0 flex-row items-center justify-between;
+  @apply !mr-0 mb-2 flex-row items-center justify-between;
 }
 
 :deep(.mobile-form-wrapper .ant-form-item-label) {

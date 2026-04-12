@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import type { Rule } from 'ant-design-vue/es/form';
+
+import type { HonorCategoryEntity, HonorRecordEntity } from '#/api/core/honor';
+
+import { computed, onMounted, ref } from 'vue';
 
 import { CalendarOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import {
@@ -12,22 +16,20 @@ import {
   Modal as AModal,
   Select as ASelect,
   SelectOption as ASelectOption,
-  Textarea as ATextarea,
-  Tag as ATag,
-  message,
-  Switch as ASwitch,
   Spin as ASpin,
+  Switch as ASwitch,
+  Tag as ATag,
+  Textarea as ATextarea,
+  message,
 } from 'ant-design-vue';
-import type { Rule } from 'ant-design-vue/es/form';
 import dayjs, { Dayjs } from 'dayjs';
+
 import {
-  queryHonorRecords,
-  queryHonorCategories,
   createHonorRecord,
-  updateHonorRecord,
   deleteHonorRecords,
-  type HonorRecordEntity,
-  type HonorCategoryEntity,
+  queryHonorCategories,
+  queryHonorRecords,
+  updateHonorRecord,
 } from '#/api/core/honor';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
@@ -165,9 +167,7 @@ const loadData = async () => {
       // 获取分类名称
       let categoryName = item.customCategory || '';
       if (item.categoryId) {
-        const category = categories.value.find(
-          (c) => c.id === item.categoryId,
-        );
+        const category = categories.value.find((c) => c.id === item.categoryId);
         if (category) {
           categoryName = category.name || '';
         }
@@ -303,24 +303,24 @@ const clearFilters = () => {
 
 // 荣誉级别：英文键 → 中文标签
 const levelLabels: Record<string, string> = {
-  'school': '校级',
-  'district': '区级',
-  'city': '市级',
-  'province': '省级',
-  'national': '国家级',
-  'international': '国际级',
-  'other': '其他',
+  school: '校级',
+  district: '区级',
+  city: '市级',
+  province: '省级',
+  national: '国家级',
+  international: '国际级',
+  other: '其他',
 };
 
 // 荣誉级别：英文键 → 颜色
 const levelColors: Record<string, string> = {
-  'school': 'green',
-  'district': 'cyan',
-  'city': 'blue',
-  'province': 'purple',
-  'national': 'volcano',
-  'international': 'gold',
-  'other': 'default',
+  school: 'green',
+  district: 'cyan',
+  city: 'blue',
+  province: 'purple',
+  national: 'volcano',
+  international: 'gold',
+  other: 'default',
 };
 
 const getLevelColor = (level: string) => {
@@ -337,9 +337,7 @@ const getLevelLabel = (level: string) => {
     <!-- Header -->
     <div class="mb-6">
       <div>
-        <p class="text-gray-500">
-          记录世俗标准下的荣誉与成就
-        </p>
+        <p class="text-gray-500">记录世俗标准下的荣誉与成就</p>
       </div>
     </div>
 
@@ -420,7 +418,11 @@ const getLevelLabel = (level: string) => {
                 >
                   {{ getLevelLabel(item.level) }}
                 </ATag>
-                <ATag v-if="item.categoryName" color="processing" class="m-0 border-0 font-medium">
+                <ATag
+                  v-if="item.categoryName"
+                  color="processing"
+                  class="m-0 border-0 font-medium"
+                >
                   {{ item.categoryName }}
                 </ATag>
               </div>
@@ -475,7 +477,7 @@ const getLevelLabel = (level: string) => {
             </div>
             <div
               v-if="item.issuer"
-              class="mt-1 text-xs text-muted-foreground truncate"
+              class="mt-1 truncate text-xs text-muted-foreground"
             >
               🏢 {{ item.issuer }}
             </div>
@@ -608,7 +610,9 @@ const getLevelLabel = (level: string) => {
           <div class="flex items-center gap-2">
             <ASwitch v-model:checked="formState.isPublic" />
             <span class="text-sm text-gray-500">
-              {{ formState.isPublic ? '公开 - 其他用户可见' : '私密 - 仅自己可见' }}
+              {{
+                formState.isPublic ? '公开 - 其他用户可见' : '私密 - 仅自己可见'
+              }}
             </span>
           </div>
         </AFormItem>
@@ -621,40 +625,40 @@ const getLevelLabel = (level: string) => {
 
 <style scoped>
 .apple-card {
-  will-change: transform, box-shadow;
-  transform: scale(1);
+  border: 1px solid transparent;
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.04);
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 2px 6px rgb(0 0 0 / 4%);
+  transform: scale(1);
   transition:
     transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
     box-shadow 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
     border-color 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-  border: 1px solid transparent;
+  will-change: transform, box-shadow;
 }
 
 .apple-card:hover {
-  transform: scale(1.005);
+  border-color: rgb(0 0 0 / 6%);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.1),
-    0 8px 24px rgba(0, 0, 0, 0.06),
-    0 16px 48px rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.06);
+    0 4px 12px rgb(0 0 0 / 10%),
+    0 8px 24px rgb(0 0 0 / 6%),
+    0 16px 48px rgb(0 0 0 / 4%);
+  transform: scale(1.005);
 }
 
 .line-clamp-2 {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-line-clamp: 2;
   line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .line-clamp-3 {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-line-clamp: 3;
   line-clamp: 3;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 </style>

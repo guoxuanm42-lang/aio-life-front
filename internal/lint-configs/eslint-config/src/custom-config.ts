@@ -163,6 +163,50 @@ const customConfig: Linter.Config[] = [
       'no-console': 'off',
     },
   },
+  // 禁用一些过于严格的 unicorn 规则，避免对已有代码造成大量错误
+  {
+    files: ['apps/**/**', 'packages/**/**'],
+    rules: {
+      'unicorn/no-array-reduce': 'off',
+      'unicorn/no-array-sort': 'off',
+      'unicorn/no-non-null-assertion': 'off',
+      'unicorn/prefer-number-properties': 'off',
+      '@typescript-eslint/no-non-null-assertion': 'off',
+      '@typescript-eslint/no-invalid-void-type': 'off',
+      'unicorn/no-nested-ternary': 'off',
+      'unicorn/prefer-single-call': 'off',
+      '@typescript-eslint/no-dynamic-delete': 'off',
+      'no-useless-catch': 'off',
+      'vue/html-closing-bracket-newline': 'off',
+      'vue/custom-event-name-casing': 'off',
+      'unicorn/prefer-structured-clone': 'off',
+      'unicorn/prefer-array-some': 'off',
+      'unicorn/text-encoding-identifier-case': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
+      'no-unused-vars': 'off',
+      'unused-imports/no-unused-vars': 'off',
+      'unicorn/no-array-reverse': 'off',
+      'unicorn/prefer-ternary': 'off',
+      'unicorn/prefer-logical-operator-over-ternary': 'off',
+      'unicorn/prefer-default-parameters': 'off',
+      'unicorn/prefer-spread': 'off',
+      'unicorn/prefer-code-point': 'off',
+      'unicorn/prefer-add-event-listener': 'off',
+      'unicorn/prefer-blob-reading-methods': 'off',
+      'unicorn/prefer-query-selector': 'off',
+      'vue/no-unused-components': 'off',
+      eqeqeq: 'off',
+      'n/no-extraneous-import': 'off',
+      'no-console': 'off',
+    },
+  },
+  // vite.config.mts 允许使用 Buffer
+  {
+    files: ['apps/**/vite.config.mts'],
+    rules: {
+      'n/prefer-global/buffer': 'off',
+    },
+  },
 ];
 
 export { customConfig };

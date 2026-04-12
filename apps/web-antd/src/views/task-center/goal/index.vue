@@ -697,38 +697,38 @@ const getStatusBadgeColor = (status: number) => {
 
 <style scoped>
 .apple-card {
-  will-change: transform, box-shadow;
-  transform: scale(1);
+  border: 1px solid transparent;
   box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.08),
-    0 2px 6px rgba(0, 0, 0, 0.04);
+    0 1px 3px rgb(0 0 0 / 8%),
+    0 2px 6px rgb(0 0 0 / 4%);
+  transform: scale(1);
   transition:
     transform 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
     box-shadow 0.35s cubic-bezier(0.25, 0.1, 0.25, 1),
     border-color 0.35s cubic-bezier(0.25, 0.1, 0.25, 1);
-  border: 1px solid transparent;
+  will-change: transform, box-shadow;
 }
 
 .apple-card:hover {
-  transform: scale(1.005);
+  border-color: rgb(0 0 0 / 6%);
   box-shadow:
-    0 4px 12px rgba(0, 0, 0, 0.1),
-    0 8px 24px rgba(0, 0, 0, 0.06),
-    0 16px 48px rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.06);
+    0 4px 12px rgb(0 0 0 / 10%),
+    0 8px 24px rgb(0 0 0 / 6%),
+    0 16px 48px rgb(0 0 0 / 4%);
+  transform: scale(1.005);
 }
 
 .line-clamp-2 {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 
 .line-clamp-3 {
   display: -webkit-box;
+  overflow: hidden;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
-  overflow: hidden;
 }
 </style>

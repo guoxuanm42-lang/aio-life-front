@@ -5,10 +5,15 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
+
 import { Card, Select } from 'ant-design-vue';
 
-import { statisticsByYear, statisticsByMonth } from '#/api/core/income';
+import { statisticsByMonth, statisticsByYear } from '#/api/core/income';
 
+// 定义年份变化事件
+const emit = defineEmits<{
+  (e: 'yearChange', year: 'all' | number): void;
+}>();
 const chartRef = ref<EchartsUIType>();
 const pieChartRef = ref<EchartsUIType>();
 const yearPieChartRef = ref<EchartsUIType>();
@@ -45,10 +50,12 @@ const totalAmount = ref(0);
 const currentYearAmount = ref(0);
 
 // 选中的年份
-const selectedYear = ref<number | 'all'>('all');
+const selectedYear = ref<'all' | number>('all');
 
 // 年份选项
-const yearOptions = ref<{ value: string | number; label: string | number }[]>([{ value: 'all', label: '全部' }]);
+const yearOptions = ref<{ label: number | string; value: number | string }[]>([
+  { value: 'all', label: '全部' },
+]);
 
 // 格式化金额显示
 const formatCurrency = (amount: number) => {
@@ -70,11 +77,10 @@ const filteredData = computed(() => {
 // 根据选中的年份过滤月份数据
 const filteredMonthlyData = computed(() => {
   let data: MonthlyIncomeData[] = [];
-  if (selectedYear.value === 'all') {
-    data = monthlyIncData.value;
-  } else {
-    data = monthlyIncData.value.filter((item) => item.year === selectedYear.value);
-  }
+  data =
+    selectedYear.value === 'all'
+      ? monthlyIncData.value
+      : monthlyIncData.value.filter((item) => item.year === selectedYear.value);
   // 按时间升序排序
   return [...data].sort((a, b) => {
     if (a.year !== b.year) {
@@ -132,7 +138,7 @@ const getMonthlySeriesData = () => {
           const value = params.value || 0;
           const percentage = total > 0 ? ((value / total) * 100).toFixed(1) : 0;
           return `${percentage}%`;
-        }
+        },
       },
       data,
     };
@@ -183,7 +189,7 @@ const getIncomeTypeTotals = () => {
 
   return Object.entries(typeTotals).map(([name, value]) => ({
     name,
-    value: Number(value.toFixed(2))
+    value: Number(value.toFixed(2)),
   }));
 };
 
@@ -203,16 +209,19 @@ const getYearPieChartData = () => {
   const yearTotals: Record<string, number> = {};
 
   filteredData.value.forEach((item) => {
-    const yearTotal = item.detail.reduce((total, current) => total + current.amt, 0);
+    const yearTotal = item.detail.reduce(
+      (total, current) => total + current.amt,
+      0,
+    );
     yearTotals[item.year] = (yearTotals[item.year] || 0) + yearTotal;
   });
 
   const data = Object.entries(yearTotals)
     .map(([year, value]) => ({
       name: `${year}年`,
-      value: Number(value.toFixed(2))
+      value: Number(value.toFixed(2)),
     }))
-    .sort((a, b) => parseInt(a.name) - parseInt(b.name));
+    .sort((a, b) => Number.parseInt(a.name) - Number.parseInt(b.name));
 
   const total = data.reduce((sum, item) => sum + item.value, 0);
 
@@ -277,14 +286,14 @@ const getSeriesData = () => {
       },
       fontSize: 12,
       color: '#333',
-      fontWeight: 'bold'
+      fontWeight: 'bold',
     },
     itemStyle: {
-      color: 'rgba(0,0,0,0)' // 完全透明
+      color: 'rgba(0,0,0,0)', // 完全透明
     },
     emphasis: {
-      disabled: true
-    }
+      disabled: true,
+    },
   });
 
   return series;
@@ -298,12 +307,12 @@ const updateCharts = () => {
 
   // 计算当年总收入
   const currentYear = new Date().getFullYear();
-  const currentYearData = incData.value.find(item => item.year === currentYear);
-  if (currentYearData) {
-    currentYearAmount.value = currentYearData.detail.reduce((sum, item) => sum + item.amt, 0);
-  } else {
-    currentYearAmount.value = 0;
-  }
+  const currentYearData = incData.value.find(
+    (item) => item.year === currentYear,
+  );
+  currentYearAmount.value = currentYearData
+    ? currentYearData.detail.reduce((sum, item) => sum + item.amt, 0)
+    : 0;
 
   // 渲染柱状图
   renderEcharts({
@@ -332,7 +341,8 @@ const updateCharts = () => {
         // 显示各项的金额和百分比
         params.forEach((item: any) => {
           if (item.seriesName !== '年度合计' && item.value > 0) {
-            const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
+            const percentage =
+              total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
             tooltip += `${item.marker} ${item.seriesName}: ${item.value} (${percentage}%)<br/>`;
           }
         });
@@ -377,7 +387,7 @@ const updateCharts = () => {
   renderPieEcharts({
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: '{a} <br/>{b}: {c} ({d}%)',
     },
     legend: {
       type: 'scroll',
@@ -404,23 +414,23 @@ const updateCharts = () => {
           formatter: (params: any) => {
             return `${params.name}\n${formatCurrency(params.value)} (${params.percent}%)`;
           },
-          fontSize: isMobile.value ? 10 : 12
+          fontSize: isMobile.value ? 10 : 12,
         },
         emphasis: {
           label: {
             show: true,
             fontSize: 14,
-            fontWeight: 'bold'
-          }
+            fontWeight: 'bold',
+          },
         },
         labelLine: {
           show: true,
           length: isMobile.value ? 5 : 10,
-          length2: isMobile.value ? 5 : 10
+          length2: isMobile.value ? 5 : 10,
         },
-        data: pieData.data
-      }
-    ]
+        data: pieData.data,
+      },
+    ],
   });
 
   // 渲染按时间分布饼图
@@ -446,29 +456,29 @@ const updateCharts = () => {
         avoidLabelOverlap: true,
         itemStyle: {
           borderRadius: 10,
-          borderWidth: 2
+          borderWidth: 2,
         },
         label: {
           show: true,
           formatter: (params: any) => {
             return `${params.name}\n${formatCurrency(params.value)} (${params.percent}%)`;
           },
-          fontSize: isMobile.value ? 10 : 12
+          fontSize: isMobile.value ? 10 : 12,
         },
         emphasis: {
           label: {
             show: true,
             fontSize: 14,
-            fontWeight: 'bold'
-          }
+            fontWeight: 'bold',
+          },
         },
         labelLine: {
           show: true,
-          length: isMobile.value ? 5 : 10
+          length: isMobile.value ? 5 : 10,
         },
-        data: yearPieData.data
-      }
-    ]
+        data: yearPieData.data,
+      },
+    ],
   });
 
   // 渲染月份柱状图
@@ -490,13 +500,14 @@ const updateCharts = () => {
 
         // 计算该月份的总收入
         params.forEach((item: any) => {
-            total += item.value || 0;
+          total += item.value || 0;
         });
 
         // 显示各项的金额和百分比
         params.forEach((item: any) => {
           if (item.value > 0) {
-            const percentage = total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
+            const percentage =
+              total > 0 ? ((item.value / total) * 100).toFixed(1) : 0;
             tooltip += `${item.marker} ${item.seriesName}: ${item.value} (${percentage}%)<br/>`;
           }
         });
@@ -522,7 +533,7 @@ const updateCharts = () => {
         },
         axisLabel: {
           rotate: 45,
-          fontSize: isMobile.value ? 10 : 12
+          fontSize: isMobile.value ? 10 : 12,
         },
       },
     ],
@@ -530,8 +541,8 @@ const updateCharts = () => {
       {
         type: 'value',
         axisLabel: {
-          fontSize: isMobile.value ? 10 : 12
-        }
+          fontSize: isMobile.value ? 10 : 12,
+        },
       },
     ],
     series: getMonthlySeriesData(),
@@ -546,7 +557,7 @@ const refreshData = async () => {
 
     const [yearRes, monthRes] = await Promise.all([
       statisticsByYear({}),
-      statisticsByMonth({})
+      statisticsByMonth({}),
     ]);
     incData.value = yearRes;
     monthlyIncData.value = monthRes;
@@ -557,11 +568,13 @@ const refreshData = async () => {
     );
     yearOptions.value = [
       { value: 'all', label: '全部' },
-      ...years.map(year => ({ value: year, label: year }))
+      ...years.map((year) => ({ value: year, label: year })),
     ];
 
     // 恢复之前选中的年份，如果该年份不再存在则设为全部
-    const yearExists = yearOptions.value.some(option => option.value === currentYear);
+    const yearExists = yearOptions.value.some(
+      (option) => option.value === currentYear,
+    );
     selectedYear.value = yearExists ? currentYear : 'all';
 
     updateCharts();
@@ -574,11 +587,6 @@ onMounted(async () => {
   await refreshData();
 });
 
-// 定义年份变化事件
-const emit = defineEmits<{
-  (e: 'yearChange', year: number | 'all'): void
-}>();
-
 // 监听年份选择变化
 watch([selectedYear, isMobile], (newVal) => {
   updateCharts();
@@ -588,7 +596,7 @@ watch([selectedYear, isMobile], (newVal) => {
 
 // 暴露刷新方法给父组件
 defineExpose({
-  refreshData
+  refreshData,
 });
 </script>
 
@@ -605,7 +613,9 @@ defineExpose({
           <div class="stat-divider"></div>
           <div class="stat-item">
             <div class="stat-label">{{ new Date().getFullYear() }}年总收入</div>
-            <div class="stat-value">{{ formatCurrency(currentYearAmount) }}</div>
+            <div class="stat-value">
+              {{ formatCurrency(currentYearAmount) }}
+            </div>
           </div>
         </div>
 
@@ -643,8 +653,6 @@ defineExpose({
 </template>
 
 <style scoped>
-
-
 @media (max-width: 1400px) {
   .chart-container {
     grid-template-columns: repeat(2, 1fr);
@@ -790,7 +798,6 @@ defineExpose({
   color: #fff; /* Fallback */
   letter-spacing: 0.5px;
   background: linear-gradient(135deg, #fff 0%, #e0e7ff 100%);
-  background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }

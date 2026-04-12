@@ -33,4 +33,3 @@ defineEmits(['click']);
   }
 }
 </style>
-

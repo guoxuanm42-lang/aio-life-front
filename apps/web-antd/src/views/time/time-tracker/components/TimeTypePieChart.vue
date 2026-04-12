@@ -1,26 +1,22 @@
-<template>
-  <Card :bordered="bordered" class="pie-chart-card shadow-sm overflow-hidden" :body-style="{ padding: '12px' }">
-    <div class="pie-chart-container">
-      <EchartsUI ref="chartRef" />
-    </div>
-  </Card>
-</template>
-
 <script setup lang="ts">
 import type { EchartsUIType } from '@vben/plugins/echarts';
-import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
-import { TimeType, TIME_TYPE_CONFIG } from '../types';
+
+import type { MergedCategory, TimeSlot, TimeSlotCategory } from '../types';
 
 import { computed, onMounted, ref, watch } from 'vue';
-import { Card } from 'ant-design-vue';
+
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
+
+import { Card } from 'ant-design-vue';
 import dayjs from 'dayjs';
+
+import { TIME_TYPE_CONFIG, TimeType } from '../types';
 
 interface Props {
   timeSlots: TimeSlot[];
-  categories: (TimeSlotCategory | MergedCategory)[];
+  categories: (MergedCategory | TimeSlotCategory)[];
   selectedDate: dayjs.Dayjs;
-  selectedFilterCategoryIds?: string[] | null;
+  selectedFilterCategoryIds?: null | string[];
   bordered?: boolean;
 }
 
@@ -40,17 +36,21 @@ const timeTypeDurations = computed(() => {
     [TimeType.NEGATIVE]: 0,
   };
 
-  props.timeSlots.forEach(slot => {
+  props.timeSlots.forEach((slot) => {
     // 如果有分类过滤，且当前 slot 不属于过滤分类，则跳过
-    if (props.selectedFilterCategoryIds && props.selectedFilterCategoryIds.length > 0 && !props.selectedFilterCategoryIds.includes(slot.categoryId)) {
+    if (
+      props.selectedFilterCategoryIds &&
+      props.selectedFilterCategoryIds.length > 0 &&
+      !props.selectedFilterCategoryIds.includes(slot.categoryId)
+    ) {
       return;
     }
-    
-    const category = props.categories.find(c => c.id === slot.categoryId);
+
+    const category = props.categories.find((c) => c.id === slot.categoryId);
     const timeType = category?.timeType;
-    
+
     if (timeType && durations[timeType as TimeType] !== undefined) {
-      durations[timeType as TimeType] += (slot.endTime - slot.startTime + 1);
+      durations[timeType as TimeType] += slot.endTime - slot.startTime + 1;
     }
   });
 
@@ -60,22 +60,22 @@ const timeTypeDurations = computed(() => {
 // 生成饼图数据
 const pieChartData = computed(() => {
   const data = [
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.REQUIRED].label, 
+    {
+      name: TIME_TYPE_CONFIG[TimeType.REQUIRED].label,
       value: timeTypeDurations.value[TimeType.REQUIRED],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.REQUIRED].color }
+      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.REQUIRED].color },
     },
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.POSITIVE].label, 
+    {
+      name: TIME_TYPE_CONFIG[TimeType.POSITIVE].label,
       value: timeTypeDurations.value[TimeType.POSITIVE],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.POSITIVE].color }
+      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.POSITIVE].color },
     },
-    { 
-      name: TIME_TYPE_CONFIG[TimeType.NEGATIVE].label, 
+    {
+      name: TIME_TYPE_CONFIG[TimeType.NEGATIVE].label,
       value: timeTypeDurations.value[TimeType.NEGATIVE],
-      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.NEGATIVE].color }
-    }
-  ].filter(item => item.value > 0);
+      itemStyle: { color: TIME_TYPE_CONFIG[TimeType.NEGATIVE].color },
+    },
+  ].filter((item) => item.value > 0);
 
   return data;
 });
@@ -95,15 +95,15 @@ const renderPieChart = () => {
 
         return `${params.name}<br/>
                 ${hours}小时${minutes}分钟 (${percentage}%)`;
-      }
+      },
     },
     legend: {
       orient: 'horizontal' as const,
       bottom: 5,
       left: 'center',
       textStyle: {
-        fontSize: 12
-      }
+        fontSize: 12,
+      },
     },
     series: [
       {
@@ -115,43 +115,59 @@ const renderPieChart = () => {
         itemStyle: {
           borderRadius: 10,
           borderColor: '#fff',
-          borderWidth: 2
+          borderWidth: 2,
         },
         label: {
           show: true,
           position: 'outside' as const,
           formatter: '{b}: {d}%',
-          fontSize: 11
+          fontSize: 11,
         },
         emphasis: {
           label: {
             show: true,
             fontSize: 14,
-            fontWeight: 'bold' as const
-          }
+            fontWeight: 'bold' as const,
+          },
         },
-        data: pieChartData.value
-      }
-    ]
+        data: pieChartData.value,
+      },
+    ],
   };
 
   renderEcharts(options as any);
 };
 
 // 监听数据变化，重新渲染图表
-watch([pieChartData, () => props.selectedDate], () => {
-  renderPieChart();
-}, { immediate: true });
+watch(
+  [pieChartData, () => props.selectedDate],
+  () => {
+    renderPieChart();
+  },
+  { immediate: true },
+);
 
 onMounted(() => {
   renderPieChart();
 });
 </script>
 
+<template>
+  <Card
+    :bordered="bordered"
+    class="pie-chart-card overflow-hidden shadow-sm"
+    :body-style="{ padding: '12px' }"
+  >
+    <div class="pie-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
+</template>
+
 <style scoped>
 .pie-chart-card {
-  min-width: 300px;
   flex: 2;
+  min-width: 300px;
 }
 
 .pie-chart-container {

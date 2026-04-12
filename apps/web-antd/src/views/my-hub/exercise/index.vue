@@ -1,18 +1,20 @@
 <script lang="ts" setup>
-import type { VbenFormProps } from '#/adapter/form';
-import type { VxeGridProps } from '#/adapter/vxe-table';
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
-import { onMounted, ref, computed, nextTick, watch } from 'vue';
+import type { VbenFormProps } from '#/adapter/form';
+import type { VxeGridProps } from '#/adapter/vxe-table';
 
-import { usePreferences } from '@vben/preferences';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
-import { Button, Popconfirm, Card } from 'ant-design-vue';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons-vue';
+import { usePreferences } from '@vben/preferences';
+
+import { DeleteOutlined, EditOutlined } from '@ant-design/icons-vue';
+import { Button, Card, Modal, Popconfirm } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { getByDictType } from '#/api/core/common';
-import { deleteBatch, query, getStatistics } from '#/api/core/exerciseRecord';
+import { deleteBatch, getStatistics, query } from '#/api/core/exerciseRecord';
 
 import FormDrawerDemo from './form-drawer.vue';
 
@@ -135,7 +137,7 @@ const exerciseTypeStats = computed(() => {
 
   const result = Object.entries(typeData).map(([name, value]) => ({
     name,
-    value
+    value,
   }));
   return result;
 });
@@ -173,7 +175,7 @@ const dailyStats = computed(() => {
 
   // 转换为每个日期的运动类型数量
   const result: Record<string, number> = {};
-  Object.keys(dailyData).forEach(date => {
+  Object.keys(dailyData).forEach((date) => {
     result[date] = dailyData[date].size;
   });
 
@@ -182,7 +184,6 @@ const dailyStats = computed(() => {
 
 // 更新图表
 const updateCharts = () => {
-
   const monthlyData = monthlyStats.value;
   const typeData = exerciseTypeStats.value;
 
@@ -192,28 +193,30 @@ const updateCharts = () => {
   }
 
   // 获取所有唯一的运动类型
-  const allTypes = Array.from(new Set(
-    Object.values(monthlyData).flatMap(month => Object.keys(month))
-  ));
+  const allTypes = [
+    ...new Set(
+      Object.values(monthlyData).flatMap((month) => Object.keys(month)),
+    ),
+  ];
 
   // 准备柱状图数据，按类型分组
   const monthKeys = Object.keys(monthlyData).sort();
 
   // 计算每月总计
-  const monthlyTotals = monthKeys.map(monthKey => {
+  const monthlyTotals = monthKeys.map((monthKey) => {
     let total = 0;
-    Object.values(monthlyData[monthKey]).forEach(count => {
+    Object.values(monthlyData[monthKey]).forEach((count) => {
       total += count;
     });
     return total;
   });
 
-  const seriesData = allTypes.map(type => {
+  const seriesData = allTypes.map((type) => {
     return {
       name: type,
       type: 'bar',
       stack: '总量', // 堆叠显示
-      data: monthKeys.map(monthKey => {
+      data: monthKeys.map((monthKey) => {
         return monthlyData[monthKey][type] || 0;
       }),
       label: {
@@ -223,11 +226,11 @@ const updateCharts = () => {
           return params.value > 0 ? params.value : '';
         },
         fontSize: 10,
-        color: '#fff'
+        color: '#fff',
       },
       emphasis: {
-        focus: 'series'
-      }
+        focus: 'series',
+      },
     };
   });
 
@@ -252,7 +255,7 @@ const updateCharts = () => {
     },
     emphasis: {
       disabled: true,
-    }
+    },
   });
 
   // 计算总运动次数
@@ -292,33 +295,36 @@ const updateCharts = () => {
       data: allTypes,
       top: '5%',
       type: 'scroll',
-      orient: 'horizontal'
+      orient: 'horizontal',
     },
     // 添加数据缩放功能
-    dataZoom: monthKeys.length > 6 ? [
-      {
-        type: 'slider',
-        show: true,
-        start: 0,
-        end: 100,
-        height: 20,
-        bottom: 10,
-        borderColor: 'transparent',
-        backgroundColor: '#f5f5f5',
-        fillerColor: 'rgba(78, 205, 196, 0.2)',
-        handleStyle: {
-          color: '#4ecdc4'
-        },
-        textStyle: {
-          color: '#666'
-        }
-      },
-      {
-        type: 'inside',
-        start: 0,
-        end: 100
-      }
-    ] : undefined,
+    dataZoom:
+      monthKeys.length > 6
+        ? [
+            {
+              type: 'slider',
+              show: true,
+              start: 0,
+              end: 100,
+              height: 20,
+              bottom: 10,
+              borderColor: 'transparent',
+              backgroundColor: '#f5f5f5',
+              fillerColor: 'rgba(78, 205, 196, 0.2)',
+              handleStyle: {
+                color: '#4ecdc4',
+              },
+              textStyle: {
+                color: '#666',
+              },
+            },
+            {
+              type: 'inside',
+              start: 0,
+              end: 100,
+            },
+          ]
+        : undefined,
     grid: {
       left: '3%',
       right: '4%',
@@ -332,70 +338,74 @@ const updateCharts = () => {
       axisLabel: {
         rotate: 45,
         interval: isMobile.value ? 0 : 'auto',
-      }
+      },
     },
     yAxis: {
       type: 'value',
       name: '运动次数',
       axisLabel: {
-        formatter: '{value}次'
+        formatter: '{value}次',
       },
       splitLine: {
         lineStyle: {
-          type: 'dashed'
-        }
-      }
+          type: 'dashed',
+        },
+      },
     },
-    series: seriesData
+    series: seriesData,
   });
 
   // 渲染饼图
   renderPieChart({
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: '{a} <br/>{b}: {c} ({d}%)',
     },
-    legend: isMobile.value ? {
-      orient: 'horizontal',
-      bottom: '0',
-      left: 'center'
-    } : {
-      orient: 'vertical',
-      right: 10,
-      top: 'center'
-    },
-    series: [{
-      name: '运动类型分布',
-      type: 'pie',
-      radius: isMobile.value ? ['0%', '55%'] : ['0%', '80%'],
-      center: isMobile.value ? ['50%', '45%'] : ['50%', '50%'],
-      avoidLabelOverlap: true,
-      itemStyle: {
-        borderRadius: 10,
-        borderWidth: 2,
-      },
-      label: {
-        show: true,
-        position: 'outside',
-        formatter: (params: any) => {
-          return `${params.name}\n${params.value}次 (${params.percent}%)`;
+    legend: isMobile.value
+      ? {
+          orient: 'horizontal',
+          bottom: '0',
+          left: 'center',
+        }
+      : {
+          orient: 'vertical',
+          right: 10,
+          top: 'center',
         },
-        fontSize: 12
-      },
-      emphasis: {
+    series: [
+      {
+        name: '运动类型分布',
+        type: 'pie',
+        radius: isMobile.value ? ['0%', '55%'] : ['0%', '80%'],
+        center: isMobile.value ? ['50%', '45%'] : ['50%', '50%'],
+        avoidLabelOverlap: true,
+        itemStyle: {
+          borderRadius: 10,
+          borderWidth: 2,
+        },
         label: {
           show: true,
-          fontSize: 14,
-          fontWeight: 'bold'
-        }
+          position: 'outside',
+          formatter: (params: any) => {
+            return `${params.name}\n${params.value}次 (${params.percent}%)`;
+          },
+          fontSize: 12,
+        },
+        emphasis: {
+          label: {
+            show: true,
+            fontSize: 14,
+            fontWeight: 'bold',
+          },
+        },
+        labelLine: {
+          show: true,
+          length: 10,
+          length2: 10,
+        },
+        data: typeData,
       },
-      labelLine: {
-        show: true,
-        length: 10,
-        length2: 10
-      },
-      data: typeData
-    }]
+    ],
   });
 };
 
@@ -513,20 +523,19 @@ const formOptions: VbenFormProps = {
   submitOnEnter: true,
 };
 
-import { Modal } from 'ant-design-vue';
-
 // ...
 
 const handleCellClick = (params: any) => {
   // 如果是手机端
-  if (isMobile.value) {
-    // 只有点击数据列才触发编辑
-    if (['exerciseTypeId', 'exerciseDate', 'exerciseCount'].includes(params.column.field)) {
-      openFormModal(params.row);
-    }
+  if (
+    isMobile.value && // 只有点击数据列才触发编辑
+    ['exerciseCount', 'exerciseDate', 'exerciseTypeId'].includes(
+      params.column.field,
+    )
+  ) {
+    openFormModal(params.row);
   }
 };
-
 
 const gridOptions: VxeGridProps<RowType> = {
   border: true, // 表格是否显示边框
@@ -655,7 +664,7 @@ const openAddFormModal = () => {
 };
 
 const submitDeleteData = async () => {
-  let checkboxRecords = gridApi.grid.getCheckboxRecords();
+  const checkboxRecords = gridApi.grid.getCheckboxRecords();
   if (checkboxRecords.length === 0) {
     return;
   }
@@ -679,7 +688,7 @@ const [Grid, gridApi] = useVbenVxeGrid({
     cellClick: handleCellClick,
     // vxe-table 不直接支持 rowTouchStart 事件，需要通过 cell-mouseenter 等间接方式或者自定义事件
     // 但 vxe-grid 组件支持 v-on 绑定所有 vxe-table 事件
-  }
+  },
 });
 
 const updateColumnsVisibility = () => {
@@ -705,7 +714,9 @@ const updateColumnsVisibility = () => {
     // 手机端不显示 mobileCard，而是显示精简的表格列
     if (col.field === 'mobileCard') {
       col.visible = false;
-    } else if (['exerciseTypeId', 'exerciseDate', 'exerciseCount'].includes(col.field)) {
+    } else if (
+      ['exerciseCount', 'exerciseDate', 'exerciseTypeId'].includes(col.field)
+    ) {
       col.visible = true;
       // 手机端自动调整宽度
       if (mobile) {
@@ -740,7 +751,10 @@ const deleteRow = async (row: RowType) => {
 const processQueryCondition = (formValues: any) => {
   const condition = { ...formValues };
   // 处理日期区间
-  if (condition.exerciseDateRange && Array.isArray(condition.exerciseDateRange)) {
+  if (
+    condition.exerciseDateRange &&
+    Array.isArray(condition.exerciseDateRange)
+  ) {
     const [startDate, endDate] = condition.exerciseDateRange;
     if (startDate) {
       condition.startDate = startDate;
@@ -760,7 +774,7 @@ const tableReload = () => {
 </script>
 
 <template>
-  <div class="vp-raw w-full exercise-wrapper">
+  <div class="vp-raw exercise-wrapper w-full">
     <!-- 图表区域 -->
     <div class="charts-section">
       <!-- 总运动次数卡片 -->
@@ -776,83 +790,81 @@ const tableReload = () => {
       <!-- 图表容器 -->
       <div class="chart-container">
         <Card class="chart-item">
-          <EchartsUI ref="lineChartRef" style=" width: 100%;height: 300px;" />
+          <EchartsUI ref="lineChartRef" style="width: 100%; height: 300px" />
         </Card>
         <Card class="chart-item">
-          <EchartsUI ref="pieChartRef" style=" width: 100%;height: 300px;" />
+          <EchartsUI ref="pieChartRef" style="width: 100%; height: 300px" />
         </Card>
       </div>
     </div>
 
     <!-- 表格区域 -->
-    <div
-      class="table-wrapper"
-    >
+    <div class="table-wrapper">
       <Grid>
-      <template #toolbar-tools>
-        <Button class="mr-2" type="primary" @click="openAddFormModal">
-          新增
-        </Button>
-        <Popconfirm
-          title="确认删除选中的记录吗?"
-          ok-text="确定"
-          cancel-text="取消"
-          @confirm="submitDeleteData"
-        >
-          <Button class="mr-2" type="primary" danger>
-            删除
+        <template #toolbar-tools>
+          <Button class="mr-2" type="primary" @click="openAddFormModal">
+            新增
           </Button>
-        </Popconfirm>
-      </template>
-      <template #action="{ row }">
-        <Button type="link" size="small" @click="openFormModal(row)">
-          <template #icon><EditOutlined /></template>
-        </Button>
-        <Popconfirm
-          title="是否确认删除?"
-          ok-text="是"
-          cancel-text="否"
-          @confirm="deleteRow(row)"
-        >
-          <Button type="link" size="small" danger>
-            <template #icon><DeleteOutlined /></template>
+          <Popconfirm
+            title="确认删除选中的记录吗?"
+            ok-text="确定"
+            cancel-text="取消"
+            @confirm="submitDeleteData"
+          >
+            <Button class="mr-2" type="primary" danger> 删除 </Button>
+          </Popconfirm>
+        </template>
+        <template #action="{ row }">
+          <Button type="link" size="small" @click="openFormModal(row)">
+            <template #icon><EditOutlined /></template>
           </Button>
-        </Popconfirm>
-      </template>
-      <template #mobile-card="{ row }">
-        <div class="mobile-card-item">
-          <div class="card-header">
-            <span class="card-title">{{ getExerciseTypeLabel(row.exerciseTypeId) }}</span>
-            <span class="card-date">{{ row.exerciseDate }}</span>
-          </div>
-          <div class="card-body">
-            <div class="card-row">
-              <span class="label">数量:</span>
-              <span class="value">{{ row.exerciseCount }}</span>
-            </div>
-            <div class="card-row" v-if="row.description">
-              <span class="label">备注:</span>
-              <span class="value">{{ row.description }}</span>
-            </div>
-          </div>
-          <div class="card-footer">
-            <Button size="small" type="link" @click="openFormModal(row)">
-              <template #icon><EditOutlined /></template>
+          <Popconfirm
+            title="是否确认删除?"
+            ok-text="是"
+            cancel-text="否"
+            @confirm="deleteRow(row)"
+          >
+            <Button type="link" size="small" danger>
+              <template #icon><DeleteOutlined /></template>
             </Button>
-            <Popconfirm
-              title="是否确认删除?"
-              ok-text="是"
-              cancel-text="否"
-              @confirm="deleteRow(row)"
-            >
-              <Button size="small" type="link" danger>
-                <template #icon><DeleteOutlined /></template>
+          </Popconfirm>
+        </template>
+        <template #mobile-card="{ row }">
+          <div class="mobile-card-item">
+            <div class="card-header">
+              <span class="card-title">{{
+                getExerciseTypeLabel(row.exerciseTypeId)
+              }}</span>
+              <span class="card-date">{{ row.exerciseDate }}</span>
+            </div>
+            <div class="card-body">
+              <div class="card-row">
+                <span class="label">数量:</span>
+                <span class="value">{{ row.exerciseCount }}</span>
+              </div>
+              <div class="card-row" v-if="row.description">
+                <span class="label">备注:</span>
+                <span class="value">{{ row.description }}</span>
+              </div>
+            </div>
+            <div class="card-footer">
+              <Button size="small" type="link" @click="openFormModal(row)">
+                <template #icon><EditOutlined /></template>
               </Button>
-            </Popconfirm>
+              <Popconfirm
+                title="是否确认删除?"
+                ok-text="是"
+                cancel-text="否"
+                @confirm="deleteRow(row)"
+              >
+                <Button size="small" type="link" danger>
+                  <template #icon><DeleteOutlined /></template>
+                </Button>
+              </Popconfirm>
+            </div>
           </div>
-        </div>
-      </template>
-    </Grid>
+        </template>
+      </Grid>
     </div>
 
     <!-- 表单模态框 -->
@@ -873,8 +885,6 @@ const tableReload = () => {
 </template>
 
 <style scoped>
-
-
 @media (max-width: 1200px) {
   .chart-container {
     grid-template-columns: 1fr;
@@ -900,7 +910,6 @@ const tableReload = () => {
   padding: 0;
   margin-bottom: 12px;
 }
-
 
 :deep(.mobile-card-col) {
   padding: 0 !important;
