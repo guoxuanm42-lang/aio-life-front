@@ -59,7 +59,7 @@ const loadCategories = async () => {
   }
 };
 
-const title = computed(() => (isEditMode.value ? '编辑时间段' : '新增时间段'));
+const title = computed(() => '');
 
 const updateIsMobile = () => {
   isMobile.value = window.innerWidth < 1024;
@@ -247,9 +247,10 @@ defineExpose({ open });
     @cancel="handleCancel"
   >
     <Spin :spinning="loading">
-      <template #[editingSlot]>
+      <template #default>
         <TimeSlotEditForm
           v-if="editingSlot"
+          :slot="editingSlot"
           :categories="categories"
           :existing-slots="existingSlots"
           @save="handleSave"
