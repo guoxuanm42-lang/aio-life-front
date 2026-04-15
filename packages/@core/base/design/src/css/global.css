@@ -199,13 +199,13 @@
   }
 
   .global-float-btn .ant-float-btn-body {
-    background-color: rgb(24 144 255 / 60%) !important;
+    background-color: rgb(24 144 255 / 45%) !important;
     box-shadow: 0 4px 16px rgb(0 0 0 / 15%) !important;
-    backdrop-filter: blur(4px) !important;
+    backdrop-filter: blur(10px) !important;
   }
 
   .global-float-btn:hover .ant-float-btn-body {
-    background-color: rgb(24 144 255 / 80%) !important;
+    background-color: rgb(24 144 255 / 55%) !important;
     box-shadow: 0 6px 20px rgb(0 0 0 / 20%) !important;
   }
 

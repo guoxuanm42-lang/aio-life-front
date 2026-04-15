@@ -41,10 +41,10 @@ const handleClick = (disabled: boolean) => {
   height: 56px;
   cursor: pointer;
   user-select: none;
-  background-color: rgb(24 144 255 / 60%);
+  background-color: rgb(24 144 255 / 45%);
   border-radius: 50%;
   box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(10px);
   transition: all 0.3s cubic-bezier(0.645, 0.045, 0.355, 1);
 
   .global-plus-icon {
@@ -53,6 +53,7 @@ const handleClick = (disabled: boolean) => {
   }
 
   &:not(.is-disabled):hover {
+    background-color: rgb(24 144 255 / 55%);
     box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
     transform: scale(1.05);
   }
@@ -71,13 +72,13 @@ const handleClick = (disabled: boolean) => {
 /* 移动端适配 */
 @media (max-width: 1024px) {
   .global-floating-btn {
-    right: 16px;
-    bottom: 16px;
-    width: 43px;
-    height: 43px;
+    right: 24px;
+    bottom: 24px;
+    width: 48px;
+    height: 48px;
 
     .global-plus-icon {
-      font-size: 18px;
+      font-size: 20px;
     }
   }
 }
