@@ -322,23 +322,23 @@ const getTypeLabel = (type: string) => {
 </script>
 
 <template>
-  <div class="min-h-full p-4">
+  <div class="min-h-full p-2 md:p-4">
     <!-- Header -->
-    <div class="mb-6 flex items-end justify-between">
+    <div class="mb-3 flex items-end justify-between">
       <div>
-        <p class="mt-1 text-gray-500">记录人生旅途中的关键节点与成就</p>
+        <p class="mt-1 text-sm text-gray-500">记录人生旅途中的关键节点与成就</p>
       </div>
     </div>
 
     <!-- Filters -->
     <div
-      class="mb-8 rounded-xl border border-gray-100 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-[#151515]"
+      class="mb-4 rounded-lg border border-gray-100 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-[#151515]"
     >
-      <div class="flex flex-wrap items-center gap-4">
+      <div class="flex flex-wrap items-center gap-3">
         <AInput
           v-model:value="filters.keyword"
           placeholder="搜索标题、描述、标签..."
-          class="w-64"
+          class="w-48 md:w-64"
           allow-clear
         >
           <template #prefix><SearchOutlined class="text-gray-400" /></template>
@@ -347,7 +347,7 @@ const getTypeLabel = (type: string) => {
         <ASelect
           v-model:value="filters.type"
           placeholder="事件类型"
-          class="w-32"
+          class="w-28"
           allow-clear
         >
           <ASelectOption value="work">工作</ASelectOption>
@@ -359,7 +359,7 @@ const getTypeLabel = (type: string) => {
         <ASelect
           v-model:value="filters.tag"
           placeholder="标签筛选"
-          class="w-32"
+          class="w-28"
           allow-clear
         >
           <ASelectOption v-for="tag in allTags" :key="tag" :value="tag">
@@ -367,7 +367,7 @@ const getTypeLabel = (type: string) => {
           </ASelectOption>
         </ASelect>
 
-        <ARangePicker v-model:value="filters.dateRange" class="w-64" />
+        <ARangePicker v-model:value="filters.dateRange" class="w-56 md:w-64" />
 
         <AButton @click="clearFilters">清除筛选</AButton>
       </div>
@@ -378,12 +378,11 @@ const getTypeLabel = (type: string) => {
       <div
         v-for="group in groupedMilestones"
         :key="group.year"
-        class="relative mb-12"
+        class="relative mb-6"
       >
         <!-- Year Header -->
-        <div class="mb-8 flex items-center pl-3">
-          <div class="mr-3 h-8 w-1.5 rounded-full bg-blue-600"></div>
-          <h2 class="text-2xl font-black text-gray-800 dark:text-gray-100">
+        <div class="mb-3 flex items-center pl-3">
+          <h2 class="text-lg font-bold text-gray-800 dark:text-gray-100">
             {{ group.year }}
           </h2>
         </div>
@@ -394,43 +393,43 @@ const getTypeLabel = (type: string) => {
             <!-- Month Header within the timeline -->
             <div
               v-if="isNewMonth(group.items, index)"
-              class="relative mb-6 mt-10 flex items-center first:mt-0"
+              class="relative mb-2 mt-4 flex items-center first:mt-0"
             >
               <div
-                class="absolute left-[-2px] h-0.5 w-4 bg-gray-300 dark:bg-gray-600"
+                class="absolute left-[-2px] h-0.5 w-3 bg-gray-300 dark:bg-gray-600"
               ></div>
               <div
-                class="pl-8 text-sm font-bold uppercase tracking-wider text-blue-500"
+                class="pl-6 text-xs font-bold uppercase tracking-wider text-blue-500"
               >
                 {{ dayjs(item.date).format('MM月') }}
               </div>
             </div>
 
             <!-- Item -->
-            <div class="group relative py-4 pl-8">
+            <div class="group relative py-2 pl-6 md:pl-8">
               <!-- Dot -->
               <div
-                class="absolute left-[-9px] top-8 z-10 h-4 w-4 rounded-full border-2 border-white shadow-sm dark:border-[#151515]"
+                class="absolute left-[-7px] top-6 z-10 h-3 w-3 rounded-full border-2 border-white shadow-sm dark:border-[#151515]"
                 :class="getTypeColor(item.type)"
               ></div>
 
               <!-- Card -->
               <div
-                class="rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-[#151515]"
+                class="rounded-lg border border-gray-100 bg-white p-3 shadow-sm transition-shadow hover:shadow-md dark:border-gray-800 dark:bg-[#151515]"
               >
-                <div class="mb-2 flex items-start justify-between">
+                <div class="mb-1.5 flex items-start justify-between">
                   <div class="flex items-center gap-2">
                     <h3
-                      class="text-lg font-bold text-gray-800 dark:text-gray-100"
+                      class="text-base font-bold text-gray-800 dark:text-gray-100"
                     >
                       {{ item.title }}
                     </h3>
-                    <ATag :color="getTypeTagColor(item.type)">
+                    <ATag :color="getTypeTagColor(item.type)" class="!mr-0">
                       {{ getTypeLabel(item.type) }}
                     </ATag>
                   </div>
                   <div
-                    class="flex gap-2 opacity-0 transition-opacity group-hover:opacity-100"
+                    class="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100"
                   >
                     <AButton
                       type="text"
@@ -450,25 +449,26 @@ const getTypeLabel = (type: string) => {
                   </div>
                 </div>
 
-                <div class="mb-3 font-mono text-sm text-gray-400">
-                  {{ item.date }}
-                  <span v-if="item.endDate"> - {{ item.endDate }}</span>
-                </div>
-
-                <div
-                  class="mb-3 flex gap-2"
-                  v-if="item.tags && item.tags.length > 0"
-                >
-                  <span
-                    v-for="tag in item.tags"
-                    :key="tag"
-                    class="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-500 dark:bg-gray-800"
-                  >
-                    {{ tag }}
+                <div class="mb-1.5 flex flex-wrap items-center gap-2">
+                  <span class="font-mono text-xs text-gray-400">
+                    {{ item.date }}
+                    <span v-if="item.endDate"> - {{ item.endDate }}</span>
                   </span>
+                  <div
+                    class="flex gap-1"
+                    v-if="item.tags && item.tags.length > 0"
+                  >
+                    <span
+                      v-for="tag in item.tags"
+                      :key="tag"
+                      class="rounded bg-gray-100 px-1.5 py-0.5 text-[10px] text-gray-500 dark:bg-gray-800"
+                    >
+                      {{ tag }}
+                    </span>
+                  </div>
                 </div>
 
-                <p class="leading-relaxed text-gray-600 dark:text-gray-400">
+                <p class="text-sm leading-normal text-gray-600 dark:text-gray-400">
                   {{ item.description }}
                 </p>
               </div>
@@ -478,7 +478,7 @@ const getTypeLabel = (type: string) => {
       </div>
     </div>
 
-    <div v-else class="py-20 text-center text-gray-400">
+    <div v-else class="py-10 text-center text-gray-400">
       <AEmpty description="暂无相关大事记" />
     </div>
 
