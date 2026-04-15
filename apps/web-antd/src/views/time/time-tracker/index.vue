@@ -1,29 +1,15 @@
 <script setup lang="ts">
-import type { DragOperation, TimeSlot } from './types';
+import type { DragOperation, TimeSlot } from "./types";
 
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
+import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
 
-import { createIconifyIcon } from '@vben/icons';
+import { createIconifyIcon } from "@vben/icons";
 
-import {
-  DeleteOutlined,
-  LeftOutlined,
-  PlusOutlined,
-  RightOutlined,
-} from '@ant-design/icons-vue';
-import {
-  Button,
-  DatePicker,
-  message,
-  Modal,
-  Radio,
-  Spin,
-  theme,
-} from 'ant-design-vue';
-import dayjs from 'dayjs';
-import isoWeek from 'dayjs/plugin/isoWeek';
-import weekOfYear from 'dayjs/plugin/weekOfYear';
+import { DeleteOutlined, LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons-vue";
+import { Button, DatePicker, message, Modal, Radio, Spin, theme } from "ant-design-vue";
+import dayjs from "dayjs";
+import isoWeek from "dayjs/plugin/isoWeek";
+import weekOfYear from "dayjs/plugin/weekOfYear";
 
 import {
   deleteByDate,
@@ -31,19 +17,19 @@ import {
   queryForWeek,
   recommendType,
   save,
-  update,
-} from '#/api/core/time-tracker';
-import { listCategories } from '#/api/core/time-tracker-category';
+  update
+} from "#/api/core/time-tracker";
+import { listCategories } from "#/api/core/time-tracker-category";
 
-import CategoryFilter from './components/CategoryFilter.vue';
-import DailyCategoryBarChart from './components/DailyCategoryBarChart.vue';
-import DailyStatsPieChart from './components/DailyStatsPieChart.vue';
-import TimeCategoryBarChart from './components/TimeCategoryBarChart.vue';
-import TimeCategoryPieChart from './components/TimeCategoryPieChart.vue';
-import TimeCategoryStackedAreaChart from './components/TimeCategoryStackedAreaChart.vue';
-import TimeTrackerModal from './components/TimeTrackerModal.vue';
-import TimeTypePieChart from './components/TimeTypePieChart.vue';
-import { defaultConfig } from './config';
+import CategoryFilter from "./components/CategoryFilter.vue";
+import DailyCategoryBarChart from "./components/DailyCategoryBarChart.vue";
+import DailyStatsPieChart from "./components/DailyStatsPieChart.vue";
+import TimeCategoryBarChart from "./components/TimeCategoryBarChart.vue";
+import TimeCategoryPieChart from "./components/TimeCategoryPieChart.vue";
+import TimeCategoryStackedAreaChart from "./components/TimeCategoryStackedAreaChart.vue";
+import TimeTrackerModal from "./components/TimeTrackerModal.vue";
+import TimeTypePieChart from "./components/TimeTypePieChart.vue";
+import { defaultConfig } from "./config";
 import {
   formatDuration,
   formatSlotTime,
@@ -53,8 +39,8 @@ import {
   getSlotPosition,
   getTimeFromPosition,
   hasOverlap,
-  snapToGrid,
-} from './utils';
+  snapToGrid
+} from "./utils";
 
 // 扩展dayjs插件
 dayjs.extend(weekOfYear);
@@ -62,7 +48,6 @@ dayjs.extend(isoWeek);
 
 const { useToken } = theme;
 const { token } = useToken();
-const router = useRouter();
 
 // 响应式数据
 const timelineRef = ref<HTMLElement>();
@@ -615,8 +600,7 @@ const updateMobileTimelineHeight = () => {
   if (!containerEl) return;
   const rect = containerEl.getBoundingClientRect();
   const viewportHeight = window.innerHeight;
-  const available = Math.max(300, viewportHeight - rect.top);
-  mobileTimelineHeight.value = available;
+  mobileTimelineHeight.value = Math.max(300, viewportHeight - rect.top);
 };
 // 获取时间段显示的标题
 const getSlotTitle = (slot: TimeSlot) => {
@@ -1702,223 +1686,6 @@ const getDaySlots = (date: string): TimeSlot[] => {
 </template>
 
 <style scoped>
-/* 手机端样式 */
-@media (max-width: 1024px) {
-  .date-picker-container {
-    border-radius: 5px;
-  }
-
-  .date-nav-button.ant-btn {
-    width: 24px !important;
-    height: 24px !important;
-  }
-
-  .date-picker-container .ant-picker {
-    height: 24px !important;
-  }
-
-  .date-picker-wrapper {
-    height: 24px;
-  }
-
-  .timeline-container .day-header {
-    grid-template-columns: 35px 1fr;
-  }
-
-  .timeline-container .time-scale-header {
-    width: 35px;
-  }
-
-  .timeline-container .time-scale {
-    width: 35px;
-  }
-}
-
-@media (max-width: 1024px) {
-  .time-tracker {
-    padding: 10px;
-  }
-
-  .content-layout {
-    flex-direction: column;
-  }
-
-  .left-panel,
-  .right-panel {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .header {
-    flex-flow: row nowrap;
-    gap: 8px;
-    align-items: center;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-
-  .header-right {
-    flex-shrink: 0;
-    flex-wrap: nowrap;
-    gap: 8px;
-    margin-left: auto;
-  }
-
-  .actions {
-    display: flex;
-    flex-shrink: 0;
-    flex-wrap: nowrap;
-    gap: 3px;
-  }
-
-  .header-right .ant-radio-group {
-    display: inline-flex;
-    flex-wrap: nowrap;
-  }
-
-  .header-right .ant-radio-group .ant-radio-button-wrapper {
-    flex: 0 0 auto;
-  }
-
-  .category-selector {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .timeline-container {
-    height: calc(100vh - 320px);
-  }
-
-  .week-timeline-container {
-    height: calc(100vh - 320px);
-  }
-
-  .month-timeline-container {
-    height: calc(100vh - 320px);
-  }
-
-  .month-header {
-    grid-template-columns: 35px repeat(
-        var(--month-day-count, 30),
-        minmax(45px, 1fr)
-      );
-  }
-
-  .week-header {
-    grid-template-columns: 35px repeat(7, 1fr);
-  }
-
-  .month-day-header {
-    min-width: 45px;
-    padding: 2px;
-  }
-
-  .month-days-container {
-    grid-template-columns: repeat(
-      var(--month-day-count, 30),
-      minmax(45px, 1fr)
-    );
-  }
-
-  .month-day-track {
-    min-width: 45px;
-    overflow: hidden;
-  }
-
-  .time-scale {
-    width: 35px;
-  }
-
-  .hour-label {
-    left: 2px;
-    font-size: 9px;
-  }
-
-  .slot-title {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 10px;
-    white-space: nowrap;
-  }
-
-  .slot-time {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 9px;
-    white-space: nowrap;
-  }
-
-  .week-day-track {
-    min-width: 0;
-  }
-
-  /* 修复月视图时间槽溢出问题 */
-  .month-day-track .time-slot {
-    left: 1px;
-    width: calc(100% - 2px);
-    min-height: 20px;
-  }
-
-  .month-day-track .slot-content {
-    padding: 2px 1px;
-    overflow: hidden;
-  }
-
-  .month-day-track .slot-info {
-    flex-wrap: wrap;
-    gap: 2px;
-  }
-
-  .day-name {
-    font-size: 12px;
-  }
-
-  .day-date {
-    font-size: 7px;
-  }
-
-  /* 手机端浮动按钮样式 */
-  .floating-add-button {
-    right: 16px;
-    bottom: 16px;
-  }
-
-  .floating-add-button .add-button {
-    width: 43px;
-    height: 43px;
-    font-size: 18px;
-  }
-
-  .stats-cards-group {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
-    width: 100%;
-  }
-
-  .stat-square-card {
-    width: 100%;
-    min-width: 0;
-    height: 80px;
-  }
-
-  .stat-label-corner {
-    top: 8px;
-    left: 10px;
-    font-size: 12px;
-  }
-
-  .stat-diff-corner {
-    top: 8px;
-    right: 10px;
-    font-size: 11px;
-  }
-
-  .stat-value-center {
-    font-size: 15px;
-  }
-}
-
 .time-tracker {
   max-width: none;
   padding: 20px;
@@ -2152,6 +1919,8 @@ const getDaySlots = (date: string): TimeSlot[] => {
   flex-direction: column;
   width: 100%;
   height: 800px;
+  /* 声明默认值以消除 IDE/Linter 警告 */
+  --month-day-count: 30;
 }
 
 .month-header {
@@ -2355,7 +2124,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   transform: translateX(-1px);
 }
 
-小尺寸时间段优化 .time-slot.is-small .slot-content {
+.time-slot.is-small .slot-content {
   padding: 0 4px;
 }
 
@@ -2611,5 +2380,222 @@ const getDaySlots = (date: string): TimeSlot[] => {
 :deep(.daily-bar-chart-card .ant-card-body),
 :deep(.pie-chart-card .ant-card-body) {
   padding: 10px !important;
+}
+
+/* 手机端样式 */
+@media (max-width: 1024px) {
+  .date-picker-container {
+    border-radius: 5px;
+  }
+
+  .date-nav-button.ant-btn {
+    width: 24px !important;
+    height: 24px !important;
+  }
+
+  .date-picker-container .ant-picker {
+    height: 24px !important;
+  }
+
+  .date-picker-wrapper {
+    height: 24px;
+  }
+
+  .timeline-container .day-header {
+    grid-template-columns: 35px 1fr;
+  }
+
+  .timeline-container .time-scale-header {
+    width: 35px;
+  }
+
+  .timeline-container .time-scale {
+    width: 35px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .time-tracker {
+    padding: 10px;
+  }
+
+  .content-layout {
+    flex-direction: column;
+  }
+
+  .left-panel,
+  .right-panel {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .header {
+    flex-flow: row nowrap;
+    gap: 8px;
+    align-items: center;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .header-right {
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    gap: 8px;
+    margin-left: auto;
+  }
+
+  .actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: nowrap;
+    gap: 3px;
+  }
+
+  .header-right .ant-radio-group {
+    display: inline-flex;
+    flex-wrap: nowrap;
+  }
+
+  .header-right .ant-radio-group .ant-radio-button-wrapper {
+    flex: 0 0 auto;
+  }
+
+  .category-selector {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .timeline-container {
+    height: calc(100vh - 320px);
+  }
+
+  .week-timeline-container {
+    height: calc(100vh - 320px);
+  }
+
+  .month-timeline-container {
+    height: calc(100vh - 320px);
+  }
+
+  .month-header {
+    grid-template-columns: 35px repeat(
+        var(--month-day-count, 30),
+        minmax(45px, 1fr)
+      );
+  }
+
+  .week-header {
+    grid-template-columns: 35px repeat(7, 1fr);
+  }
+
+  .month-day-header {
+    min-width: 45px;
+    padding: 2px;
+  }
+
+  .month-days-container {
+    grid-template-columns: repeat(
+      var(--month-day-count, 30),
+      minmax(45px, 1fr)
+    );
+  }
+
+  .month-day-track {
+    min-width: 45px;
+    overflow: hidden;
+  }
+
+  .time-scale {
+    width: 35px;
+  }
+
+  .hour-label {
+    left: 2px;
+    font-size: 9px;
+  }
+
+  .slot-title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  .slot-time {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 9px;
+    white-space: nowrap;
+  }
+
+  .week-day-track {
+    min-width: 0;
+  }
+
+  /* 修复月视图时间槽溢出问题 */
+  .month-day-track .time-slot {
+    left: 1px;
+    width: calc(100% - 2px);
+    min-height: 20px;
+  }
+
+  .month-day-track .slot-content {
+    padding: 2px 1px;
+    overflow: hidden;
+  }
+
+  .month-day-track .slot-info {
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+
+  .day-name {
+    font-size: 12px;
+  }
+
+  .day-date {
+    font-size: 7px;
+  }
+
+  /* 手机端浮动按钮样式 */
+  .floating-add-button {
+    right: 16px;
+    bottom: 16px;
+  }
+
+  .floating-add-button .add-button {
+    width: 43px;
+    height: 43px;
+    font-size: 18px;
+  }
+
+  .stats-cards-group {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    width: 100%;
+  }
+
+  .stat-square-card {
+    width: 100%;
+    min-width: 0;
+    height: 80px;
+  }
+
+  .stat-label-corner {
+    top: 8px;
+    left: 10px;
+    font-size: 12px;
+  }
+
+  .stat-diff-corner {
+    top: 8px;
+    right: 10px;
+    font-size: 11px;
+  }
+
+  .stat-value-center {
+    font-size: 15px;
+  }
 }
 </style>
