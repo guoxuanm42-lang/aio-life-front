@@ -1,15 +1,27 @@
 <script setup lang="ts">
-import type { DragOperation, TimeSlot } from "./types";
+import type { DragOperation, TimeSlot } from './types';
 
-import { computed, nextTick, onMounted, onUnmounted, ref } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue';
 
-import { createIconifyIcon } from "@vben/icons";
+import { createIconifyIcon } from '@vben/icons';
 
-import { DeleteOutlined, LeftOutlined, PlusOutlined, RightOutlined } from "@ant-design/icons-vue";
-import { Button, DatePicker, message, Modal, Radio, Spin, theme } from "ant-design-vue";
-import dayjs from "dayjs";
-import isoWeek from "dayjs/plugin/isoWeek";
-import weekOfYear from "dayjs/plugin/weekOfYear";
+import {
+  DeleteOutlined,
+  LeftOutlined,
+  RightOutlined,
+} from '@ant-design/icons-vue';
+import {
+  Button,
+  DatePicker,
+  message,
+  Modal,
+  Radio,
+  Spin,
+  theme,
+} from 'ant-design-vue';
+import dayjs from 'dayjs';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import weekOfYear from 'dayjs/plugin/weekOfYear';
 
 import {
   deleteByDate,
@@ -17,19 +29,20 @@ import {
   queryForWeek,
   recommendType,
   save,
-  update
-} from "#/api/core/time-tracker";
-import { listCategories } from "#/api/core/time-tracker-category";
+  update,
+} from '#/api/core/time-tracker';
+import { listCategories } from '#/api/core/time-tracker-category';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
-import CategoryFilter from "./components/CategoryFilter.vue";
-import DailyCategoryBarChart from "./components/DailyCategoryBarChart.vue";
-import DailyStatsPieChart from "./components/DailyStatsPieChart.vue";
-import TimeCategoryBarChart from "./components/TimeCategoryBarChart.vue";
-import TimeCategoryPieChart from "./components/TimeCategoryPieChart.vue";
-import TimeCategoryStackedAreaChart from "./components/TimeCategoryStackedAreaChart.vue";
-import TimeTrackerModal from "./components/TimeTrackerModal.vue";
-import TimeTypePieChart from "./components/TimeTypePieChart.vue";
-import { defaultConfig } from "./config";
+import CategoryFilter from './components/CategoryFilter.vue';
+import DailyCategoryBarChart from './components/DailyCategoryBarChart.vue';
+import DailyStatsPieChart from './components/DailyStatsPieChart.vue';
+import TimeCategoryBarChart from './components/TimeCategoryBarChart.vue';
+import TimeCategoryPieChart from './components/TimeCategoryPieChart.vue';
+import TimeCategoryStackedAreaChart from './components/TimeCategoryStackedAreaChart.vue';
+import TimeTrackerModal from './components/TimeTrackerModal.vue';
+import TimeTypePieChart from './components/TimeTypePieChart.vue';
+import { defaultConfig } from './config';
 import {
   formatDuration,
   formatSlotTime,
@@ -39,8 +52,8 @@ import {
   getSlotPosition,
   getTimeFromPosition,
   hasOverlap,
-  snapToGrid
-} from "./utils";
+  snapToGrid,
+} from './utils';
 
 // 扩展dayjs插件
 dayjs.extend(weekOfYear);
@@ -1632,21 +1645,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
       </div>
     </div>
 
-    <div v-if="isMobile" class="floating-add-button mobile">
-      <Button
-        type="primary"
-        shape="circle"
-        @click="handleAddSlot"
-        :disabled="loading"
-        size="large"
-        class="add-button"
-      >
-        <template #icon><PlusOutlined /></template>
-      </Button>
-    </div>
-    <div v-else class="floating-btn" @click="handleAddSlot">
-      <PlusOutlined style="font-size: 24px; color: white" />
-    </div>
+    <GlobalFloatBtn @click="handleAddSlot" :disabled="loading" />
 
     <!-- 时间段编辑模态框 -->
     <TimeTrackerModal ref="timeTrackerModalRef" @success="handleModalSuccess" />
@@ -1919,6 +1918,7 @@ const getDaySlots = (date: string): TimeSlot[] => {
   flex-direction: column;
   width: 100%;
   height: 800px;
+
   /* 声明默认值以消除 IDE/Linter 警告 */
   --month-day-count: 30;
 }
@@ -2309,72 +2309,6 @@ const getDaySlots = (date: string): TimeSlot[] => {
   min-width: 300px;
 }
 
-/* 浮动添加按钮样式 */
-.floating-add-button {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 10;
-}
-
-.floating-add-button .add-button {
-  background-color: rgb(24 144 255 / 60%) !important;
-  border: none !important;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
-  transition: all 0.3s ease;
-}
-
-.floating-add-button .add-button:hover {
-  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
-  transform: scale(1.05);
-}
-
-.floating-add-button .add-button:active {
-  transform: scale(0.95);
-}
-
-.floating-btn {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  z-index: 10000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 56px;
-  height: 56px;
-  cursor: pointer;
-  user-select: none;
-  background-color: rgb(24 144 255 / 60%);
-  border-radius: 50%;
-  box-shadow: 0 4px 16px rgb(0 0 0 / 15%);
-  backdrop-filter: blur(4px);
-  transition: all 0.3s ease;
-}
-
-.floating-btn:hover {
-  background-color: rgb(24 144 255 / 80%);
-  box-shadow: 0 6px 20px rgb(0 0 0 / 20%);
-  transform: scale(1.05);
-}
-
-.floating-btn::before,
-.floating-btn::after {
-  position: absolute;
-  content: '';
-  background-color: white;
-}
-
-.floating-btn::before {
-  width: 24px;
-  height: 2px;
-}
-
-.floating-btn::after {
-  width: 2px;
-  height: 24px;
-}
-
 /* Custom padding overrides */
 :deep(.bar-chart-card .ant-card-body),
 :deep(.daily-bar-chart-card .ant-card-body),
@@ -2555,18 +2489,6 @@ const getDaySlots = (date: string): TimeSlot[] => {
 
   .day-date {
     font-size: 7px;
-  }
-
-  /* 手机端浮动按钮样式 */
-  .floating-add-button {
-    right: 16px;
-    bottom: 16px;
-  }
-
-  .floating-add-button .add-button {
-    width: 43px;
-    height: 43px;
-    font-size: 18px;
   }
 
   .stats-cards-group {

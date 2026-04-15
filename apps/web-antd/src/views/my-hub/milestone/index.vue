@@ -8,7 +8,6 @@ import { computed, onMounted, ref } from 'vue';
 import {
   DeleteOutlined,
   EditOutlined,
-  PlusOutlined,
   SearchOutlined,
 } from '@ant-design/icons-vue';
 import {
@@ -34,6 +33,7 @@ import {
   queryMilestone,
   updateMilestone,
 } from '#/api/core/milestone';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 // Types
 // Frontend Milestone interface (transformed from backend entity)
@@ -328,10 +328,6 @@ const getTypeLabel = (type: string) => {
       <div>
         <p class="mt-1 text-gray-500">记录人生旅途中的关键节点与成就</p>
       </div>
-      <AButton type="primary" size="large" @click="handleAdd">
-        <template #icon><PlusOutlined /></template>
-        添加里程碑
-      </AButton>
     </div>
 
     <!-- Filters -->
@@ -485,6 +481,8 @@ const getTypeLabel = (type: string) => {
     <div v-else class="py-20 text-center text-gray-400">
       <AEmpty description="暂无相关大事记" />
     </div>
+
+    <GlobalFloatBtn @click="handleAdd" />
 
     <!-- Add/Edit Modal -->
     <AModal
