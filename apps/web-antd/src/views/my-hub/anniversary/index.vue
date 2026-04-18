@@ -20,39 +20,38 @@ import {
   MenuItem,
   message,
   Modal,
+  Spin,
 } from 'ant-design-vue';
 import dayjs, { Dayjs } from 'dayjs';
 
-interface Anniversary {
-  id: string;
-  title: string;
-  date: string; // ISO string
-  type: 'anniversary' | 'countdown'; // 纪念日（正数） | 倒数日（倒数）
-  note?: string;
-  color?: string; // 渐变色 class
-  icon?: string; // Emoji
-}
-
-const STORAGE_KEY = 'AIO_LIFE_ANNIVERSARIES';
+import {
+  createAnniversaryRecord,
+  deleteAnniversaryRecords,
+  getAnniversaryRecords,
+  updateAnniversaryRecord,
+} from '#/api/my-hub/anniversary';
+import type { AnniversaryRecord } from '#/api/my-hub/anniversary';
 
 const { width } = useWindowSize();
 const isMobile = computed(() => width.value < 768);
 
-const anniversaries = ref<Anniversary[]>([]);
+const anniversaries = ref<AnniversaryRecord[]>([]);
 const modalVisible = ref(false);
 const isEdit = ref(false);
 const formRef = ref();
+const loading = ref(false);
+const submitLoading = ref(false);
 
 const formState = ref<{
   color: string;
-  date: Dayjs | undefined;
+  targetDate: Dayjs | undefined;
   icon: string;
   id?: string;
   note: string;
   title: string;
 }>({
   title: '',
-  date: undefined,
+  targetDate: undefined,
   note: '',
   color: 'from-pink-400 to-rose-500',
   icon: '🎉',
@@ -60,7 +59,7 @@ const formState = ref<{
 
 const rules = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
-  date: [{ required: true, message: '请选择日期', trigger: 'change' }],
+  targetDate: [{ required: true, message: '请选择日期', trigger: 'change' }],
 };
 
 const bgOptions = [
@@ -88,21 +87,15 @@ const emojiOptions = [
 ];
 
 // 加载数据
-const loadData = () => {
-  const data = localStorage.getItem(STORAGE_KEY);
-  if (data) {
-    try {
-      anniversaries.value = JSON.parse(data);
-    } catch (error) {
-      console.error('Failed to parse anniversaries', error);
-      anniversaries.value = [];
-    }
+const loadData = async () => {
+  try {
+    loading.value = true;
+    anniversaries.value = await getAnniversaryRecords();
+  } catch (error) {
+    console.error('Failed to load anniversaries', error);
+  } finally {
+    loading.value = false;
   }
-};
-
-// 保存数据
-const saveData = () => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(anniversaries.value));
 };
 
 onMounted(() => {
@@ -129,13 +122,13 @@ const getDayCount = (dateStr: string) => {
   return Math.abs(getDays(dateStr));
 };
 
-const openModal = (item?: Anniversary) => {
+const openModal = (item?: AnniversaryRecord) => {
   if (item) {
     isEdit.value = true;
     formState.value = {
       id: item.id,
       title: item.title,
-      date: dayjs(item.date),
+      targetDate: dayjs(item.targetDate),
       note: item.note || '',
       color: item.color || bgOptions[0].value,
       icon: item.icon || '🎉',
@@ -144,7 +137,7 @@ const openModal = (item?: Anniversary) => {
     isEdit.value = false;
     formState.value = {
       title: '',
-      date: dayjs(),
+      targetDate: dayjs(),
       note: '',
       color: bgOptions[0].value,
       icon: '🎉',
@@ -156,53 +149,55 @@ const openModal = (item?: Anniversary) => {
 const handleOk = async () => {
   try {
     await formRef.value.validate();
-    const dateStr = formState.value.date!.format('YYYY-MM-DD');
+    const dateStr = formState.value.targetDate!.format('YYYY-MM-DD');
     const type = dayjs(dateStr).isAfter(dayjs()) ? 'countdown' : 'anniversary';
 
+    submitLoading.value = true;
     if (isEdit.value && formState.value.id) {
-      const index = anniversaries.value.findIndex(
-        (a) => a.id === formState.value.id,
-      );
-      if (index !== -1) {
-        anniversaries.value[index] = {
-          ...anniversaries.value[index],
-          title: formState.value.title,
-          date: dateStr,
-          type,
-          note: formState.value.note,
-          color: formState.value.color,
-          icon: formState.value.icon,
-        };
-      }
-    } else {
-      anniversaries.value.push({
-        id: Date.now().toString(),
+      await updateAnniversaryRecord({
+        id: formState.value.id,
         title: formState.value.title,
-        date: dateStr,
+        targetDate: dateStr,
         type,
         note: formState.value.note,
         color: formState.value.color,
         icon: formState.value.icon,
       });
+      message.success('修改成功');
+    } else {
+      await createAnniversaryRecord({
+        title: formState.value.title,
+        targetDate: dateStr,
+        type,
+        note: formState.value.note,
+        color: formState.value.color,
+        icon: formState.value.icon,
+      });
+      message.success('添加成功');
     }
-    saveData();
     modalVisible.value = false;
-    message.success(isEdit.value ? '修改成功' : '添加成功');
-  } catch {
-    // validation failed
+    loadData();
+  } catch (error) {
+    console.error(error);
+  } finally {
+    submitLoading.value = false;
   }
 };
 
-const handleDelete = (id: string) => {
-  anniversaries.value = anniversaries.value.filter((a) => a.id !== id);
-  saveData();
-  message.success('删除成功');
+const handleDelete = async (id: string) => {
+  try {
+    await deleteAnniversaryRecords([id]);
+    message.success('删除成功');
+    loadData();
+  } catch (error) {
+    console.error('Delete failed', error);
+  }
 };
 
 const sortedAnniversaries = computed(() => {
   return [...anniversaries.value].sort((a, b) => {
-    const diffA = Math.abs(getDays(a.date));
-    const diffB = Math.abs(getDays(b.date));
+    const diffA = Math.abs(getDays(a.targetDate));
+    const diffB = Math.abs(getDays(b.targetDate));
     return diffA - diffB;
   });
 });
@@ -234,7 +229,7 @@ const selectColor = (color: string) => {
             纪念册
           </h1>
           <p class="mt-1 text-sm text-gray-500 md:text-base dark:text-gray-400">
-            记录每一个值得铭记的瞬间（未完成）
+            记录每一个值得铭记的瞬间
           </p>
         </div>
         <Button
@@ -249,115 +244,118 @@ const selectColor = (color: string) => {
         </Button>
       </div>
 
-      <div
-        v-if="sortedAnniversaries.length === 0"
-        class="animate-fade-in mt-32 flex flex-col items-center justify-center opacity-0"
-        style="animation-delay: 0.2s; animation-fill-mode: forwards"
-      >
-        <div class="mb-4 animate-bounce text-6xl">🎈</div>
-        <Empty description="暂无纪念日，开始记录你的美好时光吧" />
-      </div>
-
-      <div
-        class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
-      >
+      <Spin :spinning="loading" size="large" tip="加载中...">
         <div
-          v-for="(item, index) in sortedAnniversaries"
-          :key="item.id"
-          class="animate-scale-in group relative transform overflow-hidden rounded-3xl opacity-0 shadow-lg transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl"
-          :style="{
-            animationDelay: `${index * 0.1}s`,
-            animationFillMode: 'forwards',
-          }"
+          v-if="!loading && sortedAnniversaries.length === 0"
+          class="animate-fade-in mt-32 flex flex-col items-center justify-center opacity-0"
+          style="animation-delay: 0.2s; animation-fill-mode: forwards"
         >
-          <!-- 背景 -->
-          <div
-            :class="`absolute inset-0 bg-gradient-to-br ${item.color || 'from-pink-400 to-rose-500'} opacity-90 transition-opacity duration-300`"
-          ></div>
+          <div class="mb-4 animate-bounce text-6xl">🎈</div>
+          <Empty description="暂无纪念日，开始记录你的美好时光吧" />
+        </div>
 
-          <!-- 装饰圆圈 -->
+        <div
+          v-if="!loading && sortedAnniversaries.length > 0"
+          class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+        >
           <div
-            class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white opacity-10 blur-2xl transition-transform duration-700 group-hover:scale-150"
-          ></div>
-          <div
-            class="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-black opacity-5 blur-xl transition-transform duration-700 group-hover:scale-150"
-          ></div>
-
-          <!-- 内容容器 -->
-          <div
-            class="relative flex h-full flex-col justify-between p-6 text-white"
+            v-for="(item, index) in sortedAnniversaries"
+            :key="item.id"
+            class="animate-scale-in group relative transform overflow-hidden rounded-3xl opacity-0 shadow-lg transition-all duration-500 hover:-translate-y-1 hover:shadow-2xl"
+            :style="{
+              animationDelay: `${index * 0.1}s`,
+              animationFillMode: 'forwards',
+            }"
           >
-            <div class="flex items-start justify-between">
-              <div
-                class="origin-top-left transform text-4xl drop-shadow-md filter transition-transform duration-300 group-hover:scale-110"
-              >
-                {{ item.icon || '🎉' }}
-              </div>
+            <!-- 背景 -->
+            <div
+              :class="`absolute inset-0 bg-gradient-to-br ${item.color || 'from-pink-400 to-rose-500'} opacity-90 transition-opacity duration-300`"
+            ></div>
 
-              <Dropdown :trigger="['click']">
+            <!-- 装饰圆圈 -->
+            <div
+              class="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-white opacity-10 blur-2xl transition-transform duration-700 group-hover:scale-150"
+            ></div>
+            <div
+              class="absolute -bottom-10 -left-10 h-24 w-24 rounded-full bg-black opacity-5 blur-xl transition-transform duration-700 group-hover:scale-150"
+            ></div>
+
+            <!-- 内容容器 -->
+            <div
+              class="relative flex h-full flex-col justify-between p-6 text-white"
+            >
+              <div class="flex items-start justify-between">
                 <div
-                  class="cursor-pointer rounded-full p-2 opacity-0 transition-colors hover:bg-white/20 group-hover:opacity-100"
+                  class="origin-top-left transform text-4xl drop-shadow-md filter transition-transform duration-300 group-hover:scale-110"
                 >
-                  <MoreOutlined class="text-xl text-white" />
+                  {{ item.icon || '🎉' }}
                 </div>
-                <template #overlay>
-                  <Menu>
-                    <MenuItem key="edit" @click="openModal(item)">
-                      <EditOutlined /> 编辑
-                    </MenuItem>
-                    <MenuItem
-                      key="delete"
-                      @click="handleDelete(item.id)"
-                      class="text-red-500"
-                    >
-                      <DeleteOutlined /> 删除
-                    </MenuItem>
-                  </Menu>
-                </template>
-              </Dropdown>
-            </div>
 
-            <div class="mt-6 text-center">
-              <div
-                class="mb-1 text-sm font-medium uppercase tracking-wider opacity-90"
-              >
-                {{ getDayLabel(item.date) }}
+                <Dropdown :trigger="['click']">
+                  <div
+                    class="cursor-pointer rounded-full p-2 opacity-0 transition-colors hover:bg-white/20 group-hover:opacity-100"
+                  >
+                    <MoreOutlined class="text-xl text-white" />
+                  </div>
+                  <template #overlay>
+                    <Menu>
+                      <MenuItem key="edit" @click="openModal(item)">
+                        <EditOutlined /> 编辑
+                      </MenuItem>
+                      <MenuItem
+                        key="delete"
+                        @click="handleDelete(item.id!)"
+                        class="text-red-500"
+                      >
+                        <DeleteOutlined /> 删除
+                      </MenuItem>
+                    </Menu>
+                  </template>
+                </Dropdown>
               </div>
-              <div
-                class="text-6xl font-black tabular-nums leading-none tracking-tighter drop-shadow-lg filter"
-              >
-                {{ getDayCount(item.date) }}
-                <span class="ml-1 align-baseline text-lg font-normal opacity-80"
-                  >天</span
-                >
-              </div>
-            </div>
 
-            <div class="mt-8">
-              <h3
-                class="mb-1 truncate text-xl font-bold leading-tight tracking-wide"
-                :title="item.title"
-              >
-                {{ item.title }}
-              </h3>
-              <div class="flex items-center justify-between text-sm opacity-80">
-                <span
-                  class="flex items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 font-medium backdrop-blur-sm"
+              <div class="mt-6 text-center">
+                <div
+                  class="mb-1 text-sm font-medium uppercase tracking-wider opacity-90"
                 >
-                  {{ item.date }}
-                </span>
-                <span
-                  v-if="item.note"
-                  class="max-w-[50%] truncate"
-                  :title="item.note"
+                  {{ getDayLabel(item.targetDate) }}
+                </div>
+                <div
+                  class="text-6xl font-black tabular-nums leading-none tracking-tighter drop-shadow-lg filter"
                 >
-                  {{ item.note }}
-                </span>
+                  {{ getDayCount(item.targetDate) }}
+                  <span class="ml-1 align-baseline text-lg font-normal opacity-80"
+                    >天</span
+                  >
+                </div>
+              </div>
+
+              <div class="mt-8">
+                <h3
+                  class="mb-1 truncate text-xl font-bold leading-tight tracking-wide"
+                  :title="item.title"
+                >
+                  {{ item.title }}
+                </h3>
+                <div class="flex items-center justify-between text-sm opacity-80">
+                  <span
+                    class="flex items-center gap-1 rounded-md bg-white/10 px-2 py-0.5 font-medium backdrop-blur-sm"
+                  >
+                    {{ item.targetDate }}
+                  </span>
+                  <span
+                    v-if="item.note"
+                    class="max-w-[50%] truncate"
+                    :title="item.note"
+                  >
+                    {{ item.note }}
+                  </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
+      </Spin>
 
       <Modal
         v-model:open="modalVisible"
@@ -409,9 +407,9 @@ const selectColor = (color: string) => {
                 />
               </FormItem>
 
-              <FormItem name="date" class="mb-6">
+              <FormItem name="targetDate" class="mb-6">
                 <DatePicker
-                  v-model:value="formState.date"
+                  v-model:value="formState.targetDate"
                   class="w-full rounded-xl border-none bg-gray-100 py-2 dark:bg-gray-700"
                   :bordered="false"
                   style="background: #f3f4f6"
@@ -481,6 +479,7 @@ const selectColor = (color: string) => {
                 </Button>
                 <Button
                   type="primary"
+                  :loading="submitLoading"
                   class="h-10 flex-1 rounded-xl border-none bg-gradient-to-r from-pink-500 to-violet-500 shadow-lg shadow-pink-500/30 hover:opacity-90"
                   @click="handleOk"
                 >
