@@ -701,8 +701,8 @@ onUnmounted(() => {
         />
       </div>
 
-      <div v-if="!isMobile || selectedUserId || (isAIChat && selectedConversationId)" class="flex-1 flex flex-col bg-white">
-        <div v-if="isAIChat && selectedConversationId" class="flex-1 flex flex-col">
+      <div v-if="!isMobile || selectedUserId || (isAIChat && selectedConversationId)" class="flex-1 flex flex-col bg-white min-h-0">
+        <div v-if="isAIChat && selectedConversationId" class="flex-1 flex flex-col min-h-0">
           <div class="border-b border-gray-100 px-4 py-3 flex items-center justify-between">
             <div class="flex items-center gap-3">
               <button

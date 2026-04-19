@@ -11,6 +11,7 @@ import UserBindSetting from './user-bind.vue';
 import ApiKeySetting from './api-key-setting.vue';
 import LLMSetting from './llm-setting.vue';
 import MbtiSetting from './mbti-setting.vue';
+import CbtiSetting from './cbti-setting.vue';
 
 const userStore = useUserStore();
 
@@ -41,6 +42,10 @@ const tabs = ref([
     label: 'MBTI测试',
     value: 'mbti',
   },
+  {
+    label: 'CBTI测试',
+    value: 'cbti',
+  },
   // {
   //   label: '新消息提醒',
   //   value: 'notice',
@@ -61,6 +66,7 @@ const tabs = ref([
       <ApiKeySetting v-if="tabsValue === 'api-key'" />
       <LLMSetting v-if="tabsValue === 'llm'" />
       <MbtiSetting v-if="tabsValue === 'mbti'" />
+      <CbtiSetting v-if="tabsValue === 'cbti'" />
       <ProfileNotificationSetting v-if="tabsValue === 'notice'" />
     </template>
   </Profile>

@@ -21,6 +21,16 @@ const routes: RouteRecordRaw[] = [
         path: '/system/user',
         component: () => import('#/views/system/user/index.vue'),
       },
+      {
+        meta: {
+          icon: 'mdi:menu-open',
+          title: '权限菜单',
+          authority: ['admin'],
+        },
+        name: 'MenuManagement',
+        path: '/system/menu',
+        component: () => import('#/views/system/menu/index.vue'),
+      },
     ],
   },
 ];

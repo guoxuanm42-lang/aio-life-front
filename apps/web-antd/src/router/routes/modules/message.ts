@@ -9,7 +9,7 @@ const routes: RouteRecordRaw[] = [
       order: 10,
       icon: 'ant-design:message-outlined',
       title: '消息中心',
-      hideInMenu: true,
+      hideInMenu: false,
       fullPathKey: false,
     },
   },

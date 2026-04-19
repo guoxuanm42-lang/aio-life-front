@@ -22,3 +22,4 @@ export * from './sysDictType';
 export * from './sysDictData';
 export * from './user-bind';
 export * from './mbti';
+export * from './cbti';
