@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 
 import { Button, Form, Input, Modal, Popconfirm, Spin, Switch, Table, Tag, Upload, message } from 'ant-design-vue';
+import QRCode from 'qrcode';
 
 import {
   cbtiTestApi,
@@ -41,6 +42,250 @@ const hiddenAnswers = ref<{ drink?: string; drinkAttitude?: string }>({});
 
 const result = ref<CbtiTestResult | null>(null);
 const showDetails = ref(false);
+
+const shareCopied = ref(false);
+const posterGenerating = ref(false);
+const posterVisible = ref(false);
+const posterUrl = ref<string | null>(null);
+
+const getSiteUrl = () => {
+  if (typeof window === 'undefined') return '';
+  return `${window.location.origin}/profile?tab=cbti`;
+};
+
+const buildShareText = (r: CbtiTestResult) => {
+  const p = r.personality;
+  const url = getSiteUrl();
+  const sitePart = url ? `\n\n你是 SUDO 还是 NULL？来测测 👉 ${url}` : '';
+  return `我在 CBTI 程序员人格测试中测出了【${p.code} · ${p.name}】！\n「${p.motto}」\n匹配度 ${r.similarity}%${sitePart}`;
+};
+
+const shareText = computed(() => (result.value ? buildShareText(result.value) : ''));
+
+const copyShareText = async () => {
+  const text = shareText.value;
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+  shareCopied.value = true;
+  message.success('已复制文案');
+  setTimeout(() => {
+    shareCopied.value = false;
+  }, 2000);
+};
+
+const downloadPoster = (dataUrl: string, filename: string) => {
+  const a = document.createElement('a');
+  a.href = dataUrl;
+  a.download = filename;
+  a.click();
+};
+
+const savePoster = () => {
+  if (!posterUrl.value || !result.value) return;
+  downloadPoster(posterUrl.value, `CBTI-${result.value.personality.code}.png`);
+};
+
+const loadImage = async (src: string) => {
+  const img = new Image();
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error('image load failed'));
+    img.src = src;
+  });
+  return img;
+};
+
+const drawRoundRect = (
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) => {
+  const radius = Math.max(0, Math.min(r, Math.min(w, h) / 2));
+  ctx.beginPath();
+  ctx.moveTo(x + radius, y);
+  ctx.arcTo(x + w, y, x + w, y + h, radius);
+  ctx.arcTo(x + w, y + h, x, y + h, radius);
+  ctx.arcTo(x, y + h, x, y, radius);
+  ctx.arcTo(x, y, x + w, y, radius);
+  ctx.closePath();
+};
+
+const generatePoster = async () => {
+  if (!result.value || posterGenerating.value) return;
+  posterGenerating.value = true;
+  try {
+    const r = result.value;
+    const p = r.personality;
+    const siteUrl = getSiteUrl();
+
+    const S = 3;
+    const W = 750 * S;
+    const H = 1334 * S;
+    const canvas = document.createElement('canvas');
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) throw new Error('no canvas context');
+    const f = (v: number) => v * S;
+
+    const bg = ctx.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#fff7ed');
+    bg.addColorStop(1, '#fffbf5');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, W, H);
+
+    const bar = ctx.createLinearGradient(0, 0, W, 0);
+    bar.addColorStop(0, '#f97316');
+    bar.addColorStop(1, '#fbbf24');
+    ctx.fillStyle = bar;
+    ctx.fillRect(0, 0, W, f(8));
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#f97316';
+    ctx.font = `900 ${f(28)}px system-ui, sans-serif`;
+    ctx.fillText('CBTI · 程序员行为类型测试', W / 2, f(55));
+
+    try {
+      if (p.imageUrl) {
+        const charImg = await loadImage(p.imageUrl);
+        const imgH = f(300);
+        const imgW = imgH * (charImg.width / charImg.height);
+        ctx.drawImage(charImg, (W - imgW) / 2, f(110), imgW, imgH);
+      }
+    } catch {}
+
+    ctx.fillStyle = p.color || '#f97316';
+    ctx.font = `900 ${f(88)}px ui-monospace, monospace`;
+    ctx.fillText(p.code, W / 2, f(475));
+
+    ctx.fillStyle = '#1c1917';
+    ctx.font = `900 ${f(44)}px system-ui, sans-serif`;
+    ctx.fillText(p.name, W / 2, f(530));
+
+    ctx.fillStyle = '#78716c';
+    ctx.font = `${f(22)}px system-ui, sans-serif`;
+    ctx.fillText(`「${p.motto}」`, W / 2, f(570));
+
+    ctx.fillStyle = p.color || '#f97316';
+    ctx.font = `900 ${f(64)}px system-ui, sans-serif`;
+    ctx.fillText(`${r.similarity}%`, W / 2, f(650));
+    ctx.fillStyle = '#a8a29e';
+    ctx.font = `${f(20)}px system-ui, sans-serif`;
+    ctx.fillText('匹配度', W / 2, f(680));
+
+    ctx.strokeStyle = '#fed7aa';
+    ctx.lineWidth = f(2);
+    ctx.beginPath();
+    ctx.moveTo(f(60), f(710));
+    ctx.lineTo(W - f(60), f(710));
+    ctx.stroke();
+
+    ctx.fillStyle = '#57534e';
+    ctx.font = `${f(21)}px system-ui, sans-serif`;
+    ctx.textAlign = 'left';
+    const maxTW = W - f(120);
+    const description = (p.description || '').slice(0, 180) + ((p.description || '').length > 180 ? '...' : '');
+    let line = '';
+    let ty = f(750);
+    for (const char of description) {
+      const test = line + char;
+      if (ctx.measureText(test).width > maxTW) {
+        ctx.fillText(line, f(60), ty);
+        line = char;
+        ty += f(32);
+        if (ty > f(900)) {
+          ctx.fillText(line + '...', f(60), ty);
+          line = '';
+          break;
+        }
+      } else {
+        line = test;
+      }
+    }
+    if (line) ctx.fillText(line, f(60), ty);
+
+    const strengths = (p.strengths ?? []).slice(0, 3);
+    const weaknesses = (p.weaknesses ?? []).slice(0, 3);
+
+    ctx.fillStyle = '#f97316';
+    ctx.font = `900 ${f(24)}px system-ui, sans-serif`;
+    ctx.fillText('优势', f(60), f(960));
+    ctx.fillStyle = '#57534e';
+    ctx.font = `${f(20)}px system-ui, sans-serif`;
+    strengths.forEach((s, i) => {
+      ctx.fillText(`✓  ${s}`, f(85), f(995 + i * 34));
+    });
+
+    ctx.fillStyle = '#d97706';
+    ctx.font = `900 ${f(24)}px system-ui, sans-serif`;
+    ctx.fillText('注意', W / 2 + f(10), f(960));
+    ctx.fillStyle = '#57534e';
+    ctx.font = `${f(20)}px system-ui, sans-serif`;
+    weaknesses.forEach((w, i) => {
+      ctx.fillText(`!  ${w}`, W / 2 + f(35), f(995 + i * 34));
+    });
+
+    const bottomY = f(1110);
+    const qrSize = f(140);
+    try {
+      if (siteUrl) {
+        const qrDataUrl = await QRCode.toDataURL(siteUrl, {
+          width: qrSize,
+          margin: 1,
+          color: { dark: '#f97316', light: '#ffffff' },
+        });
+        const qrImg = await loadImage(qrDataUrl);
+        ctx.fillStyle = '#fff7ed';
+        drawRoundRect(ctx, f(50), bottomY - f(10), qrSize + f(20), qrSize + f(20), f(12));
+        ctx.fill();
+        ctx.strokeStyle = '#fed7aa';
+        ctx.lineWidth = f(2);
+        ctx.stroke();
+        ctx.drawImage(qrImg, f(60), bottomY, qrSize, qrSize);
+      }
+    } catch {}
+
+    const ctaX = f(60) + qrSize + f(40);
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#1c1917';
+    ctx.font = `900 ${f(28)}px system-ui, sans-serif`;
+    ctx.fillText('你是什么类型的程序员？', ctaX, bottomY + f(50));
+
+    const host = typeof window !== 'undefined' ? window.location.host : '';
+    ctx.fillStyle = '#f97316';
+    ctx.font = `900 ${f(22)}px system-ui, sans-serif`;
+    ctx.fillText('扫码或访问', ctaX, bottomY + f(90));
+    if (host) ctx.fillText(host, ctaX, bottomY + f(120));
+
+    ctx.fillStyle = '#a8a29e';
+    ctx.font = `${f(18)}px system-ui, sans-serif`;
+    ctx.fillText('30 道题 · 27 种编程人格', ctaX, bottomY + f(160));
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#d6d3d1';
+    ctx.font = `${f(16)}px system-ui, sans-serif`;
+    ctx.fillText('CBTI · 程序员行为类型测试', W / 2, H - f(30));
+
+    posterUrl.value = canvas.toDataURL('image/png', 1.0);
+    posterVisible.value = true;
+  } catch (e: any) {
+    message.error(e?.message || '生成海报失败');
+  } finally {
+    posterGenerating.value = false;
+  }
+};
 
 const typesVisible = ref(false);
 const selectedType = ref<string | null>(null);
@@ -255,6 +500,10 @@ const resetTest = () => {
   hiddenAnswers.value = {};
   result.value = null;
   showDetails.value = false;
+  shareCopied.value = false;
+  posterGenerating.value = false;
+  posterVisible.value = false;
+  posterUrl.value = null;
 };
 
 const startTest = async () => {
@@ -264,6 +513,10 @@ const startTest = async () => {
   hiddenAnswers.value = {};
   result.value = null;
   showDetails.value = false;
+  shareCopied.value = false;
+  posterGenerating.value = false;
+  posterVisible.value = false;
+  posterUrl.value = null;
   phase.value = 'main';
 };
 
@@ -687,11 +940,55 @@ onMounted(() => {
           </div>
         </div>
 
+        <div
+          class="rounded-3xl overflow-hidden shadow-sm border border-orange-100 mb-5"
+          :style="{ background: 'linear-gradient(135deg, #f97316, #fbbf24)' }"
+        >
+          <div class="p-6 text-white">
+            <div class="text-lg font-black mb-1">分享你的编程人格</div>
+            <div class="text-sm text-white/80 mb-4">让更多程序员发现自己的类型</div>
+            <div class="bg-white/15 border border-white/20 rounded-2xl p-4 text-sm leading-relaxed whitespace-pre-line mb-4">
+              {{ shareText }}
+            </div>
+            <div class="flex flex-wrap gap-3">
+              <button
+                class="px-5 py-2.5 rounded-full bg-white text-orange-600 font-black text-sm hover:bg-orange-50 transition disabled:opacity-60"
+                @click="copyShareText"
+              >
+                {{ shareCopied ? '已复制' : '复制文案' }}
+              </button>
+              <button
+                class="px-5 py-2.5 rounded-full bg-white/20 border border-white/30 text-white font-black text-sm hover:bg-white/25 transition disabled:opacity-60"
+                :disabled="posterGenerating"
+                @click="posterUrl ? savePoster() : generatePoster()"
+              >
+                {{ posterUrl ? '保存海报' : posterGenerating ? '生成中...' : '生成海报' }}
+              </button>
+              <button
+                v-if="posterUrl"
+                class="px-5 py-2.5 rounded-full bg-white/10 border border-white/25 text-white font-black text-sm hover:bg-white/15 transition"
+                @click="posterVisible = true"
+              >
+                预览
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div class="flex gap-3 flex-wrap">
           <Button class="!rounded-full !font-black" @click="startTest">重新测试</Button>
           <Button class="!rounded-full !font-black" @click="openHistory">历史记录</Button>
           <Button type="primary" class="!rounded-full !font-black" @click="resetTest">回到首页</Button>
         </div>
+
+        <Modal v-model:open="posterVisible" title="CBTI 海报" :footer="null" :width="820">
+          <div class="text-xs text-stone-400 mb-3">移动端可长按保存到相册</div>
+          <img v-if="posterUrl" :src="posterUrl" class="w-full rounded-2xl border border-orange-100 bg-white" />
+          <div class="flex justify-end gap-2 mt-4">
+            <Button class="!rounded-full !font-black" @click="posterVisible = false">关闭</Button>
+            <Button type="primary" class="!rounded-full !font-black" :disabled="!posterUrl" @click="savePoster">下载</Button>
+          </div>
+        </Modal>
       </div>
 
       <Modal v-model:open="typesVisible" title="全部人格类型" :footer="null" :width="980">

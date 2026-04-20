@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 
 import { Profile } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
@@ -15,7 +16,17 @@ import CbtiSetting from './cbti-setting.vue';
 
 const userStore = useUserStore();
 
-const tabsValue = ref<string>('basic');
+const route = useRoute();
+const router = useRouter();
+
+const availableTabs = new Set(['basic', 'bind', 'password', 'api-key', 'llm', 'mbti', 'cbti', 'notice']);
+
+const resolveTab = (value: unknown) => {
+  if (typeof value !== 'string') return 'basic';
+  return availableTabs.has(value) ? value : 'basic';
+};
+
+const tabsValue = ref<string>(resolveTab(route.query.tab));
 
 const tabs = ref([
   {
@@ -51,6 +62,31 @@ const tabs = ref([
   //   value: 'notice',
   // },
 ]);
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    const next = resolveTab(tab);
+    if (next !== tabsValue.value) {
+      tabsValue.value = next;
+    }
+  },
+);
+
+watch(
+  tabsValue,
+  (tab) => {
+    const current = route.query.tab;
+    if (tab === current) return;
+    const nextQuery: Record<string, any> = { ...route.query };
+    if (tab === 'basic') {
+      delete nextQuery.tab;
+    } else {
+      nextQuery.tab = tab;
+    }
+    router.replace({ query: nextQuery });
+  },
+);
 </script>
 <template>
   <Profile
