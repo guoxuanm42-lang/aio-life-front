@@ -27,6 +27,9 @@ const form = ref<SysMenuSaveReq>({
 
 const metaText = ref('{}');
 
+const protectedPaths = new Set(['/system', '/system/menu']);
+const isProtectedMenu = (row: { path?: string }) => protectedPaths.has(String(row?.path || ''));
+
 const columns: any[] = [
   { title: '标题', key: 'title', width: 220 },
   { title: 'Path', dataIndex: 'path', key: 'path', width: 260 },
@@ -149,6 +152,8 @@ const openEdit = (row: any) => {
   editVisible.value = true;
 };
 
+const isProtectedEditing = computed(() => isProtectedMenu(form.value));
+
 const parseMeta = () => {
   const raw = (metaText.value || '').trim();
   if (!raw) return {};
@@ -171,6 +176,9 @@ const save = async () => {
       roles: form.value.roles?.trim(),
       meta: parseMeta(),
     };
+    if (isProtectedMenu(payload)) {
+      payload.status = 1;
+    }
     if (!payload.name || !payload.path) {
       message.error('name/path 不能为空');
       return;
@@ -237,7 +245,7 @@ onMounted(() => {
           <template v-else-if="column.key === 'status'">
             <Switch
               :checked="record.status === 1"
-              :disabled="statusChanging[record.id] === true"
+              :disabled="isProtectedMenu(record) || statusChanging[record.id] === true"
               @change="(checked: boolean) => toggleStatus(record, checked ? 1 : 0)"
             />
           </template>
@@ -312,6 +320,7 @@ onMounted(() => {
                 v-model:checked="form.status"
                 :checked-value="1"
                 :un-checked-value="0"
+                :disabled="isProtectedEditing"
                 checked-children="启用"
                 un-checked-children="禁用"
               />

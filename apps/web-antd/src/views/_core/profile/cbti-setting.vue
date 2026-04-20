@@ -7,6 +7,7 @@ import QRCode from 'qrcode';
 import {
   cbtiTestApi,
   createCbtiPersonalityApi,
+  deleteCbtiHistoryApi,
   deleteCbtiPersonalityApi,
   getCbtiAdminPersonalitiesApi,
   getCbtiHistoryApi,
@@ -293,6 +294,7 @@ const selectedType = ref<string | null>(null);
 const historyVisible = ref(false);
 const historyLoading = ref(false);
 const historyList = ref<CbtiHistoryItem[]>([]);
+const historyDeleting = ref<Record<string, boolean>>({});
 
 const userStore = useUserStore();
 const isAdmin = computed(() => (userStore.userInfo?.roles ?? []).includes('admin'));
@@ -607,6 +609,20 @@ const viewHistoryDetail = async (record: any) => {
     historyVisible.value = false;
   } catch (e: any) {
     message.error(e?.message || '获取详情失败');
+  }
+};
+
+const deleteHistoryItem = async (record: any) => {
+  const id = String((record as CbtiHistoryItem).id);
+  historyDeleting.value = { ...historyDeleting.value, [id]: true };
+  try {
+    await deleteCbtiHistoryApi(id);
+    message.success('删除成功');
+    historyList.value = await getCbtiHistoryApi();
+  } catch (e: any) {
+    message.error(e?.message || '删除失败');
+  } finally {
+    historyDeleting.value = { ...historyDeleting.value, [id]: false };
   }
 };
 
@@ -1066,7 +1082,19 @@ onMounted(() => {
                 <span class="font-mono">{{ record.similarity }}%</span>
               </template>
               <template v-else-if="column.key === 'action'">
-                <Button type="link" size="small" @click="viewHistoryDetail(record)">查看</Button>
+                <div class="flex items-center gap-2">
+                  <Button type="link" size="small" @click="viewHistoryDetail(record)">查看</Button>
+                  <Popconfirm
+                    title="确认删除该条历史记录？"
+                    ok-text="删除"
+                    cancel-text="取消"
+                    @confirm="deleteHistoryItem(record)"
+                  >
+                    <Button type="link" size="small" danger :disabled="historyDeleting[String(record.id)] === true">
+                      删除
+                    </Button>
+                  </Popconfirm>
+                </div>
               </template>
             </template>
           </Table>

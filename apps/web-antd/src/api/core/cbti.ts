@@ -160,6 +160,10 @@ export async function getCbtiHistoryDetailApi(id: string) {
   return requestClient.get<CbtiHistoryDetail>(`/cbti/result/${id}`);
 }
 
+export async function deleteCbtiHistoryApi(id: string) {
+  return requestClient.delete<boolean>(`/cbti/result/${id}`);
+}
+
 export async function getCbtiAdminPersonalitiesApi() {
   return requestClient.get<CbtiAdminPersonality[]>('/cbti/admin/personalities');
 }
