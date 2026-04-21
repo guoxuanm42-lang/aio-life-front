@@ -19,6 +19,15 @@ const routes: RouteRecordRaw[] = [
         path: '/task-center/todo',
         component: () => import('#/views/task-center/todo/index.vue'),
       },
+      {
+        meta: {
+          title: '目标管理',
+          icon: 'mdi:target',
+        },
+        name: 'TaskCenterGoal',
+        path: '/task-center/goal',
+        component: () => import('#/views/task-center/goal/index.vue'),
+      },
     ],
   },
 ];

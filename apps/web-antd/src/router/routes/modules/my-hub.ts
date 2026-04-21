@@ -81,6 +81,16 @@ const routes: RouteRecordRaw[] = [
         path: '/my-hub/anniversary',
         component: () => import('#/views/my-hub/anniversary/index.vue'),
       },
+      {
+        meta: {
+          title: '荣誉中心',
+          icon: 'mdi:trophy-outline',
+          backTop: false,
+        },
+        name: 'honor',
+        path: '/my-hub/honor',
+        component: () => import('#/views/my-hub/honor/index.vue'),
+      },
     ],
   },
 ];

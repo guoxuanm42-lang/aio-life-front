@@ -78,6 +78,7 @@ const [Form, formApi] = useVbenForm({
       },
       fieldName: 'incDate',
       label: '收入日期',
+      rules: 'required',
     },
     {
       component: 'Input',

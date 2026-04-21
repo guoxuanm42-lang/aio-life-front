@@ -1,7 +1,7 @@
 <script lang="ts" setup>
-import { onMounted, ref, toRaw } from 'vue';
+import { onMounted, ref, toRaw, watch } from 'vue';
 
-import { useVbenDrawer } from '@vben/common-ui';
+import { Button } from 'ant-design-vue';
 
 import { useVbenForm } from '#/adapter/form';
 import { getByDictType } from '#/api/core/common';
@@ -11,9 +11,18 @@ defineOptions({
   name: 'FormDrawerDemo',
 });
 
-const emit = defineEmits(['tableReload']);
+const props = defineProps<{
+  values?: any;
+}>();
+
+const emit = defineEmits(['tableReload', 'close']);
+
 const tableReload = () => {
   emit('tableReload');
+};
+
+const handleClose = () => {
+  emit('close');
 };
 
 const dictOptions = ref<Array<{ label: string; value: string }>>([]);
@@ -27,21 +36,8 @@ async function loadDictOptions() {
   }
 }
 
-onMounted(() => {
-  loadDictOptions();
-});
-
 const [Form, formApi] = useVbenForm({
   schema: [
-    {
-      component: 'Input',
-      componentProps: {
-        placeholder: '【自动生成】',
-      },
-      fieldName: 'id',
-      label: '主键',
-      disabled: true,
-    },
     {
       component: 'Input',
       componentProps: {
@@ -65,8 +61,8 @@ const [Form, formApi] = useVbenForm({
       componentProps: {
         placeholder: '请选择',
         options: dictOptions,
-        showSearch: true, // 支持输入查询
-        optionFilterProp: 'label', // 按标签过滤
+        showSearch: true,
+        optionFilterProp: 'label',
         style: { width: '100%' },
       },
       fieldName: 'performanceType',
@@ -119,29 +115,46 @@ const [Form, formApi] = useVbenForm({
   showDefaultActions: false,
   submitOnEnter: true,
 });
-const [Drawer, drawerApi] = useVbenDrawer({
-  onCancel() {
-    drawerApi.close();
-  },
-  onConfirm: async () => {
-    const newVar = await formApi.submitForm();
-    await insertOrUpdate(toRaw(newVar));
-    drawerApi.close();
-    tableReload();
-  },
-  onOpenChange(isOpen: boolean) {
-    if (isOpen) {
-      const { values } = drawerApi.getData<Record<string, any>>();
-      if (values) {
-        formApi.setValues(values);
-      }
+
+watch(
+  () => props.values,
+  (newValues) => {
+    if (newValues) {
+      formApi.setValues(newValues);
     }
   },
-  title: '',
+  { immediate: true },
+);
+
+onMounted(async () => {
+  await loadDictOptions();
+  if (props.values) {
+    formApi.setValues(props.values);
+  }
 });
+
+const handleSubmit = async () => {
+  try {
+    const formData = await formApi.submitForm();
+    await insertOrUpdate(toRaw(formData));
+    tableReload();
+    handleClose();
+  } catch (error) {
+    console.error('保存失败:', error);
+  }
+};
+
+const handleCancel = () => {
+  formApi.resetForm();
+  handleClose();
+};
 </script>
 <template>
-  <Drawer>
+  <div class="p-4">
     <Form />
-  </Drawer>
+    <div class="mt-4 flex justify-end gap-2 border-t border-border pt-4">
+      <Button @click="handleCancel">取消</Button>
+      <Button type="primary" @click="handleSubmit">保存</Button>
+    </div>
+  </div>
 </template>

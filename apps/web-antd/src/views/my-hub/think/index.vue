@@ -1,17 +1,36 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, toRaw } from 'vue';
-import { query as queryThink, save as saveThink, update as updateThink, deleteData as deleteThink } from '#/api/core/think';
-import { Button, Card, Modal, Input, Form, Empty, Space, message, Tag, Popconfirm, Spin } from 'ant-design-vue';
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue';
+
+import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
+import {
+  Button,
+  Card,
+  Empty,
+  Form,
+  Input,
+  message,
+  Modal,
+  Popconfirm,
+  Space,
+  Spin,
+} from 'ant-design-vue';
+
+import {
+  deleteData as deleteThink,
+  query as queryThink,
+  save as saveThink,
+  update as updateThink,
+} from '#/api/core/think';
+import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 interface Event {
-  id: number;
+  id: number | string;
   content: string;
   create_time: string;
 }
 
 interface Thought {
-  id: number;
+  id: number | string;
   content: string;
   events: Event[];
   likes: number;
@@ -22,9 +41,14 @@ const thoughts = ref<Thought[]>([]);
 const loading = ref(false);
 
 const showModal = ref(false);
-const currentEditId = ref<null | number>(null);
+const currentEditId = ref<null | number | string>(null);
 
-const form = reactive({
+interface ThoughtForm {
+  content: string;
+  events: Event[];
+}
+
+const form = reactive<ThoughtForm>({
   content: '',
   events: [
     {
@@ -45,7 +69,7 @@ const openAddModal = () => {
   form.content = '';
   form.events = [
     {
-      id: 1,
+      id: Date.now(),
       content: '',
       create_time: new Date().toISOString(),
     },
@@ -54,7 +78,7 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = (id: number) => {
+const openEditModal = (id: number | string) => {
   const thought = thoughts.value.find((t) => t.id === id);
   if (thought) {
     form.content = thought.content;
@@ -63,11 +87,14 @@ const openEditModal = (id: number) => {
       evs.length > 0
         ? evs.map((e) => ({
             ...e,
-            create_time: (e as any)?.create_time ?? (e as any)?.createTime ?? new Date().toISOString(),
+            create_time:
+              (e as any)?.create_time ??
+              (e as any)?.createTime ??
+              new Date().toISOString(),
           }))
         : [
             {
-              id: 1,
+              id: Date.now(),
               content: '',
               create_time: new Date().toISOString(),
             },
@@ -82,20 +109,14 @@ const closeCardModal = () => {
 };
 
 const addEvent = () => {
-  const newEventId =
-    form.events.length > 0 ? Math.max(...form.events.map((e) => e.id)) + 1 : 1;
   form.events.push({
-    id: newEventId,
+    id: Date.now(),
     content: '',
     create_time: new Date().toISOString(),
   });
 };
 
-const removeEvent = (index: number) => {
-  form.events.splice(index, 1);
-};
-
-const removeEventById = (id: number) => {
+const removeEventById = (id: number | string) => {
   const idx = form.events.findIndex((e) => e.id === id);
   if (idx !== -1) form.events.splice(idx, 1);
 };
@@ -106,13 +127,20 @@ const saveCard = async () => {
     return;
   }
 
-  const validEvents = form.events.filter((event) => event.content.trim() !== '');
+  const validEvents = form.events.filter(
+    (event) => event.content.trim() !== '',
+  );
 
-  const payload = {
-    id: currentEditId.value,
+  // 构造提交数据
+  const payload: any = {
     content: form.content.trim(),
     events: validEvents.map((e) => ({ ...e })),
   };
+
+  // 只有在编辑模式下才传 id
+  if (currentEditId.value !== null) {
+    payload.id = currentEditId.value;
+  }
 
   try {
     const saved =
@@ -122,18 +150,26 @@ const saveCard = async () => {
 
     const normalized = {
       ...saved,
-      content: saved?.content ?? saved?.text ?? saved?.title ?? saved?.summary ?? form.content.trim(),
+      id: saved?.id ?? currentEditId.value, // 确保 ID 不丢失
+      content:
+        saved?.content ??
+        saved?.text ??
+        saved?.title ??
+        saved?.summary ??
+        form.content.trim(),
       events: Array.isArray(saved?.events)
         ? (saved as any).events.map((e: any) => ({
             ...e,
-            create_time: e?.create_time ?? e?.createTime ?? new Date().toISOString(),
+            create_time:
+              e?.create_time ?? e?.createTime ?? new Date().toISOString(),
           }))
         : validEvents.map((e) => ({
             ...e,
             create_time: e?.create_time ?? new Date().toISOString(),
           })),
       date: saved?.date ?? new Date().toISOString(),
-      createTime: saved?.createTime ?? saved?.create_time ?? new Date().toISOString(),
+      createTime:
+        saved?.createTime ?? saved?.create_time ?? new Date().toISOString(),
     };
 
     if (currentEditId.value === null) {
@@ -144,31 +180,34 @@ const saveCard = async () => {
     }
 
     closeCardModal();
-  } catch (e) {
+    message.success('保存成功');
+  } catch {
     message.error('保存失败');
   }
 };
 
-const handleDelete = async (id: number) => {
+const handleDelete = async (id: number | string) => {
   try {
     await deleteThink({ idList: [id] });
     thoughts.value = thoughts.value.filter((t) => t.id !== id);
     message.success('删除成功');
     closeCardModal();
-  } catch (e) {
+  } catch {
     message.error('删除失败');
   }
 };
 
 const formatDate = (dateString: string) => {
-  const options: Intl.DateTimeFormatOptions = {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  };
-  return new Date(dateString).toLocaleDateString('zh-CN', options);
+  const date = new Date(dateString);
+  const padZero = (num: number) => num.toString().padStart(2, '0');
+
+  const year = date.getFullYear();
+  const month = padZero(date.getMonth() + 1);
+  const day = padZero(date.getDate());
+  const hours = padZero(date.getHours());
+  const minutes = padZero(date.getMinutes());
+
+  return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
 // 生命周期
@@ -177,19 +216,25 @@ const loadThoughts = async () => {
   try {
     const res = await queryThink({ page: 1, pageSize: 50, condition: {} });
     const list = (res && (res.items ?? res)) || [];
-    thoughts.value = list.map((t: any) => ({
-      ...t,
-      content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
-      events: Array.isArray(t?.events)
-        ? t.events.map((e: any) => ({
-            ...e,
-            create_time: e?.create_time ?? e?.createTime ?? new Date().toISOString(),
-          }))
-        : [],
-      date: t?.date ?? new Date().toISOString(),
-      createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
-    })).sort((a: Thought, b: Thought) => new Date(b.createTime).getTime() - new Date(a.createTime).getTime());
-  } catch (error) {
+    thoughts.value = list
+      .map((t: any) => ({
+        ...t,
+        content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
+        events: Array.isArray(t?.events)
+          ? t.events.map((e: any) => ({
+              ...e,
+              create_time:
+                e?.create_time ?? e?.createTime ?? new Date().toISOString(),
+            }))
+          : [],
+        date: t?.date ?? new Date().toISOString(),
+        createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
+      }))
+      .toSorted(
+        (a: Thought, b: Thought) =>
+          new Date(b.createTime).getTime() - new Date(a.createTime).getTime(),
+      );
+  } catch {
     message.error('加载失败');
   } finally {
     loading.value = false;
@@ -203,25 +248,18 @@ onMounted(async () => {
 
 <template>
   <div class="think-page">
-    <div class="header">
-      <div class="header-left">
-        <div class="subtitle">记录每次思考，捕捉灵感瞬间。</div>
-      </div>
-      <div class="header-right">
-        <Button type="primary" @click="openAddModal">
-          <template #icon><PlusOutlined /></template>
-          添加新思考
-        </Button>
-      </div>
-    </div>
-
     <Spin :spinning="loading">
-      <template v-if="thoughts.length === 0">
+      <template v-if="thoughts.length === 0 && !loading">
         <div class="empty-wrap">
-          <Empty description="还没有任何思考记录">
-            <Button type="primary" @click="openAddModal">
+          <Empty description="还没有任何思考记录，点击右下角或下方按钮添加">
+            <Button
+              type="primary"
+              shape="round"
+              size="large"
+              @click="openAddModal"
+            >
               <template #icon><PlusOutlined /></template>
-              添加新思考
+              记录闪念
             </Button>
           </Empty>
         </div>
@@ -232,41 +270,85 @@ onMounted(async () => {
           v-for="thought in thoughts"
           :key="thought.id"
           hoverable
+          :bordered="false"
           class="thought-card"
           @click="openEditModal(thought.id)"
         >
           <div class="card-content">{{ thought.content }}</div>
           <div class="card-footer">
             <span class="card-date">{{ formatDate(thought.createTime) }}</span>
-            <Tag color="blue">事件 {{ (thought.events || []).length }}</Tag>
+            <div class="event-badge" v-if="(thought.events || []).length > 0">
+              {{ (thought.events || []).length }}
+            </div>
           </div>
         </Card>
       </div>
     </Spin>
 
-    <Modal v-model:open="showModal" :title="modalTitle" :footer="null" :maskClosable="false" @cancel="closeCardModal">
-      <Form layout="vertical">
-        <Form.Item label="思考内容" required>
-          <Input.TextArea v-model:value="form.content" :rows="4" placeholder="写下你的思考..." />
+    <GlobalFloatBtn @click="openAddModal" />
+
+    <Modal
+      v-model:open="showModal"
+      :title="modalTitle"
+      :footer="null"
+      :mask-closable="false"
+      :destroy-on-close="true"
+      centered
+      @cancel="closeCardModal"
+    >
+      <Form layout="vertical" class="modern-form">
+        <Form.Item required>
+          <Input.TextArea
+            v-model:value="form.content"
+            :auto-size="{ minRows: 4, maxRows: 12 }"
+            placeholder="这一刻的想法..."
+            class="content-textarea"
+            :bordered="false"
+          />
         </Form.Item>
 
-        <Form.Item label="关联事件">
-          <div v-for="event in [...form.events].reverse()" :key="event.id" class="event-item">
-            <div class="event-row">
-              <Input v-model:value="event.content" placeholder="事件..." />
-              <Button type="text" danger @click="removeEventById(event.id)" v-if="form.events.length > 1">
-                <template #icon><DeleteOutlined /></template>
-              </Button>
+        <Form.Item>
+          <div class="events-section">
+            <div class="events-header">
+              <span class="events-title">关联事件流</span>
             </div>
-            <div class="event-time">{{ formatDate(event.create_time) }}</div>
+            <div
+              v-for="event in [...form.events].reverse()"
+              :key="event.id"
+              class="event-item"
+            >
+              <div class="event-row">
+                <Input
+                  v-model:value="event.content"
+                  placeholder="记录相关事件..."
+                  :bordered="false"
+                  class="event-input"
+                />
+                <Button
+                  type="text"
+                  danger
+                  shape="circle"
+                  @click="removeEventById(event.id)"
+                  v-if="form.events.length > 1"
+                >
+                  <template #icon><DeleteOutlined /></template>
+                </Button>
+              </div>
+              <div class="event-time">{{ formatDate(event.create_time) }}</div>
+            </div>
+            <Button type="dashed" block @click="addEvent" class="add-event-btn">
+              <template #icon><PlusOutlined /></template>
+              补充事件
+            </Button>
           </div>
-          <Button type="dashed" block @click="addEvent">
-            <template #icon><PlusOutlined /></template>
-            添加事件
-          </Button>
         </Form.Item>
 
-        <div class="form-actions" :style="{ justifyContent: currentEditId ? 'space-between' : 'flex-end' }">
+        <div
+          class="form-actions"
+          :style="{
+            justifyContent: currentEditId ? 'space-between' : 'flex-end',
+          }"
+        >
           <Popconfirm
             v-if="currentEditId"
             title="确定要删除这条思考吗？"
@@ -274,14 +356,14 @@ onMounted(async () => {
             cancel-text="取消"
             @confirm="handleDelete(currentEditId!)"
           >
-            <Button danger>
+            <Button danger type="text">
               <template #icon><DeleteOutlined /></template>
               删除
             </Button>
           </Popconfirm>
           <Space>
-            <Button @click="closeCardModal">取消</Button>
-            <Button type="primary" @click="saveCard">保存</Button>
+            <Button @click="closeCardModal" shape="round">取消</Button>
+            <Button type="primary" @click="saveCard" shape="round">保存</Button>
           </Space>
         </div>
       </Form>
@@ -291,125 +373,181 @@ onMounted(async () => {
 
 <style scoped>
 .think-page {
+  max-width: 1400px;
   padding: 24px;
-  max-width: 1200px;
   margin: 0 auto;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 24px;
-  padding: 24px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #f0f5ff 0%, #fff 100%);
-  border: 1px solid rgba(230, 244, 255, 0.8);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
-}
-
-.header-left {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.title {
-  margin: 0;
-  font-size: 24px;
-  font-weight: 600;
-  color: #1f1f1f;
-  letter-spacing: -0.5px;
-}
-
-.subtitle {
-  color: #666;
-  font-size: 14px;
-}
-
 .empty-wrap {
-  background: #fff;
-  border: 1px dashed #d9d9d9;
-  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 60vh;
   padding: 60px 20px;
-  text-align: center;
+  background: transparent;
 }
 
 .cards-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+  columns: 1;
+  gap: 24px;
 }
 
 .thought-card {
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-  transition: all 0.3s ease;
-  background: #fff;
+  margin-bottom: 24px;
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  break-inside: avoid;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgb(0, 0, 0, 0.04);
+}
+
+/* Mobile Adaptation */
+@media (max-width: 768px) {
+  .think-page {
+    padding: 12px;
+  }
+
+  .cards-grid {
+    columns: 2;
+    column-gap: 12px;
+  }
+
+  .thought-card :deep(.ant-card-body) {
+    padding: 12px;
+  }
+
+  .thought-card {
+    margin-bottom: 12px;
+  }
+}
+
+@media (min-width: 640px) {
+  .cards-grid {
+    columns: 2;
+  }
+}
+
+@media (min-width: 1024px) {
+  .cards-grid {
+    columns: 3;
+  }
+}
+
+@media (min-width: 1280px) {
+  .cards-grid {
+    columns: 4;
+  }
 }
 
 .thought-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
-  border-color: #e6f4ff;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
 }
 
 .thought-card :deep(.ant-card-body) {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 20px;
+  padding: 24px;
 }
 
 .card-content {
-  flex: 1;
-  font-size: 15px;
-  color: #262626;
-  line-height: 1.6;
   display: -webkit-box;
-  -webkit-line-clamp: 6;
-  -webkit-box-orient: vertical;
+  flex: 1;
+  margin-bottom: 20px;
   overflow: hidden;
-  margin-bottom: 16px;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-line-clamp: 10;
+  -webkit-box-orient: vertical;
+  word-break: break-word;
+  white-space: pre-wrap;
+  opacity: 0.85; /* 文字颜色自适应 */
 }
 
 .card-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding-top: 12px;
-  border-top: 1px solid #f5f5f5;
+  justify-content: space-between;
+  padding-top: 8px;
 }
 
 .card-date {
+  font-size: 13px;
+  opacity: 0.45;
+}
+
+.event-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   font-size: 12px;
-  color: #999;
+  font-weight: 500;
+  color: var(--ant-color-primary, #1677ff);
+  background: var(--ant-color-primary-bg, #e6f4ff);
+  border-radius: 50%;
+}
+
+/* Modal 内部样式 */
+.modern-form .content-textarea {
+  padding: 12px 16px;
+  font-size: 16px;
+  line-height: 1.6;
+  resize: none;
+  background: rgb(128 128 128 / 4%);
+  border-radius: 12px;
+}
+
+.modern-form .content-textarea:focus {
+  background: rgb(128 128 128 / 8%);
+}
+
+.events-section {
+  margin-top: 8px;
+}
+
+.events-header {
+  margin-bottom: 12px;
+  font-size: 14px;
+  font-weight: 500;
+  opacity: 0.65;
 }
 
 .event-item {
-  margin-bottom: 16px;
-  padding: 12px;
-  background: #f9f9f9;
-  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+  background: rgb(128 128 128 / 4%);
+  border-radius: 12px;
+  transition: background 0.3s;
+}
+
+.event-item:hover {
+  background: rgb(128 128 128 / 8%);
 }
 
 .event-row {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
+}
+
+.event-input {
+  padding: 4px 8px;
+  font-size: 14px;
+  background: transparent !important;
 }
 
 .event-time {
-  margin-top: 8px;
+  margin-top: 6px;
+  margin-left: 8px;
   font-size: 12px;
-  color: #999;
+  opacity: 0.45;
+}
+
+.add-event-btn {
+  border-radius: 12px;
+  opacity: 0.8;
 }
 
 .form-actions {
@@ -418,42 +556,17 @@ onMounted(async () => {
   margin-top: 24px;
 }
 
-/* Mobile Adaptation */
-@media (max-width: 768px) {
-  .think-page {
-    padding: 16px;
-  }
+/* 隐藏原生 textarea 滚动条但保留功能 */
+textarea::-webkit-scrollbar {
+  width: 4px;
+}
 
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    padding: 16px;
-    margin-bottom: 16px;
-    border-radius: 12px;
-  }
+textarea::-webkit-scrollbar-thumb {
+  background: rgb(128 128 128 / 20%);
+  border-radius: 4px;
+}
 
-  .header-right {
-    width: 100%;
-    margin-top: 16px;
-  }
-
-  .header-right .ant-btn {
-    width: 100%;
-    height: 40px;
-  }
-
-  .cards-grid {
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .thought-card :deep(.ant-card-body) {
-    padding: 16px;
-  }
-
-  .card-content {
-    font-size: 14px;
-    -webkit-line-clamp: 4;
-  }
+textarea:hover::-webkit-scrollbar-thumb {
+  background: rgb(128 128 128 / 40%);
 }
 </style>

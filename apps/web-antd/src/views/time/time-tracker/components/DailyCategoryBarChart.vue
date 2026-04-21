@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import type { TimeSlot, TimeSlotCategory, MergedCategory } from '../types';
-import { getCategoryColor, getCategoryName } from '../config';
+import type { MergedCategory, TimeSlot, TimeSlotCategory } from '../types';
 
 import { computed, onMounted, ref, watch } from 'vue';
 
@@ -9,9 +8,11 @@ import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { Card } from 'ant-design-vue';
 import dayjs from 'dayjs';
 
+import { getCategoryColor, getCategoryName } from '../config';
+
 interface Props {
   timeSlots: TimeSlot[];
-  categories: (TimeSlotCategory | MergedCategory)[];
+  categories: (MergedCategory | TimeSlotCategory)[];
   selectedDate: dayjs.Dayjs;
   statMode: 'month' | 'week';
   selectedFilterCategoryIds: null | string[];
@@ -23,8 +24,14 @@ const chartRef = ref();
 const { renderEcharts } = useEcharts(chartRef);
 
 const selectedFilterCategories = computed(() => {
-  if (!props.selectedFilterCategoryIds || props.selectedFilterCategoryIds.length === 0) return [];
-  return props.categories.filter((cat) => props.selectedFilterCategoryIds?.includes(cat.id));
+  if (
+    !props.selectedFilterCategoryIds ||
+    props.selectedFilterCategoryIds.length === 0
+  )
+    return [];
+  return props.categories.filter((cat) =>
+    props.selectedFilterCategoryIds?.includes(cat.id),
+  );
 });
 
 // 按天统计分类时长
@@ -33,12 +40,16 @@ const dailyCategoryData = computed(() => {
   const seriesData: Record<string, number[]> = {};
 
   // 过滤分类列表
-  const filteredCategories = (props.selectedFilterCategoryIds && props.selectedFilterCategoryIds.length > 0)
-    ? props.categories.filter(c => props.selectedFilterCategoryIds?.includes(c.id))
-    : props.categories;
+  const filteredCategories =
+    props.selectedFilterCategoryIds &&
+    props.selectedFilterCategoryIds.length > 0
+      ? props.categories.filter((c) =>
+          props.selectedFilterCategoryIds?.includes(c.id),
+        )
+      : props.categories;
 
   // 初始化系列数据
-  filteredCategories.forEach(cat => {
+  filteredCategories.forEach((cat) => {
     seriesData[cat.id] = [];
   });
 
@@ -57,9 +68,9 @@ const dailyCategoryData = computed(() => {
   for (let i = 0; i < daysCount; i++) {
     const date = startDate.add(i, 'day').format('YYYY-MM-DD');
     days.push(date);
-    
+
     // 初始化当天的每个分类数据
-    filteredCategories.forEach(cat => {
+    filteredCategories.forEach((cat) => {
       if (!seriesData[cat.id]) {
         seriesData[cat.id] = [];
       }
@@ -72,10 +83,10 @@ const dailyCategoryData = computed(() => {
     // 统计当天每个分类的时长
     props.timeSlots.forEach((slot) => {
       if (slot.date !== date) return;
-      
+
       const arr = seriesData[slot.categoryId];
       if (arr && arr[i] !== undefined) {
-        arr[i] += (slot.endTime - slot.startTime + 1);
+        arr[i] += slot.endTime - slot.startTime + 1;
       }
     });
   }
@@ -83,7 +94,7 @@ const dailyCategoryData = computed(() => {
   return {
     days,
     seriesData,
-    filteredCategories
+    filteredCategories,
   };
 });
 
@@ -100,35 +111,37 @@ const renderChart = () => {
       : day.date().toString();
   });
 
-  const series = filteredCategories.map(cat => ({
-    name: getCategoryName(cat.id, props.categories),
-    type: 'bar',
-    stack: 'total',
-    data: seriesData[cat.id],
-    itemStyle: { color: getCategoryColor(cat.id, props.categories) },
-    label: {
-      show: true,
-      position: 'inside',
-      formatter: (params: any) => {
-        const duration = params.value as number;
-        if (duration < 30) return ''; // 太短的不显示文字
-        const hours = Math.floor(duration / 60);
-        const minutes = duration % 60;
-        if (hours > 0) {
-          return `${hours}h${minutes}m`;
-        }
-        return `${minutes}m`;
+  const series = filteredCategories
+    .map((cat) => ({
+      name: getCategoryName(cat.id, props.categories),
+      type: 'bar',
+      stack: 'total',
+      data: seriesData[cat.id],
+      itemStyle: { color: getCategoryColor(cat.id, props.categories) },
+      label: {
+        show: true,
+        position: 'inside',
+        formatter: (params: any) => {
+          const duration = params.value as number;
+          if (duration < 30) return ''; // 太短的不显示文字
+          const hours = Math.floor(duration / 60);
+          const minutes = duration % 60;
+          if (hours > 0) {
+            return `${hours}h${minutes}m`;
+          }
+          return `${minutes}m`;
+        },
+        fontSize: 9,
       },
-      fontSize: 9,
-    }
-  })).filter(s => s.data && s.data.some(v => v > 0));
+    }))
+    .filter((s) => s.data && s.data.some((v) => v > 0));
 
   const options = {
     tooltip: {
       trigger: 'axis',
       axisPointer: { type: 'shadow' },
       formatter: (params: any) => {
-        if (!params.length) return '';
+        if (params.length === 0) return '';
         const date = days[params[0].dataIndex];
         let res = `${dayjs(date).format('YYYY年MM月DD日')}<br/>`;
         let total = 0;
@@ -150,7 +163,7 @@ const renderChart = () => {
     },
     legend: {
       type: 'scroll',
-      top: 0
+      top: 0,
     },
     grid: {
       left: 40,
@@ -172,7 +185,7 @@ const renderChart = () => {
       name: '分钟',
       splitLine: { show: true },
     },
-    series: series,
+    series,
   };
 
   renderEcharts(options as any);
@@ -192,27 +205,42 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="daily-bar-chart-container">
-    <EchartsUI ref="chartRef" />
-  </div>
+  <Card
+    class="daily-bar-chart-card overflow-hidden shadow-sm"
+    :body-style="{ padding: '12px' }"
+  >
+    <div class="daily-bar-chart-container">
+      <EchartsUI ref="chartRef" />
+    </div>
+  </Card>
 </template>
 
 <style scoped>
-.daily-bar-chart-container {
-  height: 100%;
+.daily-bar-chart-card {
+  flex: 2;
   width: 100%;
+  min-width: 300px;
+}
+
+.daily-bar-chart-container {
+  width: 100%;
+  height: 280px;
 }
 
 .chart-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+}
+
+.shadow-sm {
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 5%);
 }
 
 .filter-indicator {
   display: flex;
-  align-items: center;
   gap: 8px;
+  align-items: center;
   font-size: 12px;
   color: #666;
 }

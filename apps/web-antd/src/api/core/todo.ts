@@ -26,6 +26,7 @@ export interface Detail {
   content: string;
   isCompleted: number; // 0: uncompleted, 1: completed
   priority: number; // 1: very important, 10: important, 20: normal
+  isStarred?: number; // 0: not starred, 1: starred
   startTime?: string;
   endTime?: string;
 }
@@ -51,7 +52,9 @@ export async function getTaskList(data: any) {
 }
 
 export async function getTaskDetail(taskId: number) {
-  return await requestClient.get<Detail[]>('/taskDetails', { params: { taskId } });
+  return await requestClient.get<Detail[]>('/taskDetails', {
+    params: { taskId },
+  });
 }
 
 export async function addTaskDetail(data: Partial<Detail>) {
@@ -62,12 +65,20 @@ export async function updateTaskDetail(data: Partial<Detail>) {
   return await requestClient.put<boolean>('/taskDetails', data);
 }
 
-export async function deleteTaskDetail(id: string | number) {
+export async function deleteTaskDetail(id: number | string) {
   return await requestClient.delete<void>(`/taskDetails/${id}`);
 }
 
 export async function reSortTaskDetail(data: any) {
   return await requestClient.post('/taskDetails/reSort', data);
+}
+
+export async function starTaskDetail(id: number) {
+  return await requestClient.post<boolean>(`/taskDetails/star/${id}`);
+}
+
+export async function unstarTaskDetail(id: number) {
+  return await requestClient.post<boolean>(`/taskDetails/unstar/${id}`);
 }
 
 export async function saveTask(data: any) {

@@ -1,5 +1,16 @@
 import { requestClient } from '#/api/request';
 
+export interface WatchedTaskDetail {
+  id: number;
+  taskId: number;
+  taskName: string;
+  content: string;
+  priority: number;
+  isCompleted: number; // 0: uncompleted, 1: completed
+  startTime?: string;
+  endTime?: string;
+}
+
 export interface DashboardCard {
   icon: string;
   iconClickUrl?: string;
@@ -9,7 +20,7 @@ export interface DashboardCard {
   valueColor?: string;
   totalTitle?: string;
   totalValue?: string;
-  refreshInterval?: number; // 刷新间隔（秒）
+  refreshInterval?: number;
 }
 
 export interface DashboardTaskItem {
@@ -31,4 +42,11 @@ export async function getDashboardTasks() {
  */
 export async function getDashboardCardDetail(type: string) {
   return await requestClient.get<DashboardCard>(`/dashboard/card/${type}`);
+}
+
+/**
+ * Get watched task details
+ */
+export async function getWatchedTaskDetails() {
+  return await requestClient.get<WatchedTaskDetail[]>('/taskDetails/watched');
 }
