@@ -40,6 +40,10 @@ export async function getMenuAdminTreeApi() {
   return requestClient.get<SysMenuAdminItem[]>('/menu/admin/tree');
 }
 
+export async function getMenuRoleOptionsApi() {
+  return requestClient.get<string[]>('/menu/admin/role-options');
+}
+
 export async function createMenuApi(data: SysMenuSaveReq) {
   return requestClient.post<SysMenuAdminItem>('/menu/admin', data);
 }

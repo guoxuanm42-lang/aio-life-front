@@ -3,7 +3,15 @@ import { computed, onMounted, ref } from 'vue';
 
 import { Button, Form, Input, InputNumber, Modal, Select, Spin, Switch, Table, TreeSelect, message } from 'ant-design-vue';
 
-import { createMenuApi, getMenuAdminTreeApi, updateMenuApi, updateMenuStatusApi, type SysMenuAdminItem, type SysMenuSaveReq } from '#/api/core/menu';
+import {
+  createMenuApi,
+  getMenuAdminTreeApi,
+  getMenuRoleOptionsApi,
+  updateMenuApi,
+  updateMenuStatusApi,
+  type SysMenuAdminItem,
+  type SysMenuSaveReq,
+} from '#/api/core/menu';
 
 const loading = ref(false);
 const list = ref<SysMenuAdminItem[]>([]);
@@ -30,6 +38,13 @@ const metaText = ref('{}');
 const protectedPaths = new Set(['/system', '/system/menu']);
 const isProtectedMenu = (row: { path?: string }) => protectedPaths.has(String(row?.path || ''));
 
+type RoleOption = { label: string; value: string };
+const roleOptions = ref<RoleOption[]>([]);
+const roleOptionsLoading = ref(false);
+const selectableRoleOptions = computed(() => roleOptions.value.filter((x) => x.value !== 'admin'));
+
+const selectedRoles = ref<string[]>([]);
+
 const columns: any[] = [
   { title: '标题', key: 'title', width: 220 },
   { title: 'Path', dataIndex: 'path', key: 'path', width: 260 },
@@ -40,45 +55,15 @@ const columns: any[] = [
   { title: '操作', key: 'action', width: 120 },
 ];
 
-const flatten = (nodes: SysMenuAdminItem[]) => {
-  const result: SysMenuAdminItem[] = [];
-  const walk = (arr: SysMenuAdminItem[]) => {
-    for (const n of arr) {
-      result.push(n);
-      if (n.children?.length) walk(n.children);
-    }
-  };
-  walk(nodes);
-  return result;
+const parseRoles = (raw?: string) => {
+  if (!raw) return [];
+  const t = raw.trim();
+  if (!t) return [];
+  return t
+    .split(',')
+    .map((x) => x.trim())
+    .filter(Boolean);
 };
-
-const flatList = computed(() => flatten(list.value));
-const parentOptions = computed(() => [
-  { label: '根节点 (0)', value: 0 },
-  ...flatList.value.map((x) => ({
-    label: `${x.name} (${x.path}) [${x.id}]`,
-    value: x.id,
-  })),
-]);
-
-const roleTags = computed<string[]>({
-  get: () => {
-    const raw = form.value.roles?.trim();
-    if (!raw) return [];
-    return raw
-      .split(',')
-      .map((x) => x.trim())
-      .filter(Boolean);
-  },
-  set: (arr) => {
-    form.value.roles = arr.join(',');
-  },
-});
-
-const roleOptions = [
-  { label: 'admin', value: 'admin' },
-  { label: 'user', value: 'user' },
-];
 
 type ParentTreeNode = {
   children?: ParentTreeNode[];
@@ -116,6 +101,22 @@ const load = async () => {
   }
 };
 
+const loadRoleOptions = async () => {
+  roleOptionsLoading.value = true;
+  try {
+    const roles = await getMenuRoleOptionsApi();
+    roleOptions.value = (roles || []).map((r) => ({ label: r, value: r }));
+  } catch (e: any) {
+    message.error(e?.message || '加载角色失败');
+    roleOptions.value = [
+      { label: 'admin', value: 'admin' },
+      { label: 'user', value: 'user' },
+    ];
+  } finally {
+    roleOptionsLoading.value = false;
+  }
+};
+
 const openCreate = () => {
   editingId.value = null;
   form.value = {
@@ -129,6 +130,7 @@ const openCreate = () => {
     redirect: '',
     meta: {},
   };
+  selectedRoles.value = [];
   metaText.value = '{}';
   editVisible.value = true;
 };
@@ -148,6 +150,8 @@ const openEdit = (row: any) => {
     redirect: r.redirect ?? '',
     meta: r.meta ?? {},
   };
+  const roles = parseRoles(r.roles);
+  selectedRoles.value = roles.filter((x) => x !== 'admin');
   metaText.value = JSON.stringify(form.value.meta ?? {}, null, 2);
   editVisible.value = true;
 };
@@ -167,13 +171,21 @@ const parseMeta = () => {
 const save = async () => {
   saving.value = true;
   try {
+    const normalizedSelectedRoles = Array.from(
+      new Set(
+        selectedRoles.value
+          .map((x) => x.trim())
+          .filter(Boolean)
+          .filter((x) => x !== 'admin'),
+      ),
+    );
     const payload: SysMenuSaveReq = {
       ...form.value,
       name: form.value.name?.trim(),
       path: form.value.path?.trim(),
       component: form.value.component?.trim(),
       redirect: form.value.redirect?.trim(),
-      roles: form.value.roles?.trim(),
+      roles: normalizedSelectedRoles.join(','),
       meta: parseMeta(),
     };
     if (isProtectedMenu(payload)) {
@@ -199,8 +211,8 @@ const save = async () => {
   }
 };
 
-const toggleStatus = async (row: SysMenuAdminItem, status: number) => {
-  const id = row.id;
+const toggleStatus = async (row: Record<string, any>, status: number) => {
+  const id = Number(row.id);
   statusChanging.value = { ...statusChanging.value, [id]: true };
   try {
     await updateMenuStatusApi(id, status);
@@ -216,6 +228,7 @@ const toggleStatus = async (row: SysMenuAdminItem, status: number) => {
 
 onMounted(() => {
   load();
+  loadRoleOptions();
 });
 </script>
 
@@ -246,7 +259,7 @@ onMounted(() => {
             <Switch
               :checked="record.status === 1"
               :disabled="isProtectedMenu(record) || statusChanging[record.id] === true"
-              @change="(checked: boolean) => toggleStatus(record, checked ? 1 : 0)"
+              @change="toggleStatus(record, $event ? 1 : 0)"
             />
           </template>
           <template v-else-if="column.key === 'action'">
@@ -301,14 +314,16 @@ onMounted(() => {
             <Form.Item label="Redirect（可选）">
               <Input v-model:value="form.redirect" placeholder="例如 /time-management/time-tracker" />
             </Form.Item>
-            <Form.Item label="Roles（空=所有）">
+            <Form.Item label="Roles（空=仅管理员）">
               <Select
-                v-model:value="roleTags"
-                mode="tags"
-                :options="roleOptions"
-                :token-separators="[',']"
-                placeholder="输入角色后回车，例如 admin,user"
+                v-model:value="selectedRoles"
+                mode="multiple"
+                :options="selectableRoleOptions"
+                :loading="roleOptionsLoading"
+                allow-clear
+                placeholder="选择可访问角色"
               />
+              <div class="text-xs text-stone-400 mt-1">留空表示仅管理员可见；选择后表示所选角色与管理员可见。</div>
             </Form.Item>
           </div>
           <div class="grid grid-cols-2 gap-x-4">
