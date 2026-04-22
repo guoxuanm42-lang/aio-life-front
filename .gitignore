@@ -28,6 +28,10 @@ package-lock.json
 .env.*.local
 .env
 .env.*
+# allow commit env templates
+!**/.env.example
+!**/.env.development.example
+!**/.env.production.example
 .eslintcache
 
 logs
