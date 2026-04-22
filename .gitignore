@@ -26,12 +26,6 @@ package-lock.json
 # local env files
 .env.local
 .env.*.local
-.env
-.env.*
-# allow commit env templates
-!**/.env.example
-!**/.env.development.example
-!**/.env.production.example
 .eslintcache
 
 logs
@@ -56,6 +50,3 @@ vite.config.ts.*
 *.sw?
 .history
 .cursor
-
-# Local Trae workspace artifacts
-/.trae/
