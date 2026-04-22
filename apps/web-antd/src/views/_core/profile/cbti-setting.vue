@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 
-import { Button, Form, Input, Modal, Popconfirm, Spin, Switch, Table, Tag, Upload, message } from 'ant-design-vue';
+import { Button, Form, Input, Modal, Popconfirm, Space, Spin, Switch, Table, Tag, Upload, message } from 'ant-design-vue';
+import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import QRCode from 'qrcode';
 
 import {
@@ -302,6 +303,11 @@ const isAdmin = computed(() => (userStore.userInfo?.roles ?? []).includes('admin
 const adminVisible = ref(false);
 const adminLoading = ref(false);
 const adminList = ref<CbtiAdminPersonality[]>([]);
+const adminKeyword = ref('');
+
+const adminImagePreviewVisible = ref(false);
+const adminImagePreviewUrl = ref<string | null>(null);
+const adminImagePreviewTitle = ref('图片预览');
 
 const adminEditVisible = ref(false);
 const adminSaving = ref(false);
@@ -314,6 +320,64 @@ const adminForm = ref<CbtiPersonalitySaveReq>({
 const adminVectorText = ref(JSON.stringify(adminForm.value.vector));
 const adminStrengthsText = ref('');
 const adminWeaknessesText = ref('');
+
+const adminListShown = computed(() => {
+  const kw = adminKeyword.value.trim().toLowerCase();
+  if (!kw) return adminList.value;
+  return (adminList.value || []).filter((x) => {
+    const code = String(x.code ?? '').toLowerCase();
+    const name = String(x.name ?? '').toLowerCase();
+    return code.includes(kw) || name.includes(kw);
+  });
+});
+
+const hexColorRegex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+const normalizeHex6 = (hex: string) => {
+  const v = (hex || '').trim();
+  if (!hexColorRegex.test(v)) return null;
+  if (v.length === 4) {
+    const r = v[1];
+    const g = v[2];
+    const b = v[3];
+    return `#${r}${r}${g}${g}${b}${b}`.toUpperCase();
+  }
+  return v.toUpperCase();
+};
+
+const adminColorValid = computed(() => {
+  const raw = (adminForm.value.color || '').trim();
+  if (!raw) return true;
+  return hexColorRegex.test(raw);
+});
+
+const adminColorPreview = computed(() => {
+  const raw = (adminForm.value.color || '').trim();
+  return normalizeHex6(raw) ?? '#F97316';
+});
+
+const adminColorPickerValue = computed(() => {
+  const raw = (adminForm.value.color || '').trim();
+  return normalizeHex6(raw) ?? '#F97316';
+});
+
+const adminColorValidateStatus = computed(() => {
+  const raw = (adminForm.value.color || '').trim();
+  if (!raw) return undefined;
+  return adminColorValid.value ? undefined : 'error';
+});
+
+const adminColorHelp = computed(() => {
+  const raw = (adminForm.value.color || '').trim();
+  if (!raw) return '支持 #RGB 或 #RRGGBB，可直接使用右侧取色器';
+  if (adminColorValid.value) return '支持 #RGB 或 #RRGGBB';
+  return '格式不正确，例如 #f97316 / #fff';
+});
+
+const onAdminPickColor = (e: Event) => {
+  const v = (e.target as HTMLInputElement | null)?.value;
+  if (!v) return;
+  adminForm.value.color = v.toUpperCase();
+};
 
 const questions = computed(() => questionsResp.value?.questions ?? []);
 const hiddenQuestions = computed(() => questionsResp.value?.hiddenQuestions ?? []);
@@ -344,12 +408,12 @@ const historyColumns = [
 ];
 
 const adminColumns: any[] = [
-  { title: '图片', key: 'image', width: 80 },
-  { title: 'Code', dataIndex: 'code', key: 'code', width: 120 },
-  { title: '名称', dataIndex: 'name', key: 'name' },
+  { title: '图片', key: 'image', width: 96 },
+  { title: 'Code', dataIndex: 'code', key: 'code', width: 150 },
+  { title: '名称', dataIndex: 'name', key: 'name', ellipsis: true },
   { title: '隐藏', dataIndex: 'isSpecial', key: 'isSpecial', width: 90 },
-  { title: '更新时间', dataIndex: 'updateTime', key: 'updateTime', width: 200 },
-  { title: '操作', key: 'action', width: 320 },
+  { title: '更新时间', dataIndex: 'updateTime', key: 'updateTime', width: 190 },
+  { title: '操作', key: 'action', width: 300, fixed: 'right' },
 ];
 
 const init = async () => {
@@ -383,8 +447,17 @@ const refreshPersonalities = async () => {
 };
 
 const openAdmin = async () => {
+  adminKeyword.value = '';
   await loadAdminList();
   adminVisible.value = true;
+};
+
+const openAdminImagePreview = (row: any) => {
+  const r = row as CbtiAdminPersonality;
+  if (!r?.imageUrl) return;
+  adminImagePreviewUrl.value = r.imageUrl;
+  adminImagePreviewTitle.value = `${r.code || ''} 图片预览`;
+  adminImagePreviewVisible.value = true;
 };
 
 const resetAdminForm = () => {
@@ -1101,48 +1174,115 @@ onMounted(() => {
         </Spin>
       </Modal>
 
-      <Modal v-model:open="adminVisible" title="CBTI 角色管理" :footer="null" :width="1000">
-        <div class="flex items-center justify-between mb-3">
-          <Button type="primary" @click="openCreatePersonality">新增角色</Button>
-          <Button @click="loadAdminList">刷新</Button>
+      <Modal
+        v-model:open="adminVisible"
+        title="CBTI 角色管理"
+        :footer="null"
+        :width="1100"
+        centered
+        :body-style="{ padding: '12px 16px' }"
+      >
+        <div class="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <Space wrap>
+            <Button type="primary" @click="openCreatePersonality">
+              <template #icon><PlusOutlined /></template>
+              新增角色
+            </Button>
+            <Input v-model:value="adminKeyword" allow-clear class="w-full md:w-[260px]" placeholder="搜索 Code / 名称">
+              <template #prefix><SearchOutlined class="text-stone-400" /></template>
+            </Input>
+          </Space>
+          <Button :loading="adminLoading" @click="loadAdminList">
+            <template #icon><ReloadOutlined /></template>
+            刷新
+          </Button>
         </div>
-        <Spin :spinning="adminLoading">
-          <Table :data-source="adminList" :columns="adminColumns" :pagination="{ pageSize: 10 }" row-key="id">
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'image'">
-                <div class="w-10 h-10 rounded-lg bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
-                  <img v-if="record.imageUrl" :src="record.imageUrl" class="w-full h-full object-contain" />
-                </div>
-              </template>
-              <template v-else-if="column.key === 'isSpecial'">
-                <Tag v-if="record.isSpecial" color="gold">隐藏</Tag>
-                <span v-else class="text-stone-400 text-xs">否</span>
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <div class="flex items-center gap-2">
-                  <Button size="small" @click="openEditPersonality(record)">编辑</Button>
-                  <Popconfirm title="确认删除该角色？" ok-text="删除" cancel-text="取消" @confirm="deleteAdminPersonality(record)">
-                    <Button size="small" danger>删除</Button>
-                  </Popconfirm>
-                  <Upload
-                    accept="image/*"
-                    :show-upload-list="false"
-                    :customRequest="async ({ file, onError, onSuccess }: any) => {
-                      try {
-                        await uploadAdminImage(record, file as File);
-                        onSuccess?.(null, file);
-                      } catch (e) {
-                        onError?.(e);
-                      }
-                    }"
+
+        <div class="rounded-xl border border-stone-200 overflow-hidden bg-white">
+          <Spin :spinning="adminLoading">
+            <Table
+              class="cbti-admin-table"
+              :data-source="adminListShown"
+              :columns="adminColumns"
+              :pagination="{ pageSize: 10, showSizeChanger: true }"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'image'">
+                  <button
+                    type="button"
+                    class="w-14 h-14 rounded-xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center cursor-zoom-in"
+                    :class="record.imageUrl ? 'hover:shadow-sm hover:border-orange-200' : ''"
+                    @click="openAdminImagePreview(record)"
                   >
-                    <Button size="small">上传图</Button>
-                  </Upload>
-                </div>
+                    <img v-if="record.imageUrl" :src="record.imageUrl" class="w-full h-full object-contain" />
+                    <span v-else class="text-stone-400 text-xs">无图</span>
+                  </button>
+                </template>
+                <template v-else-if="column.key === 'code'">
+                  <div class="flex items-center gap-2">
+                    <span class="font-mono font-black" :style="{ color: record.color || '#f97316' }">{{ record.code }}</span>
+                    <Tag v-if="record.isSpecial" color="gold">隐藏</Tag>
+                  </div>
+                </template>
+                <template v-else-if="column.key === 'updateTime'">
+                  <div class="text-xs text-stone-500">
+                    <div class="leading-5">{{ String(record.updateTime || '').split(' ')[0] }}</div>
+                    <div class="leading-5 font-mono">{{ String(record.updateTime || '').split(' ')[1] }}</div>
+                  </div>
+                </template>
+                <template v-else-if="column.key === 'isSpecial'">
+                  <span v-if="record.isSpecial" class="text-xs text-amber-600 font-medium">是</span>
+                  <span v-else class="text-stone-400 text-xs">否</span>
+                </template>
+                <template v-else-if="column.key === 'action'">
+                  <Space size="small" class="whitespace-nowrap">
+                    <Button type="link" size="small" @click="openEditPersonality(record)">
+                      <template #icon><EditOutlined /></template>
+                      编辑
+                    </Button>
+                    <Popconfirm title="确认删除该角色？" ok-text="删除" cancel-text="取消" @confirm="deleteAdminPersonality(record)">
+                      <Button type="link" size="small" danger>
+                        <template #icon><DeleteOutlined /></template>
+                        删除
+                      </Button>
+                    </Popconfirm>
+                    <Upload
+                      accept="image/*"
+                      :show-upload-list="false"
+                      :customRequest="async ({ file, onError, onSuccess }: any) => {
+                        try {
+                          await uploadAdminImage(record, file as File);
+                          onSuccess?.(null, file);
+                        } catch (e) {
+                          onError?.(e);
+                        }
+                      }"
+                    >
+                      <Button type="link" size="small">
+                        上传图
+                      </Button>
+                    </Upload>
+                  </Space>
+                </template>
               </template>
-            </template>
-          </Table>
-        </Spin>
+            </Table>
+          </Spin>
+        </div>
+
+        <Modal
+          v-model:open="adminImagePreviewVisible"
+          :title="adminImagePreviewTitle"
+          :footer="null"
+          :width="760"
+          centered
+          :body-style="{ padding: '12px' }"
+        >
+          <div class="w-full h-[70vh] rounded-xl border border-stone-200 bg-stone-50 overflow-hidden flex items-center justify-center">
+            <img v-if="adminImagePreviewUrl" :src="adminImagePreviewUrl" class="max-w-full max-h-[70vh] object-contain" />
+          </div>
+        </Modal>
       </Modal>
 
       <Modal
@@ -1151,42 +1291,94 @@ onMounted(() => {
         ok-text="保存"
         cancel-text="取消"
         :confirm-loading="adminSaving"
+        :width="900"
+        centered
+        :body-style="{ maxHeight: '72vh', overflowY: 'auto', padding: '16px 20px' }"
         @ok="saveAdminPersonality"
       >
+        <div class="mb-4 flex items-center gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3">
+          <div class="w-11 h-11 rounded-xl bg-white border border-stone-200 overflow-hidden flex items-center justify-center">
+            <span class="font-mono font-black text-[13px]" :style="{ color: adminColorPreview }">
+              {{ (adminForm.code || 'CODE').slice(0, 10) }}
+            </span>
+          </div>
+          <div class="min-w-0 flex-1">
+            <div class="flex items-center gap-2">
+              <div class="text-base font-semibold text-stone-900 truncate">{{ adminForm.name || '未命名角色' }}</div>
+              <Tag v-if="adminForm.isSpecial" color="gold">隐藏</Tag>
+            </div>
+            <div class="text-xs text-stone-500 truncate">{{ adminForm.motto || '一句话描述…' }}</div>
+          </div>
+          <div class="w-9 h-9 rounded-xl border border-stone-200 bg-white" :style="{ backgroundColor: adminColorPreview }" />
+        </div>
+
         <Form layout="vertical">
-          <Form.Item label="Code">
-            <Input v-model:value="adminForm.code" :disabled="adminEditingId != null" placeholder="例如 SUDO / 404 / NULL" />
-          </Form.Item>
-          <Form.Item label="名称">
-            <Input v-model:value="adminForm.name" placeholder="人格名称" />
-          </Form.Item>
-          <Form.Item label="座右铭">
-            <Input v-model:value="adminForm.motto" placeholder="一句话描述" />
-          </Form.Item>
-          <Form.Item label="主题色（HEX）">
-            <Input v-model:value="adminForm.color" placeholder="#f97316" />
-          </Form.Item>
-          <Form.Item label="技术栈">
-            <Input v-model:value="adminForm.techStack" placeholder="例如 Java / Vue / Go" />
-          </Form.Item>
-          <Form.Item label="灵魂格言">
-            <Input v-model:value="adminForm.spirit" placeholder="一句话" />
-          </Form.Item>
-          <Form.Item label="描述">
-            <Input.TextArea v-model:value="adminForm.description" :auto-size="{ minRows: 3, maxRows: 6 }" />
-          </Form.Item>
-          <Form.Item label="优势（每行一条）">
-            <Input.TextArea v-model:value="adminStrengthsText" :auto-size="{ minRows: 3, maxRows: 6 }" />
-          </Form.Item>
-          <Form.Item label="注意（每行一条）">
-            <Input.TextArea v-model:value="adminWeaknessesText" :auto-size="{ minRows: 3, maxRows: 6 }" />
-          </Form.Item>
-          <Form.Item label="Vector（JSON 数组，长度 15）">
-            <Input.TextArea v-model:value="adminVectorText" :auto-size="{ minRows: 2, maxRows: 4 }" />
-          </Form.Item>
-          <Form.Item label="隐藏人格">
-            <Switch v-model:checked="adminForm.isSpecial" />
-          </Form.Item>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-x-5 gap-y-3">
+            <Form.Item label="Code">
+              <Input
+                v-model:value="adminForm.code"
+                class="font-mono"
+                :maxlength="32"
+                :disabled="adminEditingId != null"
+                placeholder="例如 SUDO / 404 / NULL"
+              />
+            </Form.Item>
+
+            <Form.Item label="名称">
+              <Input v-model:value="adminForm.name" :maxlength="32" placeholder="人格名称" />
+            </Form.Item>
+
+            <Form.Item label="座右铭" class="md:col-span-2">
+              <Input v-model:value="adminForm.motto" :maxlength="80" placeholder="一句话描述" />
+            </Form.Item>
+
+            <Form.Item label="主题色" :help="adminColorHelp" :validate-status="adminColorValidateStatus">
+              <Input v-model:value="adminForm.color" class="font-mono" placeholder="#f97316">
+                <template #addonAfter>
+                  <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 rounded border border-stone-200" :style="{ backgroundColor: adminColorPreview }" />
+                    <input
+                      type="color"
+                      :value="adminColorPickerValue"
+                      class="h-6 w-8 cursor-pointer bg-transparent border-0 p-0"
+                      @input="onAdminPickColor"
+                    />
+                  </div>
+                </template>
+              </Input>
+            </Form.Item>
+
+            <Form.Item label="技术栈">
+              <Input v-model:value="adminForm.techStack" :maxlength="120" placeholder="例如 Java / Vue / Go" />
+            </Form.Item>
+
+            <Form.Item label="灵魂格言" class="md:col-span-2">
+              <Input v-model:value="adminForm.spirit" :maxlength="120" placeholder="一句话" />
+            </Form.Item>
+
+            <Form.Item label="描述" class="md:col-span-2">
+              <Input.TextArea v-model:value="adminForm.description" :auto-size="{ minRows: 3, maxRows: 6 }" />
+            </Form.Item>
+
+            <Form.Item label="优势（每行一条）" class="md:col-span-2">
+              <Input.TextArea v-model:value="adminStrengthsText" :auto-size="{ minRows: 3, maxRows: 6 }" />
+            </Form.Item>
+
+            <Form.Item label="注意（每行一条）" class="md:col-span-2">
+              <Input.TextArea v-model:value="adminWeaknessesText" :auto-size="{ minRows: 3, maxRows: 6 }" />
+            </Form.Item>
+
+            <Form.Item label="Vector（JSON 数组，长度 15）" class="md:col-span-2">
+              <Input.TextArea v-model:value="adminVectorText" class="font-mono text-xs" :auto-size="{ minRows: 2, maxRows: 4 }" />
+            </Form.Item>
+
+            <Form.Item label="隐藏人格" class="md:col-span-2">
+              <div class="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2">
+                <span class="text-xs text-stone-500">对普通用户隐藏，仅管理员可见</span>
+                <Switch v-model:checked="adminForm.isSpecial" />
+              </div>
+            </Form.Item>
+          </div>
         </Form>
       </Modal>
     </Spin>

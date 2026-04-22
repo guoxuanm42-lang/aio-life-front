@@ -1,4 +1,4 @@
-﻿export * from './api-key';
+export * from './api-key';
 export * from './auth';
 export * from './bilibili-video';
 export * from './common';
