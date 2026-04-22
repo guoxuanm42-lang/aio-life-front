@@ -42,6 +42,7 @@
     "@vben/styles": "workspace:*",
     "@vben/types": "workspace:*",
     "@vben/utils": "workspace:*",
+    "@vueuse/motion": "catalog:",
     "@vueuse/core": "catalog:",
     "ant-design-vue": "catalog:",
     "date-fns": "^4.1.0",
@@ -50,8 +51,14 @@
     "marked": "^17.0.4",
     "moment": "^2.30.1",
     "pinia": "catalog:",
+    "pinia-plugin-persistedstate": "catalog:",
+    "qrcode": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:",
-    "vuedraggable": "^4.1.0"
+    "vuedraggable": "^4.1.0",
+    "xe-utils": "^3.8.2"
+  },
+  "devDependencies": {
+    "@types/qrcode": "catalog:"
   }
 }

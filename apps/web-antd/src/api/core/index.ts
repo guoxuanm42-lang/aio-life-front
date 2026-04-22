@@ -22,3 +22,4 @@ export * from './time-tracker-category';
 export * from './todo';
 export * from './user';
 export * from './user-bind';
+export * from './cbti';

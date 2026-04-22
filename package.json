@@ -62,9 +62,6 @@
     "version": "pnpm exec changeset version && pnpm install --no-frozen-lockfile",
     "catalog": "pnpx codemod pnpm/catalog"
   },
-  "dependencies": {
-    "xlsx": "^0.18.5"
-  },
   "devDependencies": {
     "@changesets/changelog-github": "catalog:",
     "@changesets/cli": "catalog:",
@@ -123,5 +120,9 @@
       "canvas",
       "node-gyp"
     ]
+  },
+  "dependencies": {
+    "xe-utils": "^3.8.2",
+    "xlsx": "^0.18.5"
   }
 }
