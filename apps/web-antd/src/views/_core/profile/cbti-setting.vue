@@ -28,6 +28,7 @@ import {
 import { useUserStore } from '@vben/stores';
 
 import CbtiRadarChart from './cbti/components/CbtiRadarChart.vue';
+import CbtiVectorEditor from './cbti/components/CbtiVectorEditor.vue';
 
 type Phase = 'home' | 'main' | 'hidden1' | 'hidden2' | 'result';
 
@@ -318,6 +319,8 @@ const adminForm = ref<CbtiPersonalitySaveReq>({
   vector: Array.from({ length: 15 }, () => 1),
 });
 const adminVectorText = ref(JSON.stringify(adminForm.value.vector));
+const adminVector = ref<number[]>([...adminForm.value.vector]);
+const adminVectorUseJson = ref(false);
 const adminStrengthsText = ref('');
 const adminWeaknessesText = ref('');
 
@@ -448,6 +451,7 @@ const refreshPersonalities = async () => {
 
 const openAdmin = async () => {
   adminKeyword.value = '';
+  await init();
   await loadAdminList();
   adminVisible.value = true;
 };
@@ -470,7 +474,9 @@ const resetAdminForm = () => {
     strengths: [],
     weaknesses: [],
   };
-  adminVectorText.value = JSON.stringify(adminForm.value.vector);
+  adminVectorUseJson.value = false;
+  adminVector.value = [...adminForm.value.vector];
+  adminVectorText.value = JSON.stringify(adminVector.value);
   adminStrengthsText.value = '';
   adminWeaknessesText.value = '';
 };
@@ -498,7 +504,9 @@ const openEditPersonality = (row: any) => {
     isSpecial: Boolean(r.isSpecial),
     imageObject: r.imageObject,
   };
-  adminVectorText.value = JSON.stringify(adminForm.value.vector);
+  adminVectorUseJson.value = false;
+  adminVector.value = [...(adminForm.value.vector ?? Array.from({ length: 15 }, () => 1))];
+  adminVectorText.value = JSON.stringify(adminVector.value);
   adminStrengthsText.value = (adminForm.value.strengths ?? []).join('\n');
   adminWeaknessesText.value = (adminForm.value.weaknesses ?? []).join('\n');
   adminEditVisible.value = true;
@@ -507,10 +515,44 @@ const openEditPersonality = (row: any) => {
 const parseVector = () => {
   const raw = adminVectorText.value?.trim();
   const arr = JSON.parse(raw) as any;
-  if (!Array.isArray(arr) || arr.length !== 15 || arr.some((x) => typeof x !== 'number')) {
-    throw new Error('vector 必须是长度 15 的数字数组，如 [0,1,2,...]');
+  if (
+    !Array.isArray(arr)
+    || arr.length !== 15
+    || arr.some((x) => typeof x !== 'number' || ![0, 1, 2].includes(x))
+  ) {
+    throw new Error('vector 必须是长度 15 的数字数组，且每项只能为 0/1/2（L/M/H）');
   }
   return arr as number[];
+};
+
+const syncAdminVectorFromText = () => {
+  const arr = parseVector();
+  adminVector.value = [...arr];
+  adminVectorText.value = JSON.stringify(arr);
+};
+
+const onAdminVectorChange = (next: number[]) => {
+  adminVector.value = [...(next || [])];
+  adminVectorText.value = JSON.stringify(adminVector.value);
+};
+
+const onAdminVectorTextBlur = () => {
+  try {
+    syncAdminVectorFromText();
+  } catch (e: any) {
+    message.error(e?.message || 'vector 格式错误');
+  }
+};
+
+const onAdminVectorUseJsonChange = (checked: boolean) => {
+  if (!checked) {
+    try {
+      syncAdminVectorFromText();
+    } catch (e: any) {
+      adminVectorUseJson.value = true;
+      message.error(e?.message || 'vector 格式错误');
+    }
+  }
 };
 
 const parseLines = (text: string) => {
@@ -523,7 +565,13 @@ const parseLines = (text: string) => {
 const saveAdminPersonality = async () => {
   adminSaving.value = true;
   try {
-    const vector = parseVector();
+    if (adminVectorUseJson.value) {
+      syncAdminVectorFromText();
+    }
+    const vector = adminVector.value;
+    if (!Array.isArray(vector) || vector.length !== 15 || vector.some((x) => typeof x !== 'number' || ![0, 1, 2].includes(x))) {
+      throw new Error('vector 必须是长度 15 的数字数组，且每项只能为 0/1/2（L/M/H）');
+    }
     const payload: CbtiPersonalitySaveReq = {
       ...adminForm.value,
       code: adminForm.value.code?.trim(),
@@ -1115,6 +1163,12 @@ onMounted(() => {
             </div>
           </div>
           <div class="text-sm text-stone-600 leading-relaxed mb-5">{{ currentTypeDetail.description }}</div>
+
+          <div class="bg-white rounded-2xl border border-orange-100 p-5 mb-4">
+            <div class="font-black text-xs text-stone-700 mb-4">人格向量（15维）</div>
+            <CbtiVectorEditor :dimension-defs="questionsResp?.dimensionDefs" :vector="currentTypeDetail.vector" readonly />
+          </div>
+
           <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
             <div class="bg-orange-50 rounded-xl p-4 border border-orange-100">
               <div class="font-black text-xs text-orange-600 mb-2">优势</div>
@@ -1368,8 +1422,29 @@ onMounted(() => {
               <Input.TextArea v-model:value="adminWeaknessesText" :auto-size="{ minRows: 3, maxRows: 6 }" />
             </Form.Item>
 
-            <Form.Item label="Vector（JSON 数组，长度 15）" class="md:col-span-2">
-              <Input.TextArea v-model:value="adminVectorText" class="font-mono text-xs" :auto-size="{ minRows: 2, maxRows: 4 }" />
+            <Form.Item label="Vector（15维）" class="md:col-span-2">
+              <div class="flex items-center justify-between rounded-lg border border-stone-200 bg-white px-3 py-2">
+                <span class="text-xs text-stone-500">默认可视化编辑，必要时可切换 JSON</span>
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] text-stone-400">JSON</span>
+                  <Switch v-model:checked="adminVectorUseJson" @change="onAdminVectorUseJsonChange" />
+                </div>
+              </div>
+              <div class="mt-3">
+                <CbtiVectorEditor
+                  v-if="!adminVectorUseJson"
+                  :vector="adminVector"
+                  :dimension-defs="questionsResp?.dimensionDefs"
+                  @update:vector="onAdminVectorChange"
+                />
+                <Input.TextArea
+                  v-else
+                  v-model:value="adminVectorText"
+                  class="font-mono text-xs"
+                  :auto-size="{ minRows: 2, maxRows: 6 }"
+                  @blur="onAdminVectorTextBlur"
+                />
+              </div>
             </Form.Item>
 
             <Form.Item label="隐藏人格" class="md:col-span-2">
