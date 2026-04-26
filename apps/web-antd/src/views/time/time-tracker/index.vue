@@ -26,7 +26,7 @@ import weekOfYear from 'dayjs/plugin/weekOfYear';
 import {
   deleteByDate,
   query,
-  queryForWeek,
+  queryByDateRange,
   recommendType,
   save,
   update,
@@ -409,7 +409,7 @@ const loadData = async () => {
       const endDate =
         daysValue.length > 0 ? daysValue[daysValue.length - 1]?.date || '' : '';
       const queryParams = { condition: { startDate, endDate } };
-      promises.push(queryForWeek(queryParams));
+      promises.push(queryByDateRange(queryParams));
     } else {
       // 按天查询
       const currentDate = selectedDate.value.format('YYYY-MM-DD');
@@ -426,7 +426,7 @@ const loadData = async () => {
       prevStartDate = prevDate.startOf('isoWeek').format('YYYY-MM-DD');
       prevEndDate = prevDate.endOf('isoWeek').format('YYYY-MM-DD');
       promises.push(
-        queryForWeek({
+        queryByDateRange({
           condition: { startDate: prevStartDate, endDate: prevEndDate },
         }),
       );
@@ -435,7 +435,7 @@ const loadData = async () => {
       prevStartDate = prevDate.startOf('month').format('YYYY-MM-DD');
       prevEndDate = prevDate.endOf('month').format('YYYY-MM-DD');
       promises.push(
-        queryForWeek({
+        queryByDateRange({
           condition: { startDate: prevStartDate, endDate: prevEndDate },
         }),
       );

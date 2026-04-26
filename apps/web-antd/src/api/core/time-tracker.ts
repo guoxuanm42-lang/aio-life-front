@@ -43,8 +43,8 @@ export async function query(data: any): Promise<QueryResponse> {
 /**
  * 查询数据
  */
-export async function queryForWeek(data: any): Promise<TimeRecordEntity[]> {
-  return await requestClient.post('/timeRecord/queryForWeek', data);
+export async function queryByDateRange(data: any): Promise<TimeRecordEntity[]> {
+  return await requestClient.post('/timeRecord/queryByDateRange', data);
 }
 
 /**

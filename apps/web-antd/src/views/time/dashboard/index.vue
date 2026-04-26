@@ -6,7 +6,7 @@ import { Button, Card, Empty, Radio, Spin, theme } from 'ant-design-vue';
 import dayjs from 'dayjs';
 import isoWeek from 'dayjs/plugin/isoWeek';
 
-import { query, queryForWeek } from '#/api/core/time-tracker';
+import { query, queryByDateRange } from '#/api/core/time-tracker';
 import { listCategories } from '#/api/core/time-tracker-category';
 
 import AnalysisCard from '../../dashboard/home/components/analysis-card.vue';
@@ -152,7 +152,7 @@ const loadData = async () => {
         .endOf(statMode.value === 'week' ? 'isoWeek' : 'month')
         .format('YYYY-MM-DD');
       promises.push(
-        queryForWeek({ condition: { startDate: start, endDate: end } }),
+        queryByDateRange({ condition: { startDate: start, endDate: end } }),
       );
     }
 
@@ -174,7 +174,7 @@ const loadData = async () => {
         .endOf(statMode.value === 'week' ? 'isoWeek' : 'month')
         .format('YYYY-MM-DD');
       promises.push(
-        queryForWeek({ condition: { startDate: start, endDate: end } }),
+        queryByDateRange({ condition: { startDate: start, endDate: end } }),
       );
     }
 
