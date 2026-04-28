@@ -1276,7 +1276,7 @@ const handleEditColumnOk = async () => {
   position: fixed;
   right: 30px;
   bottom: 30px;
-  z-index: 1000;
+  z-index: 99;
 }
 
 .floating-button {

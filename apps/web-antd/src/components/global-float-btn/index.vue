@@ -33,7 +33,7 @@ const handleClick = (disabled: boolean) => {
   position: fixed;
   right: 24px;
   bottom: 24px;
-  z-index: 10000;
+  z-index: 99;
   display: flex;
   align-items: center;
   justify-content: center;
