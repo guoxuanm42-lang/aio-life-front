@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { nextTick, onMounted, ref, toRaw } from 'vue';
 
-import { useVbenDrawer } from '@vben/common-ui';
+import { useVbenModal } from '@vben/common-ui';
 
 import { useVbenForm } from '#/adapter/form';
 import { getByDictType } from '#/api/core/common';
@@ -9,7 +9,7 @@ import { insertOrUpdate } from '#/api/core/expense';
 import { PAY_TYPE_OPTIONS } from '#/constants/expense';
 
 defineOptions({
-  name: 'FormDrawerDemo',
+  name: 'FormModalDemo',
 });
 
 const emit = defineEmits(['tableReload', 'updateSuccess']);
@@ -53,11 +53,15 @@ const [Form, formApi] = useVbenForm({
       fieldName: 'id',
       label: '主键',
       disabled: true,
+      dependencies: {
+        triggerFields: ['id'],
+        show: () => false,
+      },
     },
     {
       component: 'Input',
       componentProps: {
-        placeholder: '【自动显示】',
+        placeholder: '交易金额',
       },
       fieldName: 'transactionAmt',
       label: '交易金额',
@@ -65,7 +69,7 @@ const [Form, formApi] = useVbenForm({
     {
       component: 'Input',
       componentProps: {
-        placeholder: '请输入',
+        placeholder: '实际记账的钱',
       },
       fieldName: 'amt',
       label: '记账金额',
@@ -122,20 +126,14 @@ const [Form, formApi] = useVbenForm({
 
 // 重置表单数据
 const resetForm = () => {
-  const now = new Date();
-  const today = now.toISOString().split('T')[0];
   formApi.setValues({
-    // id: '',
     amt: '',
-    // expTypeId: '',
-    // expTime: `${today} 00:00:00`,
-    // remark: '',
   });
 };
 
-const [Drawer, drawerApi] = useVbenDrawer({
+const [Modal, modalApi] = useVbenModal({
   onCancel() {
-    drawerApi.close();
+    modalApi.close();
   },
   onConfirm: async () => {
     const formData = await formApi.submitForm();
@@ -159,7 +157,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
       tableReload();
     } else {
       // 普通模式：关闭弹窗
-      drawerApi.close();
+      modalApi.close();
       if (processedData.id) {
         emit('updateSuccess', processedData);
       } else {
@@ -171,7 +169,8 @@ const [Drawer, drawerApi] = useVbenDrawer({
     if (isOpen) {
       // 使用 nextTick 确保 DOM 已经渲染完成
       nextTick(() => {
-        const { values } = drawerApi.getData<Record<string, any>>();
+        formApi.resetForm();
+        const { values } = modalApi.getData<Record<string, any>>();
         if (values) {
           // 处理日期字段显示
           const processedValues = { ...values };
@@ -206,7 +205,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
 });
 </script>
 <template>
-  <Drawer>
+  <Modal>
     <Form />
 
     <!-- 连续录入模式开关 -->
@@ -228,7 +227,7 @@ const [Drawer, drawerApi] = useVbenDrawer({
         </div>
       </div>
     </div>
-  </Drawer>
+  </Modal>
 </template>
 
 <style scoped>

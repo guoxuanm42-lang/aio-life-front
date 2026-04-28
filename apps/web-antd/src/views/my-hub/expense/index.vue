@@ -6,7 +6,7 @@ import type { VxeGridProps } from '#/adapter/vxe-table';
 
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 
-import { useVbenDrawer } from '@vben/common-ui';
+import { useVbenModal } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import { usePreferences } from '@vben/preferences';
 
@@ -24,7 +24,7 @@ import {
 } from '#/api/core/expense';
 import { PAY_TYPE_OPTIONS } from '#/constants/expense';
 
-import FormDrawerDemo from './form-drawer.vue';
+import FormModalDemo from './form-modal.vue';
 
 interface RowType {
   id: any;
@@ -326,33 +326,6 @@ const getYearPieChartData = computed(() => {
   };
 });
 
-// 根据选中的年份过滤数据
-const filteredData = computed(() => {
-  if (selectedYear.value === 'all') {
-    return tableData.value;
-  }
-  return tableData.value.filter((row) => {
-    if (row.expTime) {
-      try {
-        let date: Date;
-        if (typeof row.expTime === 'string' && row.expTime.includes('T')) {
-          date = new Date(row.expTime);
-        } else if (
-          typeof row.expTime === 'string' &&
-          row.expTime.includes(' ')
-        ) {
-          date = new Date(row.expTime.replace(' ', 'T'));
-        } else {
-          date = new Date(`${row.expTime}T00:00:00`);
-        }
-        return date.getFullYear() === selectedYear.value;
-      } catch {
-        return false;
-      }
-    }
-    return false;
-  });
-});
 
 // 根据选中的年份过滤年度统计数据
 const filteredExpData = computed(() => {
@@ -721,8 +694,8 @@ onMounted(async () => {
   await getYearlyStatistics();
 });
 
-const [FormDrawer, formDrawerApi] = useVbenDrawer({
-  connectedComponent: FormDrawerDemo,
+const [FormModal, formModalApi] = useVbenModal({
+  connectedComponent: FormModalDemo,
 });
 
 const formOptions: VbenFormProps = {
@@ -804,7 +777,6 @@ const gridOptions: VxeGridProps<RowType> = {
   columns: [
     { type: 'checkbox', title: '', width: 60 },
     { title: '序号', type: 'seq', width: 50 },
-    { title: '主键', visible: false },
     {
       field: 'transactionAmt',
       cellType: 'number',
@@ -947,8 +919,8 @@ const gridOptions: VxeGridProps<RowType> = {
   },
 };
 
-function openFormDrawer(row: RowType) {
-  formDrawerApi
+function openFormModal(row: RowType) {
+  formModalApi
     .setData({
       // 表单值
       values: row,
@@ -956,8 +928,8 @@ function openFormDrawer(row: RowType) {
     .open();
 }
 
-function openAddFormDrawer() {
-  formDrawerApi
+function openAddFormModal() {
+  formModalApi
     .setData({
       // 表单值
       values: { modelname: '' },
@@ -1028,7 +1000,7 @@ const handleUpdateSuccess = async (updatedRow: any) => {
 
 <template>
   <div class="vp-raw w-full">
-    <FormDrawer
+    <FormModal
       @table-reload="tableReload"
       @update-success="handleUpdateSuccess"
     />
@@ -1090,7 +1062,7 @@ const handleUpdateSuccess = async (updatedRow: any) => {
     <!-- 表格区域 -->
     <Grid>
       <template #toolbar-tools>
-        <Button class="mr-2" type="primary" @click="openAddFormDrawer">
+        <Button class="mr-2" type="primary" @click="openAddFormModal">
           新增
         </Button>
         <Button class="mr-2" type="primary" @click="submitDeleteData">
@@ -1098,7 +1070,7 @@ const handleUpdateSuccess = async (updatedRow: any) => {
         </Button>
       </template>
       <template #action="{ row }">
-        <Button type="link" size="small" @click="openFormDrawer(row)">
+        <Button type="link" size="small" @click="openFormModal(row)">
           <template #icon><EditOutlined /></template>
         </Button>
         <Popconfirm
