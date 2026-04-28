@@ -6,9 +6,10 @@
 用户账号密码过多，难以记忆。需要一个集中管理平台。
 
 ### 核心目标
-- 零知识架构：后端不存明文，不存密钥，不存主密码
-- 用户主密码自己记忆，丢失则所有密码永久无法解密
-- 前端 SM4 加解密，密钥由主密码 PBKDF2 派生，存于前端内存
+- 只有密码 (`password`) 需要加密，账号 (`username`) 明文存储
+- 后端不存明文密码、不存密钥、不存主密码
+- 用户主密码自己记忆，丢失则密码永久无法解密
+- 前端 SM4 加密，密钥由主密码 PBKDF2 派生，存于前端内存
 
 ---
 
@@ -21,16 +22,17 @@
     ↓ 每条记录独立的 salt
 SM4 密钥（128bit）
     ↓ SM4/GCM 模式加密
-密文
+密文（只用于 password 字段）
 ```
 
 ### 加密字段（存后端）
-- `username`：账号（加密）
-- `password`：密码（加密）
-- `remark`：备注（加密）
+- `password`：密码（SM4加密存储）
 
 ### 明文字段（存后端）
-- `title`、`website`、`category`、`favorite`（不需要加密）
+- `username`：账号（明文）
+- `remark`：备注（明文）
+- `salt`：PBKDF2盐值（明文，用于派生解密密钥）
+- `title`、`website`、`category`、`favorite`
 
 ---
 
@@ -45,10 +47,10 @@ CREATE TABLE password_vault (
     title           VARCHAR(100) NOT NULL COMMENT '标题，如 GitHub',
     website         VARCHAR(255) COMMENT '网站/应用名',
     category        VARCHAR(50) DEFAULT '其他' COMMENT '分类：工作/生活/金融/社交/其他',
-    username        TEXT COMMENT '账号（SM4加密存储）',
+    username        TEXT COMMENT '账号（明文）',
     password        TEXT COMMENT '密码（SM4加密存储）',
     salt            VARCHAR(64) NOT NULL COMMENT 'PBKDF2盐值，每条记录唯一',
-    remark          TEXT COMMENT '备注（SM4加密存储）',
+    remark          TEXT COMMENT '备注（明文）',
     favorite        BOOLEAN DEFAULT FALSE COMMENT '是否收藏',
     create_user     BIGINT NOT NULL,
     create_time     DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -60,9 +62,9 @@ CREATE TABLE password_vault (
 ```
 
 ### 加密说明
-- 每条记录有独立的 `salt`，即使相同内容加密结果也不同
+- 每条记录有独立的 `salt`，相同密码加密结果不同
 - `salt` 明文存储，用于派生解密密钥
-- `username`、`password`、`remark` 存加密后密文（Base64编码）
+- 只有 `password` 字段存加密后密文（Base64），其他字段均为明文
 
 ---
 
@@ -73,9 +75,9 @@ CREATE TABLE password_vault (
 | 功能 | 说明 |
 |------|------|
 | 设置主密码 | 首次使用时设置（需确认） |
-| 解锁查看 | 输入主密码解锁，展示明文 |
+| 解锁查看 | 输入主密码解锁，展示明文密码 |
 | 添加密码 | 录入账号+密码+标题+分类 |
-| 编辑密码 | 修改已存条目（需重新加密） |
+| 编辑密码 | 修改已存条目（密码需重新加密） |
 | 删除密码 | 删除（逻辑删除） |
 | 搜索 | 按标题/网站名模糊搜索 |
 | 列表展示 | 显示标题+网站+分类+收藏 |
@@ -103,10 +105,10 @@ CREATE TABLE password_vault (
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /password/list | 查询密码列表（返回密文，前端解密） |
+| GET | /password/list | 查询密码列表 |
 | GET | /password/{id} | 获取单条密码详情 |
-| POST | /password | 新增密码（前端加密后传密文） |
-| PUT | /password/{id} | 编辑密码（重新加密） |
+| POST | /password | 新增密码（前端只加密password字段） |
+| PUT | /password/{id} | 编辑密码 |
 | DELETE | /password/{id} | 删除密码 |
 | GET | /password/categories | 获取分类列表 |
 
@@ -118,10 +120,10 @@ CREATE TABLE password_vault (
   "title": "GitHub",
   "website": "https://github.com",
   "category": "工作",
-  "username": "BASE64_密文",
-  "password": "BASE64_密文",
+  "username": "myaccount",
+  "password": "BASE64_密文（只加密password）",
   "salt": "随机盐值",
-  "remark": "BASE64_密文",
+  "remark": "这是备注",
   "favorite": false
 }
 ```
@@ -135,10 +137,10 @@ CREATE TABLE password_vault (
     "title": "GitHub",
     "website": "https://github.com",
     "category": "工作",
-    "username": "BASE64_密文",
+    "username": "myaccount",
     "password": "BASE64_密文",
     "salt": "盐值",
-    "remark": "BASE64_密文",
+    "remark": "这是备注",
     "favorite": false,
     "createTime": "2026-04-28 10:00:00",
     "updateTime": "2026-04-28 10:00:00"
@@ -174,7 +176,7 @@ CREATE TABLE password_vault (
 
 | 情况 | 处理 |
 |------|------|
-| 用户遗忘主密码 | 所有密码永久丢失，无法解密，无法找回 |
+| 用户遗忘主密码 | 密码永久丢失，无法解密，无法找回 |
 | 首次使用未设置主密码 | 引导用户设置后才能添加密码 |
 | 超时自动锁 | 30分钟无操作自动锁定，需重新输入主密码 |
 
@@ -193,18 +195,18 @@ CREATE TABLE password_vault (
 
 ## 十、开发任务
 
-### 后端（aio-life-serve）
-- [ ] 创建 `password_vault` 表
-- [ ] 创建 `PasswordVaultController`
-- [ ] 创建 `PasswordVaultService`
-- [ ] 创建 `PasswordVaultMapper`
-- [ ] 实现增删改查 API
+### 后端（aio-life-serve）✅ 已完成
+- [x] 创建 `password_vault` 表
+- [x] 创建 `PasswordVaultController`
+- [x] 创建 `PasswordVaultService`
+- [x] 创建 `PasswordVaultMapper`
+- [x] 实现增删改查 API
 
-### 前端（aio-life-front）
-- [ ] 添加路由 `/password-manager`
-- [ ] 创建密码管理 Pinia store（解锁状态）
-- [ ] 创建加密工具函数（PBKDF2 + SM4）
-- [ ] 实现密码列表页
-- [ ] 实现添加/编辑密码页
-- [ ] 实现密码生成器组件
-- [ ] 实现锁屏页
+### 前端（aio-life-front）✅ 已完成
+- [x] 添加路由 `/password-manager`
+- [x] 创建密码管理 Pinia store（解锁状态）
+- [x] 创建加密工具函数（PBKDF2 + SM4）
+- [x] 实现密码列表页
+- [x] 实现添加/编辑密码页
+- [x] 实现密码生成器组件
+- [x] 实现锁屏页
