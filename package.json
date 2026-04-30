@@ -122,6 +122,7 @@
     ]
   },
   "dependencies": {
+    "gm-crypto": "^0.1.12",
     "xe-utils": "^3.8.2",
     "xlsx": "^0.18.5"
   }
