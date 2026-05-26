@@ -59,17 +59,25 @@ const [Form, formApi] = useVbenForm({
       },
     },
     {
-      component: 'Input',
+      component: 'InputNumber',
       componentProps: {
         placeholder: '交易金额',
+        min: 0,
+        precision: 2,
+        step: 0.01,
+        style: { width: '100%' },
       },
       fieldName: 'transactionAmt',
       label: '交易金额',
     },
     {
-      component: 'Input',
+      component: 'InputNumber',
       componentProps: {
         placeholder: '实际记账的钱',
+        min: 0,
+        precision: 2,
+        step: 0.01,
+        style: { width: '100%' },
       },
       fieldName: 'amt',
       label: '记账金额',
@@ -127,7 +135,8 @@ const [Form, formApi] = useVbenForm({
 // 重置表单数据
 const resetForm = () => {
   formApi.setValues({
-    amt: '',
+    amt: null,
+    transactionAmt: null,
   });
 };
 

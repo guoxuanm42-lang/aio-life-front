@@ -318,7 +318,7 @@ const quickNavItems: WorkbenchQuickNavItem[] = [
     color: '#3fb27f',
     icon: 'mdi:lightbulb-on-outline',
     title: '闪念',
-    url: '/my-hub/think',
+    url: '/think',
   },
   {
     color: '#1f2328',

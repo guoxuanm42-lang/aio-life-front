@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
 
-import { Button, Form, Input, Modal, Popconfirm, Space, Spin, Switch, Table, Tag, Upload, message } from 'ant-design-vue';
+import { Button, Form, Input, Modal, Popconfirm, Space, Spin, Switch, Table, Tag, message } from 'ant-design-vue';
 import { DeleteOutlined, EditOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import QRCode from 'qrcode';
 
@@ -16,7 +16,6 @@ import {
   getCbtiPersonalitiesApi,
   getCbtiQuestionsApi,
   updateCbtiPersonalityApi,
-  uploadCbtiPersonalityImageApi,
   type CbtiAdminPersonality,
   type CbtiHistoryItem,
   type CbtiPersonality,
@@ -38,6 +37,21 @@ const calculating = ref(false);
 
 const questionsResp = ref<CbtiQuestionsResp>();
 const personalities = ref<CbtiPersonality[]>([]);
+
+const cbtiImageBroken = ref<Record<string, boolean>>({});
+
+const getCbtiCharacterUrl = (code?: string | null) => {
+  const c = String(code ?? '').trim();
+  if (!c) return null;
+  return `/cbti-characters/${encodeURIComponent(c)}.png`;
+};
+
+const markCbtiImageBroken = (code?: string | null) => {
+  const c = String(code ?? '').trim();
+  if (!c) return;
+  if (cbtiImageBroken.value[c]) return;
+  cbtiImageBroken.value = { ...cbtiImageBroken.value, [c]: true };
+};
 
 const currentIndex = ref(0);
 const answers = ref<Record<number, number>>({});
@@ -161,8 +175,9 @@ const generatePoster = async () => {
     ctx.fillText('CBTI · 程序员行为类型测试', W / 2, f(55));
 
     try {
-      if (p.imageUrl) {
-        const charImg = await loadImage(p.imageUrl);
+      const url = getCbtiCharacterUrl(p.code);
+      if (url) {
+        const charImg = await loadImage(url);
         const imgH = f(300);
         const imgW = imgH * (charImg.width / charImg.height);
         ctx.drawImage(charImg, (W - imgW) / 2, f(110), imgW, imgH);
@@ -458,8 +473,9 @@ const openAdmin = async () => {
 
 const openAdminImagePreview = (row: any) => {
   const r = row as CbtiAdminPersonality;
-  if (!r?.imageUrl) return;
-  adminImagePreviewUrl.value = r.imageUrl;
+  const url = getCbtiCharacterUrl(r?.code);
+  if (!url) return;
+  adminImagePreviewUrl.value = url;
   adminImagePreviewTitle.value = `${r.code || ''} 图片预览`;
   adminImagePreviewVisible.value = true;
 };
@@ -605,15 +621,6 @@ const deleteAdminPersonality = async (row: any) => {
   } catch (e: any) {
     message.error(e?.message || '删除失败');
   }
-};
-
-const uploadAdminImage = async (row: any, file: File) => {
-  const r = row as CbtiAdminPersonality;
-  const formData = new FormData();
-  formData.append('file', file);
-  await uploadCbtiPersonalityImageApi(r.code, formData);
-  message.success('上传成功');
-  await Promise.all([loadAdminList(), refreshPersonalities()]);
 };
 
 const resetTest = () => {
@@ -953,7 +960,12 @@ onMounted(() => {
               隐藏人格触发
             </div>
             <div class="mx-auto mb-6 w-40 h-40 rounded-2xl overflow-hidden bg-white/70 border border-orange-100 flex items-center justify-center">
-              <img v-if="result.personality.imageUrl" :src="result.personality.imageUrl" class="w-full h-full object-contain" />
+              <img
+                v-if="result.personality.code && !cbtiImageBroken[result.personality.code]"
+                :src="getCbtiCharacterUrl(result.personality.code)!"
+                class="w-full h-full object-contain"
+                @error="markCbtiImageBroken(result.personality.code)"
+              />
               <span v-else class="text-stone-300 font-mono">NO IMG</span>
             </div>
             <div class="text-5xl md:text-7xl font-black font-mono tracking-wider" :style="{ color: result.personality.color || '#f97316' }">
@@ -1139,7 +1151,12 @@ onMounted(() => {
             @click="selectedType = selectedType === p.code ? null : p.code"
           >
             <div class="w-14 h-14 mx-auto mb-2 rounded-lg bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
-              <img v-if="p.imageUrl" :src="p.imageUrl" class="w-full h-full object-contain" />
+              <img
+                v-if="p.code && !cbtiImageBroken[p.code]"
+                :src="getCbtiCharacterUrl(p.code)!"
+                class="w-full h-full object-contain"
+                @error="markCbtiImageBroken(p.code)"
+              />
             </div>
             <div class="font-mono text-[10px] font-black" :style="{ color: p.color || '#f97316' }">{{ p.code }}</div>
             <div class="font-bold text-[10px] text-stone-600 truncate">{{ p.name }}</div>
@@ -1152,7 +1169,12 @@ onMounted(() => {
         <div v-if="currentTypeDetail" class="bg-white rounded-2xl border border-orange-100 p-6">
           <div class="flex items-center gap-5 mb-5">
             <div class="w-24 h-24 rounded-2xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
-              <img v-if="currentTypeDetail.imageUrl" :src="currentTypeDetail.imageUrl" class="w-full h-full object-contain" />
+              <img
+                v-if="currentTypeDetail.code && !cbtiImageBroken[currentTypeDetail.code]"
+                :src="getCbtiCharacterUrl(currentTypeDetail.code)!"
+                class="w-full h-full object-contain"
+                @error="markCbtiImageBroken(currentTypeDetail.code)"
+              />
             </div>
             <div>
               <div class="font-mono text-3xl font-black" :style="{ color: currentTypeDetail.color || '#f97316' }">
@@ -1197,7 +1219,12 @@ onMounted(() => {
               <template v-if="column.key === 'personalityCode'">
                 <div class="flex items-center gap-2">
                   <div class="w-7 h-7 rounded-lg bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
-                    <img v-if="record.imageUrl" :src="record.imageUrl" class="w-full h-full object-contain" />
+                    <img
+                      v-if="record.personalityCode && !cbtiImageBroken[String(record.personalityCode)]"
+                      :src="getCbtiCharacterUrl(String(record.personalityCode))!"
+                      class="w-full h-full object-contain"
+                      @error="markCbtiImageBroken(String(record.personalityCode))"
+                    />
                   </div>
                   <span class="font-mono font-black" :style="{ color: record.color || '#f97316' }">
                     {{ record.personalityCode }}
@@ -1267,10 +1294,15 @@ onMounted(() => {
                   <button
                     type="button"
                     class="w-14 h-14 rounded-xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center cursor-zoom-in"
-                    :class="record.imageUrl ? 'hover:shadow-sm hover:border-orange-200' : ''"
+                    :class="record.code && !cbtiImageBroken[String(record.code)] ? 'hover:shadow-sm hover:border-orange-200' : ''"
                     @click="openAdminImagePreview(record)"
                   >
-                    <img v-if="record.imageUrl" :src="record.imageUrl" class="w-full h-full object-contain" />
+                    <img
+                      v-if="record.code && !cbtiImageBroken[String(record.code)]"
+                      :src="getCbtiCharacterUrl(String(record.code))!"
+                      class="w-full h-full object-contain"
+                      @error="markCbtiImageBroken(String(record.code))"
+                    />
                     <span v-else class="text-stone-400 text-xs">无图</span>
                   </button>
                 </template>
@@ -1302,22 +1334,6 @@ onMounted(() => {
                         删除
                       </Button>
                     </Popconfirm>
-                    <Upload
-                      accept="image/*"
-                      :show-upload-list="false"
-                      :customRequest="async ({ file, onError, onSuccess }: any) => {
-                        try {
-                          await uploadAdminImage(record, file as File);
-                          onSuccess?.(null, file);
-                        } catch (e) {
-                          onError?.(e);
-                        }
-                      }"
-                    >
-                      <Button type="link" size="small">
-                        上传图
-                      </Button>
-                    </Upload>
                   </Space>
                 </template>
               </template>

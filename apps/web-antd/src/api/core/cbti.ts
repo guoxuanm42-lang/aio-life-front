@@ -131,11 +131,6 @@ export interface CbtiPersonalitySaveReq {
   weaknesses?: string[];
 }
 
-export interface CbtiPersonalityImageResp {
-  imageObject: string;
-  imageUrl: string;
-}
-
 export async function getCbtiQuestionsApi() {
   return requestClient.get<CbtiQuestionsResp>('/cbti/questions');
 }
@@ -178,11 +173,4 @@ export async function updateCbtiPersonalityApi(id: number, data: CbtiPersonality
 
 export async function deleteCbtiPersonalityApi(id: number) {
   return requestClient.delete<boolean>(`/cbti/admin/personalities/${id}`);
-}
-
-export async function uploadCbtiPersonalityImageApi(code: string, formData: FormData) {
-  return requestClient.post<CbtiPersonalityImageResp>(
-    `/cbti/admin/personalities/${code}/image`,
-    formData,
-  );
 }

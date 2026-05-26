@@ -2,7 +2,7 @@ import type { DeepPartial } from '@vben-core/typings';
 
 import type { InitialOptions, Preferences } from './types';
 
-import { markRaw, reactive, readonly, watch } from 'vue';
+import { reactive, readonly, watch } from 'vue';
 
 import { StorageManager } from '@vben-core/shared/cache';
 import { isMacOs, merge } from '@vben-core/shared/utils';
@@ -29,6 +29,30 @@ class PreferenceManager {
   private state: Preferences = reactive<Preferences>({
     ...this.loadPreferences(),
   });
+
+  private applyDeepPartial(target: any, patch: any) {
+    if (!patch || typeof patch !== 'object') {
+      return;
+    }
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined) {
+        continue;
+      }
+      const current = target?.[key];
+      if (
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value) &&
+        current &&
+        typeof current === 'object' &&
+        !Array.isArray(current)
+      ) {
+        this.applyDeepPartial(current, value);
+      } else {
+        target[key] = value;
+      }
+    }
+  }
   constructor() {
     this.cache = new StorageManager();
 
@@ -114,9 +138,7 @@ class PreferenceManager {
    * @param updates - 要更新的偏好设置
    */
   public updatePreferences(updates: DeepPartial<Preferences>) {
-    const mergedState = merge({}, updates, markRaw(this.state));
-
-    Object.assign(this.state, mergedState);
+    this.applyDeepPartial(this.state, updates);
 
     // 根据更新的键值执行相应的操作
     this.handleUpdates(updates);

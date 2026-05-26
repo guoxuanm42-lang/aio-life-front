@@ -1,572 +1,354 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRaw } from 'vue';
+import { useRouter } from 'vue-router';
 
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
-import {
-  Button,
-  Card,
-  Empty,
-  Form,
-  Input,
-  message,
-  Modal,
-  Popconfirm,
-  Space,
-  Spin,
-} from 'ant-design-vue';
+import { Card } from 'ant-design-vue';
 
-import {
-  deleteData as deleteThink,
-  query as queryThink,
-  save as saveThink,
-  update as updateThink,
-} from '#/api/core/think';
-import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
+type ThemeKey = 'blue' | 'cyan' | 'green' | 'purple' | 'pink' | 'orange';
 
-interface Event {
-  id: number | string;
-  content: string;
-  create_time: string;
-}
+const router = useRouter();
 
-interface Thought {
-  id: number | string;
-  content: string;
-  events: Event[];
-  likes: number;
-  createTime: string;
-}
+const categories: Array<{
+  key: string;
+  title: string;
+  desc: string;
+  icon: string;
+  tags: string;
+  themeKey: ThemeKey;
+  accent: string;
+  rgb: string;
+}> = [
+  {
+    key: 'work',
+    title: '工作',
+    desc: '工作想法、项目记录、会议灵感、临时事项',
+    icon: '/thought-icons/work.png',
+    tags: '公文包 / 文件',
+    themeKey: 'blue',
+    accent: '#1677ff',
+    rgb: '22 119 255',
+  },
+  {
+    key: 'life',
+    title: '生活',
+    desc: '日常琐事、生活感受、想买想做的事',
+    icon: '/thought-icons/life.png',
+    tags: '房子 / 咖啡 / 叶子',
+    themeKey: 'cyan',
+    accent: '#06b6d4',
+    rgb: '6 182 212',
+  },
+  {
+    key: 'study',
+    title: '学习',
+    desc: '想学的知识、技术点、资料线索、概念记录',
+    icon: '/thought-icons/study.png',
+    tags: '书 / 放大镜',
+    themeKey: 'green',
+    accent: '#22c55e',
+    rgb: '34 197 94',
+  },
+  {
+    key: 'social',
+    title: '社交',
+    desc: '人际关系、聊天记录、联系提醒、交流感受',
+    icon: '/thought-icons/social.png',
+    tags: '聊天 / 双人',
+    themeKey: 'purple',
+    accent: '#a855f7',
+    rgb: '168 85 247',
+  },
+  {
+    key: 'creation',
+    title: '创作',
+    desc: '写作、文章、视频、设计、产品创意、输出内容',
+    icon: '/thought-icons/creation.png',
+    tags: '画笔 / 火花',
+    themeKey: 'pink',
+    accent: '#ec4899',
+    rgb: '236 72 153',
+  },
+  {
+    key: 'travel',
+    title: '旅行',
+    desc: '想去的地方、旅行计划、路线灵感、旅途见闻',
+    icon: '/thought-icons/travel.png',
+    tags: '地图 / 飞机',
+    themeKey: 'orange',
+    accent: '#f97316',
+    rgb: '249 115 22',
+  },
+];
 
-const thoughts = ref<Thought[]>([]);
-const loading = ref(false);
-
-const showModal = ref(false);
-const currentEditId = ref<null | number | string>(null);
-
-interface ThoughtForm {
-  content: string;
-  events: Event[];
-}
-
-const form = reactive<ThoughtForm>({
-  content: '',
-  events: [
-    {
-      id: 1,
-      content: '',
-      create_time: new Date().toISOString(),
-    },
-  ],
-});
-
-// 计算属性
-const modalTitle = computed(() =>
-  currentEditId.value === null ? '添加新思考' : '编辑思考',
-);
-
-// 方法
-const openAddModal = () => {
-  form.content = '';
-  form.events = [
-    {
-      id: Date.now(),
-      content: '',
-      create_time: new Date().toISOString(),
-    },
-  ];
-  currentEditId.value = null;
-  showModal.value = true;
-};
-
-const openEditModal = (id: number | string) => {
-  const thought = thoughts.value.find((t) => t.id === id);
-  if (thought) {
-    form.content = thought.content;
-    const evs = Array.isArray(thought.events) ? thought.events : [];
-    form.events =
-      evs.length > 0
-        ? evs.map((e) => ({
-            ...e,
-            create_time:
-              (e as any)?.create_time ??
-              (e as any)?.createTime ??
-              new Date().toISOString(),
-          }))
-        : [
-            {
-              id: Date.now(),
-              content: '',
-              create_time: new Date().toISOString(),
-            },
-          ];
-    currentEditId.value = id;
-    showModal.value = true;
-  }
-};
-
-const closeCardModal = () => {
-  showModal.value = false;
-};
-
-const addEvent = () => {
-  form.events.push({
-    id: Date.now(),
-    content: '',
-    create_time: new Date().toISOString(),
+const openCategory = (themeKey: ThemeKey) => {
+  router.push({
+    path: '/think/list',
+    query: { themeKey },
   });
 };
-
-const removeEventById = (id: number | string) => {
-  const idx = form.events.findIndex((e) => e.id === id);
-  if (idx !== -1) form.events.splice(idx, 1);
-};
-
-const saveCard = async () => {
-  if (!form.content.trim()) {
-    message.warning('思考内容不能为空');
-    return;
-  }
-
-  const validEvents = form.events.filter(
-    (event) => event.content.trim() !== '',
-  );
-
-  // 构造提交数据
-  const payload: any = {
-    content: form.content.trim(),
-    events: validEvents.map((e) => ({ ...e })),
-  };
-
-  // 只有在编辑模式下才传 id
-  if (currentEditId.value !== null) {
-    payload.id = currentEditId.value;
-  }
-
-  try {
-    const saved =
-      currentEditId.value === null
-        ? await saveThink(toRaw(payload))
-        : await updateThink(toRaw(payload));
-
-    const normalized = {
-      ...saved,
-      id: saved?.id ?? currentEditId.value, // 确保 ID 不丢失
-      content:
-        saved?.content ??
-        saved?.text ??
-        saved?.title ??
-        saved?.summary ??
-        form.content.trim(),
-      events: Array.isArray(saved?.events)
-        ? (saved as any).events.map((e: any) => ({
-            ...e,
-            create_time:
-              e?.create_time ?? e?.createTime ?? new Date().toISOString(),
-          }))
-        : validEvents.map((e) => ({
-            ...e,
-            create_time: e?.create_time ?? new Date().toISOString(),
-          })),
-      date: saved?.date ?? new Date().toISOString(),
-      createTime:
-        saved?.createTime ?? saved?.create_time ?? new Date().toISOString(),
-    };
-
-    if (currentEditId.value === null) {
-      thoughts.value.unshift(normalized);
-    } else {
-      const idx = thoughts.value.findIndex((t) => t.id === currentEditId.value);
-      if (idx !== -1) thoughts.value[idx] = normalized;
-    }
-
-    closeCardModal();
-    message.success('保存成功');
-  } catch {
-    message.error('保存失败');
-  }
-};
-
-const handleDelete = async (id: number | string) => {
-  try {
-    await deleteThink({ idList: [id] });
-    thoughts.value = thoughts.value.filter((t) => t.id !== id);
-    message.success('删除成功');
-    closeCardModal();
-  } catch {
-    message.error('删除失败');
-  }
-};
-
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString);
-  const padZero = (num: number) => num.toString().padStart(2, '0');
-
-  const year = date.getFullYear();
-  const month = padZero(date.getMonth() + 1);
-  const day = padZero(date.getDate());
-  const hours = padZero(date.getHours());
-  const minutes = padZero(date.getMinutes());
-
-  return `${year}-${month}-${day} ${hours}:${minutes}`;
-};
-
-// 生命周期
-const loadThoughts = async () => {
-  loading.value = true;
-  try {
-    const res = await queryThink({ page: 1, pageSize: 50, condition: {} });
-    const list = (res && (res.items ?? res)) || [];
-    thoughts.value = list
-      .map((t: any) => ({
-        ...t,
-        content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
-        events: Array.isArray(t?.events)
-          ? t.events.map((e: any) => ({
-              ...e,
-              create_time:
-                e?.create_time ?? e?.createTime ?? new Date().toISOString(),
-            }))
-          : [],
-        date: t?.date ?? new Date().toISOString(),
-        createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
-      }))
-      .toSorted(
-        (a: Thought, b: Thought) =>
-          new Date(b.createTime).getTime() - new Date(a.createTime).getTime(),
-      );
-  } catch {
-    message.error('加载失败');
-  } finally {
-    loading.value = false;
-  }
-};
-
-onMounted(async () => {
-  await loadThoughts();
-});
 </script>
 
 <template>
-  <div class="think-page">
-    <Spin :spinning="loading">
-      <template v-if="thoughts.length === 0 && !loading">
-        <div class="empty-wrap">
-          <Empty description="还没有任何思考记录，点击右下角或下方按钮添加">
-            <Button
-              type="primary"
-              shape="round"
-              size="large"
-              @click="openAddModal"
-            >
-              <template #icon><PlusOutlined /></template>
-              记录闪念
-            </Button>
-          </Empty>
-        </div>
-      </template>
-
-      <div v-else class="cards-grid">
-        <Card
-          v-for="thought in thoughts"
-          :key="thought.id"
-          hoverable
-          :bordered="false"
-          class="thought-card"
-          @click="openEditModal(thought.id)"
-        >
-          <div class="card-content">{{ thought.content }}</div>
-          <div class="card-footer">
-            <span class="card-date">{{ formatDate(thought.createTime) }}</span>
-            <div class="event-badge" v-if="(thought.events || []).length > 0">
-              {{ (thought.events || []).length }}
-            </div>
+  <div class="think-category-page">
+    <div class="category-grid">
+      <Card
+        v-for="item in categories"
+        :key="item.key"
+        hoverable
+        :bordered="false"
+        class="category-card"
+        :style="{ '--accent': item.accent, '--accent-rgb': item.rgb }"
+        @click="openCategory(item.themeKey)"
+      >
+        <div class="card-top">
+          <div class="card-icon">
+            <img :src="item.icon" :alt="item.title" class="card-icon-img" />
           </div>
-        </Card>
-      </div>
-    </Spin>
-
-    <GlobalFloatBtn @click="openAddModal" />
-
-    <Modal
-      v-model:open="showModal"
-      :title="modalTitle"
-      :footer="null"
-      :mask-closable="false"
-      :destroy-on-close="true"
-      centered
-      @cancel="closeCardModal"
-    >
-      <Form layout="vertical" class="modern-form">
-        <Form.Item required>
-          <Input.TextArea
-            v-model:value="form.content"
-            :auto-size="{ minRows: 4, maxRows: 12 }"
-            placeholder="这一刻的想法..."
-            class="content-textarea"
-            :bordered="false"
-          />
-        </Form.Item>
-
-        <Form.Item>
-          <div class="events-section">
-            <div class="events-header">
-              <span class="events-title">关联事件流</span>
-            </div>
-            <div
-              v-for="event in [...form.events].reverse()"
-              :key="event.id"
-              class="event-item"
-            >
-              <div class="event-row">
-                <Input
-                  v-model:value="event.content"
-                  placeholder="记录相关事件..."
-                  :bordered="false"
-                  class="event-input"
-                />
-                <Button
-                  type="text"
-                  danger
-                  shape="circle"
-                  @click="removeEventById(event.id)"
-                  v-if="form.events.length > 1"
-                >
-                  <template #icon><DeleteOutlined /></template>
-                </Button>
-              </div>
-              <div class="event-time">{{ formatDate(event.create_time) }}</div>
-            </div>
-            <Button type="dashed" block @click="addEvent" class="add-event-btn">
-              <template #icon><PlusOutlined /></template>
-              补充事件
-            </Button>
+          <div class="card-content">
+            <div class="card-pill">{{ item.title }}</div>
+            <div class="card-title">{{ item.title }}</div>
+            <div class="card-desc">{{ item.desc }}</div>
           </div>
-        </Form.Item>
-
-        <div
-          class="form-actions"
-          :style="{
-            justifyContent: currentEditId ? 'space-between' : 'flex-end',
-          }"
-        >
-          <Popconfirm
-            v-if="currentEditId"
-            title="确定要删除这条思考吗？"
-            ok-text="确定"
-            cancel-text="取消"
-            @confirm="handleDelete(currentEditId!)"
-          >
-            <Button danger type="text">
-              <template #icon><DeleteOutlined /></template>
-              删除
-            </Button>
-          </Popconfirm>
-          <Space>
-            <Button @click="closeCardModal" shape="round">取消</Button>
-            <Button type="primary" @click="saveCard" shape="round">保存</Button>
-          </Space>
+          <div class="card-badge">
+            <img :src="item.icon" :alt="item.title" class="card-badge-img" />
+          </div>
         </div>
-      </Form>
-    </Modal>
+        <div class="card-meta">
+          <div class="card-meta-left">
+            <span class="meta-dot" />
+            <span class="meta-text">{{ item.tags }}</span>
+          </div>
+          <div class="card-meta-right">
+            <span class="meta-enter">›</span>
+          </div>
+        </div>
+      </Card>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.think-page {
-  max-width: 1400px;
-  padding: 24px;
-  margin: 0 auto;
+.think-category-page {
+  padding: 20px;
 }
 
-.empty-wrap {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 60vh;
-  padding: 60px 20px;
-  background: transparent;
-}
-
-.cards-grid {
-  columns: 1;
-  gap: 24px;
-}
-
-.thought-card {
-  margin-bottom: 24px;
-  border-radius: 16px;
-  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  break-inside: avoid;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgb(0, 0, 0, 0.04);
-}
-
-/* Mobile Adaptation */
-@media (max-width: 768px) {
-  .think-page {
-    padding: 12px;
-  }
-
-  .cards-grid {
-    columns: 2;
-    column-gap: 12px;
-  }
-
-  .thought-card :deep(.ant-card-body) {
-    padding: 12px;
-  }
-
-  .thought-card {
-    margin-bottom: 12px;
-  }
+.category-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
 @media (min-width: 640px) {
-  .cards-grid {
-    columns: 2;
+  .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (min-width: 1024px) {
-  .cards-grid {
-    columns: 3;
+  .category-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (min-width: 1280px) {
-  .cards-grid {
-    columns: 4;
+@media (min-width: 1536px) {
+  .category-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
-.thought-card:hover {
-  box-shadow: 0 4px 16px rgb(0 0 0 / 8%);
-}
-
-.thought-card :deep(.ant-card-body) {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: 24px;
-}
-
-.card-content {
-  display: -webkit-box;
-  flex: 1;
-  margin-bottom: 20px;
+.category-card {
+  position: relative;
   overflow: hidden;
-  font-size: 15px;
-  line-height: 1.7;
-  -webkit-line-clamp: 10;
-  -webkit-box-orient: vertical;
-  word-break: break-word;
-  white-space: pre-wrap;
-  opacity: 0.85; /* 文字颜色自适应 */
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgb(255 255 255 / 70%), rgb(255 255 255 / 45%));
+  box-shadow:
+    0 14px 34px rgb(0 0 0 / 10%),
+    0 10px 24px rgb(var(--accent-rgb) / 0.15);
+  transition:
+    transform 0.25s cubic-bezier(0.25, 0.8, 0.25, 1),
+    box-shadow 0.25s cubic-bezier(0.25, 0.8, 0.25, 1);
 }
 
-.card-footer {
+.category-card::before {
+  content: '';
+  position: absolute;
+  inset: -40%;
+  background: radial-gradient(
+    circle at 20% 10%,
+    rgb(var(--accent-rgb) / 0.22) 0%,
+    transparent 60%
+  );
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+.category-card :deep(.ant-card-body) {
+  padding: 18px 18px 16px;
+  position: relative;
+  z-index: 1;
+}
+
+.category-card:hover {
+  transform: translateY(-6px);
+  box-shadow:
+    0 18px 42px rgb(0 0 0 / 12%),
+    0 18px 42px rgb(var(--accent-rgb) / 0.26);
+}
+
+.card-top {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
+  gap: 16px;
+  align-items: flex-start;
+  padding-right: 48px;
+  position: relative;
 }
 
-.card-date {
-  font-size: 13px;
-  opacity: 0.45;
-}
-
-.event-badge {
+.card-icon {
+  width: 78px;
+  height: 78px;
+  flex: 0 0 78px;
+  border-radius: 22px;
+  background: rgb(255 255 255 / 55%);
+  border: 1px solid rgb(255 255 255 / 65%);
+  box-shadow:
+    0 18px 35px rgb(var(--accent-rgb) / 0.18),
+    inset 0 0 0 1px rgb(255 255 255 / 45%);
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 20px;
-  height: 20px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--ant-color-primary, #1677ff);
-  background: var(--ant-color-primary-bg, #e6f4ff);
-  border-radius: 50%;
+  overflow: hidden;
 }
 
-/* Modal 内部样式 */
-.modern-form .content-textarea {
-  padding: 12px 16px;
-  font-size: 16px;
-  line-height: 1.6;
-  resize: none;
-  background: rgb(128 128 128 / 4%);
-  border-radius: 12px;
+.card-icon-img {
+  width: 64px;
+  height: 64px;
+  object-fit: contain;
 }
 
-.modern-form .content-textarea:focus {
-  background: rgb(128 128 128 / 8%);
+.card-content {
+  min-width: 0;
+  flex: 1;
 }
 
-.events-section {
-  margin-top: 8px;
-}
-
-.events-header {
-  margin-bottom: 12px;
-  font-size: 14px;
-  font-weight: 500;
-  opacity: 0.65;
-}
-
-.event-item {
-  padding: 12px 16px;
-  margin-bottom: 12px;
-  background: rgb(128 128 128 / 4%);
-  border-radius: 12px;
-  transition: background 0.3s;
-}
-
-.event-item:hover {
-  background: rgb(128 128 128 / 8%);
-}
-
-.event-row {
-  display: flex;
-  gap: 8px;
+.card-pill {
+  display: inline-flex;
   align-items: center;
-}
-
-.event-input {
-  padding: 4px 8px;
-  font-size: 14px;
-  background: transparent !important;
-}
-
-.event-time {
-  margin-top: 6px;
-  margin-left: 8px;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 999px;
   font-size: 12px;
-  opacity: 0.45;
+  font-weight: 700;
+  color: rgb(var(--accent-rgb) / 0.92);
+  background: rgb(var(--accent-rgb) / 0.12);
+  border: 1px solid rgb(var(--accent-rgb) / 0.2);
 }
 
-.add-event-btn {
-  border-radius: 12px;
-  opacity: 0.8;
+.card-title {
+  margin-top: 10px;
+  font-size: 22px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: rgb(0 0 0 / 0.82);
 }
 
-.form-actions {
+.card-desc {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: rgb(0 0 0 / 0.55);
+}
+
+.card-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 16px;
+  background: rgb(255 255 255 / 55%);
+  border: 1px solid rgb(255 255 255 / 65%);
+  box-shadow:
+    0 16px 30px rgb(var(--accent-rgb) / 0.18),
+    inset 0 0 0 1px rgb(255 255 255 / 45%);
   display: flex;
-  justify-content: flex-end;
-  margin-top: 24px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
 }
 
-/* 隐藏原生 textarea 滚动条但保留功能 */
-textarea::-webkit-scrollbar {
-  width: 4px;
+.card-badge-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
 }
 
-textarea::-webkit-scrollbar-thumb {
-  background: rgb(128 128 128 / 20%);
-  border-radius: 4px;
+.card-meta {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgb(0 0 0 / 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-textarea:hover::-webkit-scrollbar-thumb {
-  background: rgb(128 128 128 / 40%);
+.card-meta-left {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.meta-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: rgb(var(--accent-rgb) / 0.75);
+  box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0.12);
+  flex: 0 0 auto;
+}
+
+.meta-text {
+  font-size: 12px;
+  color: rgb(0 0 0 / 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.meta-enter {
+  font-size: 18px;
+  line-height: 1;
+  color: rgb(var(--accent-rgb) / 0.85);
+}
+
+@media (max-width: 768px) {
+  .think-category-page {
+    padding: 12px;
+  }
+
+  .category-card :deep(.ant-card-body) {
+    padding: 14px;
+  }
+
+  .card-top {
+    gap: 12px;
+    padding-right: 44px;
+  }
+
+  .card-icon {
+    width: 62px;
+    height: 62px;
+    border-radius: 18px;
+    flex-basis: 62px;
+  }
+
+  .card-icon-img {
+    width: 50px;
+    height: 50px;
+  }
+
+  .card-title {
+    font-size: 18px;
+  }
 }
 </style>

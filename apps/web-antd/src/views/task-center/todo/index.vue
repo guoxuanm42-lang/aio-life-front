@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 import {
   CheckCircleOutlined,
@@ -458,16 +458,80 @@ const editingColumn = ref({
   bgColor: '#fff',
 });
 
+const prevEditingColumnBgColor = ref('');
+
+const presetColumnBgColors = [
+  { value: '#eff3f9', label: '浅蓝' },
+  { value: '#fff9e6', label: '浅黄' },
+  { value: '#f0f0ff', label: '浅紫' },
+  { value: '#eff9ef', label: '浅绿' },
+  { value: '#fff1f2', label: '浅粉' },
+  { value: '#fdf2f8', label: '浅玫红' },
+  { value: '#f0fdfa', label: '浅青' },
+  { value: '#ecfeff', label: '浅天蓝' },
+  { value: '#f1f5f9', label: '浅灰蓝' },
+  { value: '#faf5ff', label: '浅薰衣草' },
+];
+
+const normalizeHexColor = (value?: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) return null;
+  const normalized = trimmed.toLowerCase();
+  return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : null;
+};
+
+const selectedBgColor = computed(() => {
+  return normalizeHexColor(editingColumn.value.bgColor) ?? '';
+});
+
+const pickerBgColor = computed(() => {
+  return normalizeHexColor(editingColumn.value.bgColor) ?? '#ffffff';
+});
+
+const handlePickBgColor = (event: Event) => {
+  const value = (event.target as HTMLInputElement).value;
+  editingColumn.value.bgColor = value.toLowerCase();
+};
+
+const setPresetBgColor = (color: string) => {
+  if (!color) {
+    editingColumn.value.bgColor = '';
+    return;
+  }
+  editingColumn.value.bgColor = color.toLowerCase();
+};
+
+const handleBgColorBlur = () => {
+  const trimmed = editingColumn.value.bgColor?.trim();
+  if (!trimmed) {
+    editingColumn.value.bgColor = '';
+    return;
+  }
+  const normalized = normalizeHexColor(trimmed);
+  if (!normalized) {
+    editingColumn.value.bgColor = prevEditingColumnBgColor.value;
+    return;
+  }
+  editingColumn.value.bgColor = normalized;
+};
+
 const openEditColumnModal = (
-  column:
-    | { bgColor: string; id: null; title: string }
-    | { bgColor: string; id: null; title: string },
+  column: { bgColor?: string; id: number; title: string },
 ) => {
   editingColumn.value = { ...column };
+  prevEditingColumnBgColor.value = editingColumn.value.bgColor ?? '';
   editColumnModalVisible.value = true;
 };
 
 const handleEditColumnOk = async () => {
+  const trimmed = editingColumn.value.bgColor?.trim();
+  if (!trimmed) {
+    editingColumn.value.bgColor = '';
+  } else {
+    const normalized = normalizeHexColor(trimmed);
+    editingColumn.value.bgColor = normalized ?? prevEditingColumnBgColor.value;
+  }
+
   const column = columns.value.find((col) => col.id === editingColumn.value.id);
   if (column) {
     column.title = editingColumn.value.title;
@@ -907,7 +971,22 @@ const handleEditColumnOk = async () => {
         style="margin-bottom: 10px"
       />
       <div style="display: flex; align-items: center; margin-bottom: 10px">
-        <span style="margin-right: 10px">背景颜色:</span>
+        <div style="width: 70px; margin-right: 10px">背景颜色:</div>
+        <input
+          :value="pickerBgColor"
+          type="color"
+          style="
+            width: 32px;
+            height: 32px;
+            padding: 0;
+            border: 1px solid rgba(0, 0, 0, 0.06);
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            margin-right: 10px;
+          "
+          @input="handlePickBgColor"
+        />
         <AInput
           :style="{
             backgroundColor: editingColumn.bgColor || token.colorBgContainer,
@@ -915,8 +994,50 @@ const handleEditColumnOk = async () => {
           }"
           v-model:value="editingColumn.bgColor"
           placeholder="输入颜色代码"
+          @blur="handleBgColorBlur"
           style="width: 120px; margin-right: 10px"
         />
+      </div>
+      <div style="display: flex; align-items: flex-start; margin-bottom: 10px">
+        <div style="width: 70px; margin-right: 10px; padding-top: 4px">
+          预设:
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px">
+          <div
+            title="默认"
+            role="button"
+            :style="{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              backgroundColor: token.colorBgContainer,
+              border:
+                selectedBgColor === ''
+                  ? `2px solid ${token.colorPrimary}`
+                  : '1px dashed rgba(0, 0, 0, 0.2)',
+            }"
+            @click="setPresetBgColor('')"
+          ></div>
+          <div
+            v-for="item in presetColumnBgColors"
+            :key="item.value"
+            :title="`${item.label} ${item.value}`"
+            role="button"
+            :style="{
+              width: '28px',
+              height: '28px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              backgroundColor: item.value,
+              border:
+                selectedBgColor === item.value
+                  ? `2px solid ${token.colorPrimary}`
+                  : '1px solid rgba(0, 0, 0, 0.06)',
+            }"
+            @click="setPresetBgColor(item.value)"
+          ></div>
+        </div>
       </div>
     </AModal>
   </div>

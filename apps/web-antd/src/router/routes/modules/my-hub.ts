@@ -33,16 +33,6 @@ const routes: RouteRecordRaw[] = [
       },
       {
         meta: {
-          title: '闪念',
-          icon: 'mdi:lightbulb-on-outline',
-          backTop: false,
-        },
-        name: 'think',
-        path: '/my-hub/think',
-        component: () => import('#/views/my-hub/think/index.vue'),
-      },
-      {
-        meta: {
           title: '笔记',
           icon: 'mdi:note-text-outline',
           backTop: false,
