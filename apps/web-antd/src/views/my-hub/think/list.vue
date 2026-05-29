@@ -24,13 +24,22 @@ import {
 } from '#/api/core/think';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
-type ThemeKey = 'blue' | 'cyan' | 'green' | 'purple' | 'pink' | 'orange';
+type ThemeKey = 'blue' | 'cyan' | 'teal' | 'green' | 'purple' | 'indigo' | 'pink' | 'orange';
 type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'archived';
 type ThoughtStatusFilter = 'all' | ThoughtStatus;
 
 const route = useRoute();
 
-type CategoryKey = 'all' | 'work' | 'life' | 'study' | 'social' | 'creation' | 'travel';
+type CategoryKey =
+  | 'all'
+  | 'work'
+  | 'life'
+  | 'healthy'
+  | 'study'
+  | 'social'
+  | 'creation'
+  | 'aio-life'
+  | 'travel';
 
 const statusSelectOptions: Array<{ label: string; value: ThoughtStatusFilter }> = [
   { label: '全部', value: 'all' },
@@ -76,6 +85,13 @@ const categoryPresets: Record<
     accent: '#22c55e',
     rgb: '34 197 94',
   },
+  healthy: {
+    title: '健康',
+    themeKey: 'teal',
+    icon: '/thought-icons/healthy.png',
+    accent: '#2dd4bf',
+    rgb: '45 212 191',
+  },
   study: {
     title: '学习',
     themeKey: 'blue',
@@ -97,6 +113,13 @@ const categoryPresets: Record<
     accent: '#a855f7',
     rgb: '168 85 247',
   },
+  'aio-life': {
+    title: 'AIO-LIFE开发',
+    themeKey: 'indigo',
+    icon: '/thought-icons/aio-life.png',
+    accent: '#6366f1',
+    rgb: '99 102 241',
+  },
   travel: {
     title: '旅行',
     themeKey: 'orange',
@@ -113,9 +136,11 @@ const activeCategoryKey = computed<CategoryKey>(() => {
     key === 'all' ||
     key === 'work' ||
     key === 'life' ||
+    key === 'healthy' ||
     key === 'study' ||
     key === 'social' ||
     key === 'creation' ||
+    key === 'aio-life' ||
     key === 'travel'
   ) {
     return key;
@@ -156,6 +181,13 @@ const thoughtThemePresets: Array<{
   },
   { key: 'cyan', label: '青', accent: '#06b6d4', rgb: '6 182 212', icon: 'lucide:zap' },
   {
+    key: 'teal',
+    label: '薄荷',
+    accent: '#2dd4bf',
+    rgb: '45 212 191',
+    icon: 'lucide:activity',
+  },
+  {
     key: 'green',
     label: '绿',
     accent: '#22c55e',
@@ -168,6 +200,13 @@ const thoughtThemePresets: Array<{
     accent: '#a855f7',
     rgb: '168 85 247',
     icon: 'lucide:sparkles',
+  },
+  {
+    key: 'indigo',
+    label: '靛',
+    accent: '#6366f1',
+    rgb: '99 102 241',
+    icon: 'lucide:terminal',
   },
   { key: 'pink', label: '粉', accent: '#ec4899', rgb: '236 72 153', icon: 'lucide:heart' },
   {
@@ -205,6 +244,7 @@ interface Thought {
 
 const thoughts = ref<Thought[]>([]);
 const loading = ref(false);
+let latestLoadSeq = 0;
 
 const showModal = ref(false);
 const currentEditId = ref<null | number | string>(null);
@@ -248,7 +288,7 @@ const modalTitle = computed(() =>
 );
 
 const getThoughtThemeKey = (thought: Thought): ThemeKey => {
-  const themeKey = thought?.themeKey as ThemeKey | undefined;
+  const themeKey = String(thought?.themeKey ?? '').trim() as ThemeKey;
   if (themeKey && thoughtThemePresets.some((p) => p.key === themeKey)) {
     return themeKey;
   }
@@ -423,16 +463,22 @@ const formatDate = (dateString: string) => {
 
 // 生命周期
 const loadThoughts = async () => {
+  const loadSeq = ++latestLoadSeq;
+  const currentThemeKey = activeCategoryThemeKey.value;
+  const currentStatus = statusFilter.value;
   loading.value = true;
   try {
     const condition: Record<string, any> = {};
-    if (activeCategoryThemeKey.value) {
-      condition.themeKey = activeCategoryThemeKey.value;
+    if (currentThemeKey) {
+      condition.themeKey = currentThemeKey;
     }
-    if (statusFilter.value !== 'all') {
-      condition.status = statusFilter.value;
+    if (currentStatus !== 'all') {
+      condition.status = currentStatus;
     }
     const res = await queryThink({ page: 1, pageSize: 50, condition });
+    if (loadSeq !== latestLoadSeq) {
+      return;
+    }
     const list = (res && (res.items ?? res)) || [];
     thoughts.value = list
       .map((t: any) => ({
@@ -455,6 +501,14 @@ const loadThoughts = async () => {
         date: t?.date ?? new Date().toISOString(),
         createTime: t?.createTime ?? t?.create_time ?? new Date().toISOString(),
       }))
+      .filter((t: Thought) => {
+        if (!currentThemeKey) return true;
+        return getThoughtThemeKey(t) === currentThemeKey;
+      })
+      .filter((t: Thought) => {
+        if (currentStatus === 'all') return true;
+        return getThoughtStatusKey(t.status) === currentStatus;
+      })
       .toSorted(
         (a: Thought, b: Thought) =>
           new Date(b.createTime).getTime() - new Date(a.createTime).getTime(),
@@ -462,7 +516,9 @@ const loadThoughts = async () => {
   } catch {
     message.error('加载失败');
   } finally {
-    loading.value = false;
+    if (loadSeq === latestLoadSeq) {
+      loading.value = false;
+    }
   }
 };
 
@@ -471,7 +527,7 @@ onMounted(async () => {
 });
 
 watch(
-  () => activeCategoryThemeKey.value,
+  () => route.fullPath,
   async () => {
     await loadThoughts();
   },

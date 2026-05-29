@@ -32,6 +32,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('#/views/my-hub/think/list.vue'),
       },
       {
+        meta: { title: '健康' },
+        name: 'thinkHealthy',
+        path: 'healthy',
+        component: () => import('#/views/my-hub/think/list.vue'),
+      },
+      {
         meta: { title: '学习' },
         name: 'thinkStudy',
         path: 'study',
@@ -47,6 +53,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '创作' },
         name: 'thinkCreation',
         path: 'creation',
+        component: () => import('#/views/my-hub/think/list.vue'),
+      },
+      {
+        meta: { title: 'AIO-LIFE开发' },
+        name: 'thinkAioLife',
+        path: 'aio-life',
         component: () => import('#/views/my-hub/think/list.vue'),
       },
       {
