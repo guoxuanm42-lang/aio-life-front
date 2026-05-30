@@ -1,1455 +1,1044 @@
 <script lang="ts" setup>
-import { computed, onMounted, ref } from 'vue';
+import type { Task, TaskType } from '#/api/core/todo';
+
+import { computed, onActivated, onMounted, ref } from 'vue';
 
 import {
-  CheckCircleOutlined,
-  ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
-  HolderOutlined,
-  MoreOutlined,
   PlusOutlined,
-  StarOutlined,
 } from '@ant-design/icons-vue';
 import {
   Button as AButton,
   Checkbox as ACheckbox,
   DatePicker as ADatePicker,
-  Dropdown as ADropdown,
   Input as AInput,
-  Menu as AMenu,
-  MenuItem as AMenuItem,
   Modal as AModal,
   Popconfirm as APopconfirm,
-  Popover as APopover,
+  RangePicker as ARangePicker,
   Select as ASelect,
   SelectOption as ASelectOption,
   Tag as ATag,
   Textarea as ATextarea,
-  theme,
+  message,
 } from 'ant-design-vue';
-import dayjs from 'dayjs';
-import draggable from 'vuedraggable';
+import dayjs, { type Dayjs } from 'dayjs';
 
 import {
-  addTaskDetail,
-  deleteColumn,
   deleteTask,
-  deleteTaskDetail,
   getTaskColumnList,
-  getTaskDetail,
   getTaskList,
-  reSortColumn,
-  reSortTask,
-  reSortTaskDetail,
+  getTaskTypeList,
   saveColumn,
   saveTask,
-  starTaskDetail,
-  unstarTaskDetail,
-  updateColumn,
   updateTask,
-  updateTaskDetail,
 } from '#/api/core/todo';
 
-interface Detail {
+interface TaskColumn {
   id: number;
-  taskId: number;
-  content: string;
-  isCompleted: number;
-  priority: number; // 1: very important, 10: important, 20: normal
-  startTime?: any;
-  endTime?: any;
+  title: string;
 }
 
-interface Task {
-  id: number;
+interface TodoForm {
+  columnId?: number;
   content: string;
   detail?: string;
-  details?: Detail[];
-  unCompletedCount?: number;
-  startTime?: any;
-  endTime?: any;
-  dueDate?: any;
-  createdAt?: any;
-  columnId?: number;
+  endTime?: Dayjs;
+  id?: number;
+  isCompleted: TodoStatus;
+  startTime?: Dayjs;
+  theme?: string;
+  typeId?: number;
 }
 
-const { useToken } = theme;
-const { token } = useToken();
+type TodoStatus = 0 | 1 | 2;
+type TodoStatusFilter = 'all' | 'valid' | TodoStatus;
+type QuickDateRange = 'month' | 'today' | 'week';
 
-// 预定义列主题颜色（仿照设计图）
-const columnThemes = [
-  {
-    bg: '#eff3f9',
-    headerBg: '#dae5f5',
-    headerColor: '#5285c5',
-    label: '未开始',
-  }, // 蓝
-  {
-    bg: '#fff9e6',
-    headerBg: '#fff2cc',
-    headerColor: '#d4a017',
-    label: '修复中',
-  }, // 黄
-  {
-    bg: '#f0f0ff',
-    headerBg: '#e6e6ff',
-    headerColor: '#6c5ce7',
-    label: '验证中',
-  }, // 紫
-  {
-    bg: '#eff9ef',
-    headerBg: '#dcf0dc',
-    headerColor: '#4b9e4b',
-    label: '已完成',
-  }, // 绿
-];
+interface TodoFilters {
+  dateRange?: [Dayjs, Dayjs];
+  isCompleted: TodoStatusFilter;
+  theme?: string;
+  typeId?: number;
+}
 
-// 获取列样式的辅助函数
-const getColumnStyle = (column: any, index: number) => {
-  const themeIndex = index % columnThemes.length;
-  const currentTheme = columnThemes[themeIndex] ||
-    columnThemes[0] || {
-      bg: '#eff3f9',
-      headerBg: '#dae5f5',
-      headerColor: '#5285c5',
-    };
+const DEFAULT_THEME_VALUE = '__default__';
+const DEFAULT_THEME_LABEL = '默认';
+const FILTER_STORAGE_KEY = 'aio-life.todo.filters';
+const WEEKDAY_LABELS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
 
-  // 优先使用列自身配置的 bgColor
-  const bg = column.bgColor || currentTheme.bg;
+const tasks = ref<Task[]>([]);
+const taskTypes = ref<TaskType[]>([]);
+const initialized = ref(false);
+const loading = ref(false);
+const saving = ref(false);
+const modalVisible = ref(false);
+const isEditing = ref(false);
+const defaultColumnId = ref<number>();
+const form = ref<TodoForm>(createEmptyForm());
+const filters = ref<TodoFilters>(loadSavedFilters());
 
-  // 如果是自定义背景色，标题标签使用半透明遮罩以适应各种背景，否则使用主题配套颜色
-  const headerBg = column.bgColor
-    ? 'rgba(0, 0, 0, 0.06)'
-    : currentTheme.headerBg;
-  const headerColor = column.bgColor
-    ? 'rgba(0, 0, 0, 0.65)'
-    : currentTheme.headerColor;
+const modalTitle = computed(() => (isEditing.value ? '编辑代办' : '新增代办'));
+const hasActiveFilters = computed(
+  () =>
+    filters.value.isCompleted !== 0 ||
+    !!filters.value.theme ||
+    !!filters.value.typeId ||
+    !!filters.value.dateRange,
+);
+const emptyText = computed(() =>
+  hasActiveFilters.value
+    ? '当前筛选无结果'
+    : '暂无代办，点击右下角新增',
+);
 
-  return {
-    bg,
-    headerBg,
-    headerColor,
-  };
-};
+const themeOptions = computed(() => {
+  const themeSet = new Set<string>();
+  for (const item of taskTypes.value) {
+    themeSet.add(item.theme?.trim() || DEFAULT_THEME_VALUE);
+  }
+  return [...themeSet].map((value) => ({
+    label: value === DEFAULT_THEME_VALUE ? DEFAULT_THEME_LABEL : value,
+    value,
+  }));
+});
 
-const columns = ref<
-  Array<{
-    bgColor?: string;
-    id: number;
-    tasks: Task[];
-    title: string;
-  }>
->([]);
+const filteredTaskTypes = computed(() =>
+  filterTypesByTheme(taskTypes.value, filters.value.theme),
+);
+
+const formFilteredTaskTypes = computed(() =>
+  filterTypesByTheme(taskTypes.value, form.value.theme),
+);
 
 onMounted(async () => {
-  // 初始化列
-  const res = await getTaskColumnList({});
-  console.log('getTaskColumnList', res);
-  columns.value = res.items.map((item: any) => ({
-    ...item,
-    tasks: item.tasks || [],
-  }));
-
-  getTaskList({}).then((res) => {
-    console.log('getTaskList', res);
-    columns.value.forEach((column) => {
-      column.tasks = res.items.filter(
-        (item: { columnId: number }) => item.columnId === column.id,
-      );
-    });
-  });
+  await initTodoPage();
 });
 
-const newColumnName = ref('');
-
-const addTask = async (columnId: number) => {
-  const column = columns.value.find((col) => col.id === columnId);
-  if (column) {
-    const newTask: Task = {
-      id: 0,
-      content: '新任务',
-      detail: '',
-      createdAt: new Date(),
-      columnId,
-    };
-    const savedTask = await saveTask(newTask);
-    column.tasks.push(savedTask);
-  }
-};
-
-// 添加列
-const addColumn = async () => {
-  if (!newColumnName.value.trim()) return;
-
-  // 生成一个随机id
-  const newColumnId = Math.floor(Math.random() * 1_000_000);
-  let newColumn = {
-    id: newColumnId,
-    title: newColumnName.value,
-    tasks: [],
-  };
-
-  columns.value.push(newColumn);
-  newColumn = await saveColumn(newColumn);
-
-  newColumnName.value = '';
-};
-
-const onDragEnd = (event: any) => {
-  console.log('完整拖拽事件:', event);
-  const fromColumnId = Number(event.from.dataset.columnId);
-  const toColumnId = Number(event.to.dataset.columnId);
-  const taskId = Number(event.item.dataset.taskId);
-
-  console.log('移动前列ID:', fromColumnId);
-  console.log('移动后列ID:', toColumnId);
-  console.log('移动的任务ID:', taskId);
-  console.log('原始位置:', event.oldIndex);
-  console.log('新位置:', event.newIndex);
-
-  // 获取目标列
-  const toColumn = columns.value.find((col) => col.id === toColumnId);
-  if (!toColumn) return;
-
-  // 准备重排序数据
-  const sortedTasks = toColumn.tasks.map((task, index) => ({
-    id: task.id,
-    columnId: toColumnId,
-    sortOrder: index + 1,
-  }));
-  console.log('排序后的数据:', sortedTasks);
-
-  // 调用API更新排序
-  reSortTask(sortedTasks);
-};
-
-const onColumnDragEnd = (event: any) => {
-  console.log('列已移动', event);
-  // 只传输id和sortOrder
-  const sortedData = columns.value.map((col, index) => ({
-    id: col.id,
-    sortOrder: index + 1,
-  }));
-  reSortColumn(sortedData);
-};
-
-const onDetailDragEnd = () => {
-  if (!editingTask.value.details) return;
-  const sortedData = editingTask.value.details.map((detail, index) => ({
-    id: detail.id,
-    sort: index + 1,
-  }));
-  reSortTaskDetail(sortedData);
-};
-
-const formatDate = (date: any) => {
-  if (!date) return '';
-  return dayjs(date).format('YYYY-MM-DD HH:mm');
-};
-
-const editModalVisible = ref(false);
-const editingTask = ref<Task>({
-  id: 0,
-  content: '',
-  detail: '',
-  details: [],
-  startTime: undefined,
-  endTime: undefined,
-  dueDate: undefined,
-  createdAt: undefined,
-});
-
-const addDetailModalVisible = ref(false);
-const newDetail = ref<any>({
-  content: '',
-  priority: 20,
-  startTime: undefined,
-  endTime: undefined,
-});
-
-// 打开编辑模态框
-const openEditModal = async (task: Task) => {
-  const startTime = task.startTime ? dayjs(task.startTime) : undefined;
-  const endTime = task.endTime ? dayjs(task.endTime) : undefined;
-  const dueDate = task.dueDate ? dayjs(task.dueDate) : undefined;
-
-  editingTask.value = {
-    ...task,
-    details: [], // 先清空，等待加载
-    startTime,
-    endTime,
-    dueDate,
-  };
-  editModalVisible.value = true;
-
-  try {
-    const details = await getTaskDetail(task.id);
-    editingTask.value.details = details;
-  } catch (error) {
-    console.error('获取任务明细失败', error);
-  }
-};
-
-const addDetail = () => {
-  newDetail.value = {
-    content: '',
-    priority: 20,
-    startTime: undefined,
-    endTime: undefined,
-  };
-  addDetailModalVisible.value = true;
-};
-
-const handleAddDetailOk = async () => {
-  if (!newDetail.value.content?.trim()) {
+onActivated(async () => {
+  if (!initialized.value) {
     return;
   }
+  filters.value = createDefaultFilters();
+  await loadTasks();
+});
 
-  if (!editingTask.value.details) {
-    editingTask.value.details = [];
-  }
+function createDefaultFilters(): TodoFilters {
+  return {
+    dateRange: getQuickDateRange('today'),
+    isCompleted: 'valid',
+  };
+}
 
-  try {
-    const res = await addTaskDetail({
-      ...newDetail.value,
-      taskId: editingTask.value.id,
-      isCompleted: 0,
-    });
-    // Add to the beginning of the list to solve the "find it at the bottom" issue
-    editingTask.value.details.unshift(res);
-    addDetailModalVisible.value = false;
-  } catch (error) {
-    console.error('添加明细失败', error);
-  }
-};
+function loadSavedFilters(): TodoFilters {
+  return createDefaultFilters();
+}
 
-const removeDetail = async (index: number, detail: Detail) => {
-  try {
-    if (detail.id !== undefined && detail.id !== null) {
-      await deleteTaskDetail(detail.id);
-    }
-    editingTask.value.details?.splice(index, 1);
-  } catch (error) {
-    console.error('删除明细失败', error);
-  }
-};
-
-const handleDetailCheck = async (detail: Detail, checked: boolean) => {
-  detail.isCompleted = checked ? 1 : 0;
-  try {
-    await updateTaskDetail(detail);
-  } catch (error) {
-    console.error('更新状态失败', error);
-    // 回滚状态
-    detail.isCompleted = checked ? 0 : 1;
-  }
-};
-
-const handleDetailBlur = async (detail: Detail) => {
-  if (!detail.content) return;
-  try {
-    await updateTaskDetail(detail);
-  } catch (error) {
-    console.error('更新内容失败', error);
-  }
-};
-
-const handlePriorityChange = async (detail: Detail, priority: number) => {
-  detail.priority = priority;
-  await handleDetailBlur(detail);
-};
-
-const getPriorityColor = (priority: number) => {
-  if (priority === 1) return 'error';
-  if (priority === 10) return 'warning';
-  return 'default';
-};
-
-const getPriorityLabel = (priority: number) => {
-  if (priority === 1) return '高';
-  if (priority === 10) return '中';
-  return '低';
-};
-
-const handleStar = async (detail: Detail) => {
-  if (detail.isStarred === 1) {
-    detail.isStarred = 0;
-    await unstarTaskDetail(detail.id);
-  } else {
-    detail.isStarred = 1;
-    await starTaskDetail(detail.id);
-  }
-};
-
-const refreshTask = async (taskId: number) => {
-  try {
-    const res = await getTaskList({ taskId });
-    if (res.items) {
-      const task = res.items.find((t: any) => t.id === taskId);
-      if (task) {
-        columns.value.forEach((col) => {
-          const idx = col.tasks.findIndex((t) => t.id === taskId);
-          if (idx !== -1) {
-            col.tasks[idx] = task;
-          }
-        });
-      }
-    }
-  } catch (error) {
-    console.error('刷新任务失败', error);
-  }
-};
-
-const handleEditCancel = () => {
-  refreshTask(editingTask.value.id);
-};
-
-// 编辑任务
-const handleEditOk = async () => {
-  const column = columns.value.find((col) =>
-    col.tasks.some((task) => task.id === editingTask.value.id),
+function saveFilters() {
+  const [startDate, endDate] = filters.value.dateRange ?? [];
+  localStorage.setItem(
+    FILTER_STORAGE_KEY,
+    JSON.stringify({
+      dateRange:
+        startDate && endDate
+          ? [startDate.toISOString(), endDate.toISOString()]
+          : undefined,
+      isCompleted: filters.value.isCompleted,
+      theme: filters.value.theme,
+      typeId: filters.value.typeId,
+    }),
   );
+}
 
-  if (column) {
-    const taskIndex = column.tasks.findIndex(
-      (task) => task.id === editingTask.value.id,
-    );
-    if (taskIndex !== -1) {
-      column.tasks[taskIndex] = { ...editingTask.value };
+function createEmptyForm(): TodoForm {
+  return {
+    content: '',
+    detail: '',
+    endTime: dayjs().endOf('day'),
+    isCompleted: 0,
+    startTime: dayjs(),
+  };
+}
+
+async function initTodoPage() {
+  loading.value = true;
+  try {
+    await ensureDefaultColumn();
+    await loadTaskTypes();
+    await loadTasks();
+    initialized.value = true;
+  } catch (error) {
+    console.error('初始化代办失败', error);
+    message.error('加载代办失败');
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function ensureDefaultColumn() {
+  const res = await getTaskColumnList({});
+  const items = (res?.items ?? []) as TaskColumn[];
+  if (items.length > 0) {
+    defaultColumnId.value = items[0]?.id;
+    return;
+  }
+
+  const savedColumn = await saveColumn({
+    title: '默认',
+  });
+  defaultColumnId.value = savedColumn.id;
+}
+
+async function loadTaskTypes() {
+  taskTypes.value = await getTaskTypeList();
+}
+
+async function loadTasks() {
+  const params = buildTaskQueryParams();
+  const res = await getTaskList(params);
+  tasks.value = sortTodoTasks(
+    filterStatusGroupTasks(filterDefaultThemeTasks((res?.items ?? []) as Task[])),
+  );
+  saveFilters();
+}
+
+function buildTaskQueryParams() {
+  const params: Record<string, any> = {
+    pageSize: 500,
+  };
+  if (filters.value.isCompleted !== 'all') {
+    if (filters.value.isCompleted === 'valid') {
+      params.statusGroup = 'valid';
+    } else {
+      params.isCompleted = filters.value.isCompleted;
     }
   }
-  await updateTask(editingTask.value);
-  await refreshTask(editingTask.value.id);
-  editModalVisible.value = false;
-};
+  if (filters.value.theme && filters.value.theme !== DEFAULT_THEME_VALUE) {
+    params.theme = filters.value.theme;
+  }
+  if (filters.value.typeId) {
+    params.typeId = filters.value.typeId;
+  }
+  const [startDate, endDate] = filters.value.dateRange ?? [];
+  if (startDate) {
+    params.startDate = startDate.format('YYYY-MM-DD');
+  }
+  if (endDate) {
+    params.endDate = endDate.format('YYYY-MM-DD');
+  }
+  return params;
+}
 
-const confirmDeleteColumn = (columnId: number) => {
-  Modal.confirm({
-    title: '确认删除列',
-    content: '删除列将同时删除该列下的所有任务，确定要删除吗？',
-    okText: '确定',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk() {
-      deleteColumnMethod(columnId);
-    },
+function filterDefaultThemeTasks(list: Task[]) {
+  if (filters.value.theme !== DEFAULT_THEME_VALUE || filters.value.typeId) {
+    return list;
+  }
+  return list.filter((task) => !task.theme);
+}
+
+function filterStatusGroupTasks(list: Task[]) {
+  if (filters.value.isCompleted !== 'valid') {
+    return list;
+  }
+  return list.filter((task) => (task.isCompleted ?? 0) !== 2);
+}
+
+function sortTodoTasks(list: Task[]) {
+  return [...list].sort((left, right) => {
+    const completedDiff = (left.isCompleted ?? 0) - (right.isCompleted ?? 0);
+    if (completedDiff !== 0) return completedDiff;
+    return getSortTime(left) - getSortTime(right);
   });
-};
+}
 
-const deleteColumnMethod = (columnId: number) => {
-  deleteColumn({ id: columnId });
-  columns.value = columns.value.filter((col) => col.id !== columnId);
-};
+function getSortTime(task: Task) {
+  const date = task.startTime || task.endTime || task.dueDate;
+  return date ? dayjs(date).valueOf() : Number.MAX_SAFE_INTEGER;
+}
 
-const deleteTaskFunc = async (taskId: number) => {
-  await deleteTask({ id: taskId });
-  columns.value.forEach((column) => {
-    column.tasks = column.tasks.filter(
-      (task: { id: number }) => task.id !== taskId,
-    );
-  });
-};
+function formatListDate(task: Task) {
+  const date = task.endTime || task.dueDate || task.startTime;
+  if (!date) return '';
+  const value = dayjs(date);
+  return `${WEEKDAY_LABELS[value.day()]} ${value.format('MM-DD HH:mm')}`;
+}
 
-const editColumnModalVisible = ref(false);
-const editingColumn = ref({
-  id: null,
-  title: '',
-  bgColor: '#fff',
-});
+function formatDateTimeForSubmit(value?: Dayjs | string) {
+  if (!value) return undefined;
+  return dayjs.isDayjs(value) ? value.format('YYYY-MM-DDTHH:mm:ss') : value;
+}
 
-const prevEditingColumnBgColor = ref('');
+function getStatusLabel(status?: number) {
+  if (status === 1) return '已完成';
+  if (status === 2) return '已失败';
+  return '未完成';
+}
 
-const presetColumnBgColors = [
-  { value: '#eff3f9', label: '浅蓝' },
-  { value: '#fff9e6', label: '浅黄' },
-  { value: '#f0f0ff', label: '浅紫' },
-  { value: '#eff9ef', label: '浅绿' },
-  { value: '#fff1f2', label: '浅粉' },
-  { value: '#fdf2f8', label: '浅玫红' },
-  { value: '#f0fdfa', label: '浅青' },
-  { value: '#ecfeff', label: '浅天蓝' },
-  { value: '#f1f5f9', label: '浅灰蓝' },
-  { value: '#faf5ff', label: '浅薰衣草' },
-];
+function getStatusColor(status?: number) {
+  if (status === 1) return 'success';
+  if (status === 2) return 'error';
+  return 'processing';
+}
 
-const normalizeHexColor = (value?: string) => {
-  const trimmed = value?.trim();
-  if (!trimmed) return null;
-  const normalized = trimmed.toLowerCase();
-  return /^#[0-9a-f]{6}$/.test(normalized) ? normalized : null;
-};
+function getTaskThemeLabel(task: Task) {
+  return task.theme || DEFAULT_THEME_LABEL;
+}
 
-const selectedBgColor = computed(() => {
-  return normalizeHexColor(editingColumn.value.bgColor) ?? '';
-});
+function getTaskTypeLabel(task: Task) {
+  if (!task.typeName) return '未分类';
+  return task.typeDeleted ? `${task.typeName}（已删除）` : task.typeName;
+}
 
-const pickerBgColor = computed(() => {
-  return normalizeHexColor(editingColumn.value.bgColor) ?? '#ffffff';
-});
+function getTypeThemeValue(type?: TaskType) {
+  return type?.theme?.trim() || DEFAULT_THEME_VALUE;
+}
 
-const handlePickBgColor = (event: Event) => {
-  const value = (event.target as HTMLInputElement).value;
-  editingColumn.value.bgColor = value.toLowerCase();
-};
+function filterTypesByTheme(types: TaskType[], theme?: string) {
+  if (!theme) {
+    return types;
+  }
+  return types.filter((type) => getTypeThemeValue(type) === theme);
+}
 
-const setPresetBgColor = (color: string) => {
-  if (!color) {
-    editingColumn.value.bgColor = '';
+function getTaskType(typeId?: number) {
+  if (!typeId) return undefined;
+  return taskTypes.value.find((item) => item.id === typeId);
+}
+
+function handleFilterThemeChange() {
+  if (
+    filters.value.typeId &&
+    !filteredTaskTypes.value.some((item) => item.id === filters.value.typeId)
+  ) {
+    filters.value.typeId = undefined;
+  }
+  void loadTasks();
+}
+
+function handleFormThemeChange() {
+  if (
+    form.value.typeId &&
+    !formFilteredTaskTypes.value.some((item) => item.id === form.value.typeId)
+  ) {
+    form.value.typeId = undefined;
+  }
+}
+
+async function handleFilterChange() {
+  await loadTasks();
+}
+
+async function resetFilters() {
+  filters.value = createDefaultFilters();
+  await loadTasks();
+}
+
+function getQuickDateRange(range: QuickDateRange): [Dayjs, Dayjs] {
+  if (range === 'today') {
+    return [dayjs().startOf('day'), dayjs().endOf('day')];
+  }
+  return [dayjs().startOf(range), dayjs().endOf(range)];
+}
+
+function isQuickDateRangeActive(range: QuickDateRange) {
+  const [currentStart, currentEnd] = filters.value.dateRange ?? [];
+  if (!currentStart || !currentEnd) {
+    return false;
+  }
+  const [targetStart, targetEnd] = getQuickDateRange(range);
+  return (
+    currentStart.isSame(targetStart, 'day') &&
+    currentEnd.isSame(targetEnd, 'day')
+  );
+}
+
+async function setQuickDateRange(range: QuickDateRange) {
+  filters.value.dateRange = getQuickDateRange(range);
+  await loadTasks();
+}
+
+function openCreateModal() {
+  isEditing.value = false;
+  form.value = {
+    ...createEmptyForm(),
+    columnId: defaultColumnId.value,
+  };
+  modalVisible.value = true;
+}
+
+function openEditModal(record: Record<string, any>) {
+  const task = record as Task;
+  const selectedType = getTaskType(task.typeId);
+  isEditing.value = true;
+  form.value = {
+    columnId: task.columnId,
+    content: task.content,
+    detail: task.detail ?? '',
+    endTime: task.endTime ? dayjs(task.endTime) : undefined,
+    id: task.id,
+    isCompleted: (task.isCompleted ?? 0) as TodoStatus,
+    startTime: task.startTime ? dayjs(task.startTime) : undefined,
+    theme: selectedType ? getTypeThemeValue(selectedType) : undefined,
+    typeId: task.typeId,
+  };
+  modalVisible.value = true;
+}
+
+async function handleSave() {
+  const content = form.value.content.trim();
+  if (!content) {
+    message.warning('请输入代办内容');
     return;
   }
-  editingColumn.value.bgColor = color.toLowerCase();
-};
 
-const handleBgColorBlur = () => {
-  const trimmed = editingColumn.value.bgColor?.trim();
-  if (!trimmed) {
-    editingColumn.value.bgColor = '';
+  saving.value = true;
+  try {
+    const payload = {
+      columnId: form.value.columnId ?? defaultColumnId.value,
+      content,
+      detail: form.value.detail?.trim() ?? '',
+      dueDate: formatDateTimeForSubmit(form.value.endTime),
+      endTime: formatDateTimeForSubmit(form.value.endTime),
+      id: form.value.id,
+      isCompleted: form.value.isCompleted,
+      startTime: formatDateTimeForSubmit(form.value.startTime),
+      typeId: form.value.typeId ?? 0,
+    };
+
+    if (isEditing.value) {
+      await updateTask(payload);
+      message.success('代办已更新');
+    } else {
+      await saveTask(payload);
+      message.success('代办已创建');
+    }
+    modalVisible.value = false;
+    await loadTasks();
+  } catch (error) {
+    console.error('保存代办失败', error);
+    message.error('保存代办失败');
+  } finally {
+    saving.value = false;
+  }
+}
+
+async function handleCompleteChange(record: Record<string, any>, checked: boolean) {
+  const task = record as Task;
+  if ((task.isCompleted ?? 0) === 2) {
+    message.warning('失败代办请在复盘模块处理');
     return;
   }
-  const normalized = normalizeHexColor(trimmed);
-  if (!normalized) {
-    editingColumn.value.bgColor = prevEditingColumnBgColor.value;
-    return;
-  }
-  editingColumn.value.bgColor = normalized;
-};
 
-const openEditColumnModal = (
-  column: { bgColor?: string; id: number; title: string },
-) => {
-  editingColumn.value = { ...column };
-  prevEditingColumnBgColor.value = editingColumn.value.bgColor ?? '';
-  editColumnModalVisible.value = true;
-};
+  const previousValue = task.isCompleted ?? 0;
+  task.isCompleted = checked ? 1 : 0;
+  tasks.value = sortTodoTasks(tasks.value);
 
-const handleEditColumnOk = async () => {
-  const trimmed = editingColumn.value.bgColor?.trim();
-  if (!trimmed) {
-    editingColumn.value.bgColor = '';
-  } else {
-    const normalized = normalizeHexColor(trimmed);
-    editingColumn.value.bgColor = normalized ?? prevEditingColumnBgColor.value;
+  try {
+    await updateTask({
+      columnId: task.columnId,
+      content: task.content,
+      detail: task.detail,
+      dueDate: task.dueDate,
+      endTime: task.endTime,
+      id: task.id,
+      isCompleted: task.isCompleted,
+      startTime: task.startTime,
+      typeId: task.typeId ?? 0,
+    });
+    await loadTasks();
+  } catch (error) {
+    task.isCompleted = previousValue;
+    tasks.value = sortTodoTasks(tasks.value);
+    console.error('更新完成状态失败', error);
+    message.error('更新完成状态失败');
   }
+}
 
-  const column = columns.value.find((col) => col.id === editingColumn.value.id);
-  if (column) {
-    column.title = editingColumn.value.title;
-    column.bgColor = editingColumn.value.bgColor;
-    await updateColumn(column);
+async function handleDelete(record: Record<string, any>) {
+  const task = record as Task;
+  try {
+    await deleteTask({ id: task.id });
+    tasks.value = tasks.value.filter((item) => item.id !== task.id);
+    message.success('代办已删除');
+  } catch (error) {
+    console.error('删除代办失败', error);
+    message.error('删除代办失败');
   }
-  editColumnModalVisible.value = false;
-};
+}
 </script>
 
 <template>
-  <div class="kanban-board">
-    <draggable
-      v-model="columns"
-      group="columns"
-      @end="onColumnDragEnd"
-      item-key="id"
-      class="columns-container"
-      handle=".column-header"
-    >
-      <template #item="{ element: column, index }">
-        <div
-          class="kanban-column"
-          :style="{ backgroundColor: getColumnStyle(column, index).bg }"
+  <div class="todo-page">
+    <div class="todo-header">
+      <h2 class="todo-title">代办清单</h2>
+      <div class="todo-filters">
+        <ASelect
+          v-model:value="filters.theme"
+          allow-clear
+          class="filter-control"
+          placeholder="主题"
+          @change="handleFilterThemeChange"
         >
-          <div class="column-header">
-            <div class="header-left">
-              <span
-                class="column-title-tag"
-                :style="{
-                  backgroundColor: getColumnStyle(column, index).headerBg,
-                  color: getColumnStyle(column, index).headerColor,
-                }"
-                @click="openEditColumnModal(column)"
-              >
-                {{ column.title }}
-              </span>
-              <span class="task-count">{{ column.tasks.length }}</span>
-            </div>
-
-            <ADropdown :trigger="['click']">
-              <AButton type="text" size="small" class="more-btn">
-                <template #icon><MoreOutlined /></template>
-              </AButton>
-              <template #overlay>
-                <AMenu>
-                  <AMenuItem key="edit" @click="openEditColumnModal(column)">
-                    <EditOutlined /> 编辑
-                  </AMenuItem>
-                  <AMenuItem
-                    key="delete"
-                    danger
-                    @click="confirmDeleteColumn(column.id)"
-                  >
-                    <DeleteOutlined /> 删除
-                  </AMenuItem>
-                </AMenu>
-              </template>
-            </ADropdown>
-          </div>
-          <draggable
-            v-model="column.tasks"
-            group="tasks"
-            @end="onDragEnd"
-            item-key="id"
-            :data-column-id="column.id"
-            class="task-list"
+          <ASelectOption
+            v-for="item in themeOptions"
+            :key="item.value"
+            :value="item.value"
           >
-            <template #item="{ element }">
-              <div
-                class="kanban-task"
-                :data-task-id="element.id"
-                @click="openEditModal(element)"
-              >
-                <div class="task-header">
-                  <span class="task-title">{{ element.content }}</span>
-                  <APopconfirm
-                    title="确定要删除这个任务吗?"
-                    ok-text="确定"
-                    cancel-text="取消"
-                    trigger="click"
-                    @confirm="deleteTaskFunc(element.id)"
-                  >
-                    <AButton
-                      type="text"
-                      size="small"
-                      danger
-                      class="delete-task-btn"
-                      @click.stop
-                    >
-                      <template #icon><DeleteOutlined /></template>
-                    </AButton>
-                  </APopconfirm>
-                </div>
+            {{ item.label }}
+          </ASelectOption>
+        </ASelect>
 
-                <div class="task-meta" v-if="element.detail">
-                  <div class="task-detail-text">
-                    {{
-                      element.detail.length > 50
-                        ? `${element.detail.substring(0, 50)}...`
-                        : element.detail
-                    }}
-                  </div>
-                </div>
-
-                <div class="task-footer">
-                  <div class="footer-left">
-                    <ClockCircleOutlined class="prop-icon" />
-                    <span class="uncompleted-count"
-                      >待办: {{ element.unCompletedCount || 0 }}</span
-                    >
-                  </div>
-                  <span class="due-date">{{
-                    formatDate(element.dueDate)
-                  }}</span>
-                </div>
-              </div>
-            </template>
-            <template #footer>
-              <div class="add-task-wrapper">
-                <AButton
-                  type="text"
-                  block
-                  class="simple-add-btn"
-                  @click="addTask(column.id)"
-                >
-                  <template #icon><PlusOutlined /></template>
-                </AButton>
-              </div>
-            </template>
-          </draggable>
-        </div>
-      </template>
-    </draggable>
-
-    <div class="floating-add-column">
-      <APopover placement="topRight" trigger="click" :auto-focus="false">
-        <template #content>
-          <AInput
-            v-model:value="newColumnName"
-            placeholder="新列名称"
-            @click.stop
-          />
-          <AButton
-            type="primary"
-            @click="addColumn"
-            style="width: 100%; margin-top: 10px"
+        <ASelect
+          v-model:value="filters.typeId"
+          allow-clear
+          class="filter-control"
+          placeholder="类型"
+          @change="handleFilterChange"
+        >
+          <ASelectOption
+            v-for="item in filteredTaskTypes"
+            :key="item.id"
+            :value="item.id"
           >
-            添加列
-          </AButton>
-        </template>
-        <AButton type="primary" shape="circle" class="floating-button">
-          <template #icon><PlusOutlined /></template>
+            {{ item.name }}
+          </ASelectOption>
+        </ASelect>
+
+        <ASelect
+          v-model:value="filters.isCompleted"
+          class="filter-control"
+          placeholder="状态"
+          @change="handleFilterChange"
+        >
+          <ASelectOption value="all">全部</ASelectOption>
+          <ASelectOption value="valid">有效任务</ASelectOption>
+          <ASelectOption :value="0">未完成</ASelectOption>
+          <ASelectOption :value="1">已完成</ASelectOption>
+          <ASelectOption :value="2">已失败</ASelectOption>
+        </ASelect>
+
+        <ARangePicker
+          v-model:value="filters.dateRange"
+          class="date-range-control"
+          @change="handleFilterChange"
+        />
+
+        <AButton
+          class="quick-filter-button"
+          :class="{ 'is-active': isQuickDateRangeActive('today') }"
+          :type="isQuickDateRangeActive('today') ? 'primary' : 'default'"
+          @click="setQuickDateRange('today')"
+        >
+          今天
         </AButton>
-      </APopover>
+        <AButton
+          class="quick-filter-button"
+          :class="{ 'is-active': isQuickDateRangeActive('week') }"
+          :type="isQuickDateRangeActive('week') ? 'primary' : 'default'"
+          @click="setQuickDateRange('week')"
+        >
+          本周
+        </AButton>
+        <AButton
+          class="quick-filter-button"
+          :class="{ 'is-active': isQuickDateRangeActive('month') }"
+          :type="isQuickDateRangeActive('month') ? 'primary' : 'default'"
+          @click="setQuickDateRange('month')"
+        >
+          本月
+        </AButton>
+
+        <AButton @click="resetFilters">重置</AButton>
+      </div>
     </div>
 
-    <AModal
-      v-model:open="editModalVisible"
-      title="编辑任务"
-      width="1000px"
-      :style="{ top: '20px' }"
-      :body-style="{ height: 'calc(100vh - 150px)', overflowY: 'auto' }"
-      @ok="handleEditOk"
-      @cancel="handleEditCancel"
-    >
-      <AInput
-        v-model:value="editingTask.content"
-        placeholder="任务标题"
-        size="large"
-        :bordered="false"
-        :style="{
-          padding: '15px 0px',
-        }"
-      />
-
-      <div class="task-dates-row">
-        <div class="date-col">
-          <div class="date-label">开始时间</div>
-          <ADatePicker
-            show-time
-            v-model:value="editingTask.startTime"
-            placeholder="开始时间"
-            style="width: 100%"
-          />
-        </div>
-        <div class="date-col">
-          <div class="date-label">结束时间</div>
-          <ADatePicker
-            show-time
-            v-model:value="editingTask.endTime"
-            placeholder="结束时间"
-            style="width: 100%"
-          />
-        </div>
-        <div class="date-col">
-          <div class="date-label">目标完成时间</div>
-          <ADatePicker
-            show-time
-            v-model:value="editingTask.dueDate"
-            placeholder="目标完成时间"
-            style="width: 100%"
-          />
-        </div>
-      </div>
-
-      <ATextarea
-        v-model:value="editingTask.detail"
-        placeholder="任务备注"
-        :rows="3"
-        style="margin-bottom: 20px"
-      />
-
-      <div class="subtasks-section">
-        <div class="subtasks-header">
-          <span class="subtasks-title">
-            <CheckCircleOutlined style="margin-right: 8px" />
-            任务明细
-          </span>
-          <AButton type="link" size="small" @click="addDetail">
-            <template #icon><PlusOutlined /></template>
-            添加
-          </AButton>
-        </div>
-
-        <draggable
-          v-if="editingTask.details"
-          v-model="editingTask.details"
-          item-key="id"
-          handle=".drag-handle"
-          class="subtasks-list"
-          ghost-class="sortable-ghost"
-          @end="onDetailDragEnd"
+    <div class="todo-card">
+      <div v-if="loading" class="todo-empty">加载中...</div>
+      <div v-else-if="tasks.length === 0" class="todo-empty">{{ emptyText }}</div>
+      <ul v-else class="todo-list" role="list">
+        <li
+          v-for="task in tasks"
+          :key="task.id"
+          :class="{
+            'completed-item': (task.isCompleted ?? 0) === 1,
+            'failed-item': (task.isCompleted ?? 0) === 2,
+          }"
+          class="todo-item"
         >
-          <template #item="{ element: detail, index }">
-            <div class="subtask-item">
-              <HolderOutlined
-                class="drag-handle"
-                style="margin-right: 8px; color: #999; cursor: move"
-              />
-              <ACheckbox
-                :checked="detail.isCompleted === 1"
-                @update:checked="(val) => handleDetailCheck(detail, val)"
-                class="subtask-checkbox"
-              />
-              <AInput
-                v-model:value="detail.content"
-                :bordered="false"
-                placeholder="输入任务内容..."
-                class="subtask-input"
-                :class="[{ 'subtask-completed': detail.isCompleted === 1 }]"
-                @blur="handleDetailBlur(detail)"
-              />
-              <div class="subtask-actions">
-                <AButton
-                  type="text"
-                  size="small"
-                  class="subtask-star-btn"
-                  @click="handleStar(detail)"
-                >
-                  <template #icon>
-                    <StarOutlined
-                      :style="{
-                        color: detail.isStarred === 1 ? '#faad14' : '#d9d9d9',
-                      }"
-                    />
-                  </template>
-                </AButton>
-                <ADropdown :trigger="['click']" placement="bottomRight">
-                  <ATag
-                    :color="getPriorityColor(detail.priority)"
-                    style="
-                      cursor: pointer;
-                      user-select: none;
-                      border-radius: 4px;
-                    "
-                    class="priority-tag"
-                  >
-                    {{ getPriorityLabel(detail.priority) }}
-                  </ATag>
-                  <template #overlay>
-                    <AMenu
-                      @click="
-                        ({ key }) => handlePriorityChange(detail, Number(key))
-                      "
-                    >
-                      <AMenuItem key="20">
-                        <ATag
-                          color="default"
-                          style="
-                            width: 100%;
-                            margin-right: 0;
-                            text-align: center;
-                          "
-                        >
-                          低
-                        </ATag>
-                      </AMenuItem>
-                      <AMenuItem key="10">
-                        <ATag
-                          color="warning"
-                          style="
-                            width: 100%;
-                            margin-right: 0;
-                            text-align: center;
-                          "
-                        >
-                          中
-                        </ATag>
-                      </AMenuItem>
-                      <AMenuItem key="1">
-                        <ATag
-                          color="error"
-                          style="
-                            width: 100%;
-                            margin-right: 0;
-                            text-align: center;
-                          "
-                        >
-                          高
-                        </ATag>
-                      </AMenuItem>
-                    </AMenu>
-                  </template>
-                </ADropdown>
-                <ADatePicker
-                  show-time
-                  size="small"
-                  v-model:value="detail.startTime"
-                  placeholder="开始"
-                  class="subtask-date"
-                  :bordered="false"
-                  @change="handleDetailBlur(detail)"
-                />
-                <ADatePicker
-                  show-time
-                  size="small"
-                  v-model:value="detail.endTime"
-                  placeholder="结束"
-                  class="subtask-date"
-                  :bordered="false"
-                  @change="handleDetailBlur(detail)"
-                />
-                <APopconfirm
-                  title="确定要删除这条明细吗?"
-                  ok-text="确定"
-                  cancel-text="取消"
-                  trigger="click"
-                  @confirm="removeDetail(index, detail)"
-                >
-                  <AButton
-                    type="text"
-                    danger
-                    size="small"
-                    class="subtask-delete-btn"
-                  >
-                    <template #icon><DeleteOutlined /></template>
-                  </AButton>
-                </APopconfirm>
-              </div>
-            </div>
-          </template>
-        </draggable>
-      </div>
-    </AModal>
+          <ACheckbox
+            class="todo-checkbox"
+            :checked="(task.isCompleted ?? 0) === 1"
+            :disabled="(task.isCompleted ?? 0) === 2"
+            @update:checked="
+              (checked) => handleCompleteChange(task, checked === true)
+            "
+          />
 
-    <!-- 添加任务明细弹窗 -->
-    <AModal
-      v-model:open="addDetailModalVisible"
-      title="添加"
-      @ok="handleAddDetailOk"
-      @cancel="addDetailModalVisible = false"
-    >
-      <div
-        style="
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-          padding: 10px 0;
-        "
-      >
-        <div>
-          <div style="margin-bottom: 5px; font-size: 12px; color: #666">
-            任务内容
+          <button class="todo-main" type="button" @click="openEditModal(task)">
+            <span class="todo-item-title">{{ task.content }}</span>
+            <span class="todo-item-detail">
+              {{ task.detail || '点击查看或补充详情' }}
+            </span>
+            <span class="todo-meta">
+              <ATag class="todo-tag" :color="task.typeColor || 'blue'">
+                {{ getTaskTypeLabel(task) }}
+              </ATag>
+              <ATag class="todo-tag" color="default">
+                {{ getTaskThemeLabel(task) }}
+              </ATag>
+              <ATag
+                class="todo-tag"
+                :color="getStatusColor(task.isCompleted)"
+              >
+                {{ getStatusLabel(task.isCompleted) }}
+              </ATag>
+            </span>
+          </button>
+
+          <span class="todo-date">{{ formatListDate(task) }}</span>
+
+          <div class="todo-actions">
+            <AButton type="text" size="small" @click="openEditModal(task)">
+              <template #icon><EditOutlined /></template>
+            </AButton>
+            <APopconfirm
+              title="确定删除这条代办吗？"
+              ok-text="确定"
+              cancel-text="取消"
+              @confirm="handleDelete(task)"
+            >
+              <AButton type="text" size="small" danger>
+                <template #icon><DeleteOutlined /></template>
+              </AButton>
+            </APopconfirm>
           </div>
+        </li>
+      </ul>
+    </div>
+
+    <button
+      type="button"
+      class="floating-add-button"
+      title="新增代办"
+      @click="openCreateModal"
+    >
+      <PlusOutlined />
+    </button>
+
+    <AModal
+      v-model:open="modalVisible"
+      :confirm-loading="saving"
+      :title="modalTitle"
+      ok-text="确定"
+      cancel-text="取消"
+      width="640px"
+      @ok="handleSave"
+    >
+      <div class="todo-form">
+        <label class="form-item">
+          <span class="form-label">代办内容</span>
           <AInput
-            v-model:value="newDetail.content"
-            placeholder="输入任务内容..."
+            v-model:value="form.content"
+            placeholder="请输入代办内容"
             auto-focus
           />
+        </label>
+
+        <div class="date-grid">
+          <label class="form-item">
+            <span class="form-label">开始时间</span>
+            <ADatePicker
+              v-model:value="form.startTime"
+              show-time
+              style="width: 100%"
+            />
+          </label>
+
+          <label class="form-item">
+            <span class="form-label">结束时间</span>
+            <ADatePicker
+              v-model:value="form.endTime"
+              show-time
+              style="width: 100%"
+            />
+          </label>
         </div>
-        <div class="task-dates-row">
-          <div class="date-col">
-            <div class="date-label">优先级</div>
-            <ASelect v-model:value="newDetail.priority" style="width: 100%">
-              <ASelectOption :value="20" label="低">
-                <ATag color="default" style="margin-right: 0"> 低 </ATag>
-              </ASelectOption>
-              <ASelectOption :value="10" label="中">
-                <ATag color="warning" style="margin-right: 0"> 中 </ATag>
-              </ASelectOption>
-              <ASelectOption :value="1" label="高">
-                <ATag color="error" style="margin-right: 0"> 高 </ATag>
+
+        <div class="date-grid">
+          <label class="form-item">
+            <span class="form-label">主题</span>
+            <ASelect
+              v-model:value="form.theme"
+              allow-clear
+              placeholder="选择主题以筛选类型"
+              @change="handleFormThemeChange"
+            >
+              <ASelectOption
+                v-for="item in themeOptions"
+                :key="item.value"
+                :value="item.value"
+              >
+                {{ item.label }}
               </ASelectOption>
             </ASelect>
-          </div>
-          <div class="date-col">
-            <div class="date-label">开始时间</div>
-            <ADatePicker
-              show-time
-              v-model:value="newDetail.startTime"
-              placeholder="开始时间"
-              style="width: 100%"
-            />
-          </div>
-          <div class="date-col">
-            <div class="date-label">结束时间</div>
-            <ADatePicker
-              show-time
-              v-model:value="newDetail.endTime"
-              placeholder="结束时间"
-              style="width: 100%"
-            />
-          </div>
-        </div>
-      </div>
-    </AModal>
+          </label>
 
-    <AModal
-      v-model:open="editColumnModalVisible"
-      title="编辑"
-      @ok="handleEditColumnOk"
-    >
-      <AInput
-        v-model:value="editingColumn.title"
-        placeholder="列名称"
-        style="margin-bottom: 10px"
-      />
-      <div style="display: flex; align-items: center; margin-bottom: 10px">
-        <div style="width: 70px; margin-right: 10px">背景颜色:</div>
-        <input
-          :value="pickerBgColor"
-          type="color"
-          style="
-            width: 32px;
-            height: 32px;
-            padding: 0;
-            border: 1px solid rgba(0, 0, 0, 0.06);
-            border-radius: 6px;
-            background: transparent;
-            cursor: pointer;
-            margin-right: 10px;
-          "
-          @input="handlePickBgColor"
-        />
-        <AInput
-          :style="{
-            backgroundColor: editingColumn.bgColor || token.colorBgContainer,
-            color: token.colorText,
-          }"
-          v-model:value="editingColumn.bgColor"
-          placeholder="输入颜色代码"
-          @blur="handleBgColorBlur"
-          style="width: 120px; margin-right: 10px"
-        />
-      </div>
-      <div style="display: flex; align-items: flex-start; margin-bottom: 10px">
-        <div style="width: 70px; margin-right: 10px; padding-top: 4px">
-          预设:
+          <label class="form-item">
+            <span class="form-label">类型</span>
+            <ASelect
+              v-model:value="form.typeId"
+              allow-clear
+              placeholder="未分类"
+            >
+              <ASelectOption
+                v-for="item in formFilteredTaskTypes"
+                :key="item.id"
+                :value="item.id"
+              >
+                {{ item.name }}
+              </ASelectOption>
+            </ASelect>
+          </label>
         </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px">
-          <div
-            title="默认"
-            role="button"
-            :style="{
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              backgroundColor: token.colorBgContainer,
-              border:
-                selectedBgColor === ''
-                  ? `2px solid ${token.colorPrimary}`
-                  : '1px dashed rgba(0, 0, 0, 0.2)',
-            }"
-            @click="setPresetBgColor('')"
-          ></div>
-          <div
-            v-for="item in presetColumnBgColors"
-            :key="item.value"
-            :title="`${item.label} ${item.value}`"
-            role="button"
-            :style="{
-              width: '28px',
-              height: '28px',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              backgroundColor: item.value,
-              border:
-                selectedBgColor === item.value
-                  ? `2px solid ${token.colorPrimary}`
-                  : '1px solid rgba(0, 0, 0, 0.06)',
-            }"
-            @click="setPresetBgColor(item.value)"
-          ></div>
-        </div>
+
+        <label class="form-item">
+          <span class="form-label">备注</span>
+          <ATextarea
+            v-model:value="form.detail"
+            placeholder="可以补充说明"
+            :rows="4"
+          />
+        </label>
       </div>
     </AModal>
   </div>
 </template>
 
 <style scoped>
-@media (max-width: 768px) {
-  /* Task Edit Modal Responsive */
-  .task-dates-row {
-    flex-direction: column;
-    gap: 15px;
-  }
-
-  .subtask-item {
-    position: relative;
-    flex-wrap: wrap;
-    padding: 8px;
-    margin-bottom: 12px;
-    background: v-bind('token.colorFillQuaternary');
-    border-radius: 8px;
-  }
-
-  .subtask-checkbox {
-    margin-right: 8px;
-  }
-
-  .subtask-input {
-    flex: 1 1 calc(100% - 60px); /* Take remaining width in top row */
-    min-width: 150px;
-    margin: 0 0 8px;
-  }
-
-  .subtask-actions {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    align-items: center;
-    justify-content: flex-start;
-    width: 100%;
-    padding-left: 24px; /* Align with input start */
-  }
-
-  .subtask-date {
-    width: 130px; /* Give it a fixed small width on mobile instead of flex */
-    margin-right: 0;
-  }
-
-  .priority-tag {
-    margin-right: 0;
-  }
-
-  .subtask-delete-btn {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-  }
-
-  .drag-handle {
-    opacity: 1; /* Always show handle on mobile */
-  }
+.todo-page {
+  position: relative;
+  min-height: calc(100vh - 140px);
+  padding: 28px 32px 96px;
+  background: #f5f7fb;
 }
 
-.kanban-board {
+.todo-header {
+  max-width: 980px;
+  margin: 0 auto 18px;
+}
+
+.todo-title {
+  margin: 0 0 14px;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #1f2937;
+}
+
+.todo-filters {
   display: flex;
-  flex-direction: column;
-  height: calc(100vh - 40px);
-  padding: 20px;
-  overflow: auto hidden;
-  background: linear-gradient(180deg, #fafbfc 0%, #f5f7fa 100%);
-}
-
-/* 自定义横向滚动条样式 */
-.kanban-board::-webkit-scrollbar {
-  height: 8px;
-}
-
-.kanban-board::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.kanban-board::-webkit-scrollbar-thumb {
-  background: rgb(0 0 0 / 8%);
-  border-radius: 4px;
-  transition: background 0.2s ease;
-}
-
-.kanban-board::-webkit-scrollbar-thumb:hover {
-  background: rgb(0 0 0 / 15%);
-}
-
-.columns-container {
-  display: flex;
-  gap: 20px;
-  width: max-content;
-  min-width: 100%;
-  height: 100%;
-  padding: 10px 10px 20px;
-}
-
-.kanban-column {
-  display: flex;
-  flex: 0 0 320px;
-  flex-direction: column;
-  min-width: 320px;
-  max-width: 320px;
-  padding: 16px;
-  border-radius: 16px;
-  transition: all 0.3s ease;
-}
-
-.column-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 4px 0;
-  margin-bottom: 16px;
-  cursor: grab;
-}
-
-.column-header:active {
-  cursor: grabbing;
-}
-
-.header-left {
-  display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   align-items: center;
 }
 
-.column-title-tag {
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: 20px;
-  transition: all 0.3s ease;
+.filter-control {
+  width: 138px;
 }
 
-.column-title-tag:hover {
-  filter: brightness(0.9);
+.date-range-control {
+  width: 260px;
 }
 
-.task-count {
-  min-width: 20px;
-  padding: 2px 8px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #8c8c8c;
-  text-align: center;
-  background: rgb(0 0 0 / 4%);
+.quick-filter-button.is-active {
+  font-weight: 700;
+  box-shadow: 0 6px 14px rgb(22 119 255 / 22%);
+}
+
+.todo-card {
+  max-width: 980px;
+  margin: 0 auto;
+  background: #fff;
+  border: 1px solid #e5e7eb;
   border-radius: 10px;
 }
 
-.more-btn {
-  color: #8c8c8c;
+.todo-list {
+  padding: 0 24px;
+  margin: 0;
+  list-style: none;
 }
 
-.task-list {
-  flex: 1;
-  min-height: 50px;
-  padding: 4px 0;
-  overflow-y: auto;
-}
-
-.kanban-task {
+.todo-item {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px 16px;
-  margin-bottom: 10px;
+  align-items: center;
+  gap: 22px;
+  min-height: 108px;
+  padding: 18px 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.todo-item:last-child {
+  border-bottom: 0;
+}
+
+.todo-checkbox {
+  flex: 0 0 auto;
+}
+
+:deep(.todo-checkbox .ant-checkbox-inner) {
+  width: 20px;
+  height: 20px;
+}
+
+:deep(.todo-checkbox .ant-checkbox-inner::after) {
+  width: 6px;
+  height: 10px;
+}
+
+.todo-main {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  flex: 1 1 auto;
+  gap: 6px 18px;
+  min-width: 0;
+  padding: 0;
+  overflow: hidden;
+  text-align: left;
   cursor: pointer;
-  background: #fff;
-  border: none;
-  border-radius: 12px;
-  box-shadow:
-    0 1px 3px rgb(0 0 0 / 4%),
-    0 2px 6px rgb(0 0 0 / 3%);
-  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  background: transparent;
+  border: 0;
 }
 
-.kanban-task:hover {
-  box-shadow:
-    0 4px 12px rgb(0 0 0 / 8%),
-    0 2px 4px rgb(0 0 0 / 4%);
-}
-
-.task-header {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-  justify-content: space-between;
-}
-
-.task-title {
-  flex: 1;
-  font-size: 14px;
+.todo-item-title {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 20px;
   font-weight: 600;
+  line-height: 1.35;
+  color: #111827;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-item-detail {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 17px;
   line-height: 1.5;
-  color: #1a1a1a;
-  letter-spacing: -0.01em;
+  color: #4b5563;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.delete-task-btn {
-  margin-left: 4px;
-  opacity: 0;
-  transform: scale(0.9);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
-.kanban-task:hover .delete-task-btn {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.task-meta {
-  margin-bottom: 4px;
-}
-
-.task-detail-text {
-  padding: 6px 10px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: #8c8c8c;
-  word-break: break-all;
-  background: #fafafa;
-  border-radius: 8px;
-}
-
-.task-footer {
+.todo-meta {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-top: 8px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: #8c8c8c;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 6px;
+  min-width: 0;
 }
 
-.footer-left {
+.todo-tag {
+  max-width: 150px;
+  margin-right: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.todo-date {
+  flex: 0 0 160px;
+  font-size: 16px;
+  line-height: 1.4;
+  color: #4b5563;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.todo-actions {
   display: flex;
+  flex: 0 0 auto;
   gap: 8px;
   align-items: center;
-  font-size: 12px;
-  color: #8c8c8c;
 }
 
-.footer-left .prop-icon {
-  font-size: 13px;
-  opacity: 0.7;
+:deep(.todo-actions .ant-btn) {
+  width: 44px;
+  height: 44px;
+  font-size: 22px;
+  border-radius: 10px;
 }
 
-.due-date {
-  font-size: 12px;
-  font-weight: 500;
-  color: #a0a0a0;
+.completed-item {
+  opacity: 0.62;
 }
 
-.add-task-wrapper {
-  display: flex;
-  justify-content: center;
-  margin-top: 4px;
+.failed-item {
+  background: linear-gradient(90deg, rgb(255 77 79 / 5%), transparent 38%);
 }
 
-.simple-add-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 32px;
-  font-size: 18px;
-  color: #bfbfbf;
-}
-
-.simple-add-btn:hover {
-  color: #8c8c8c;
-  background: rgb(0 0 0 / 2%);
-}
-
-/* 隐藏不必要的样式 */
-.delete-column-btn {
-  display: none;
-}
-
-.add-task-card {
-  display: none;
-}
-
-.subtasks-section {
-  margin-top: 10px;
-}
-
-.subtasks-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.subtasks-title {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 500;
-  color: v-bind('token.colorText');
-}
-
-.subtasks-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-
-  /* max-height: 500px; */
-
-  /* Removed to allow modal body to scroll */
-
-  /* overflow-y: auto; */
-  padding-right: 4px;
-}
-
-.subtask-item {
-  display: flex;
-  align-items: center;
-  padding: 4px 0;
-  transition: background 0.3s;
-}
-
-.subtask-item:hover {
-  background: v-bind('token.colorFillQuaternary');
-}
-
-.subtask-item:hover .drag-handle {
-  opacity: 1;
-}
-
-.drag-handle {
-  cursor: grab;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.sortable-ghost {
-  background: v-bind('token.colorFillSecondary');
-  opacity: 0.5;
-}
-
-.subtask-completed {
-  color: v-bind('token.colorTextQuaternary');
+.completed-item .todo-item-title,
+.completed-item .todo-item-detail,
+.completed-item .todo-date {
   text-decoration: line-through;
 }
 
-.floating-add-column {
+.todo-empty {
+  padding: 44px 24px;
+  font-size: 17px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.floating-add-button {
   position: fixed;
-  right: 30px;
-  bottom: 30px;
-  z-index: 99;
-}
-
-.floating-button {
-  width: 50px;
-  height: 50px;
-  font-size: 20px;
-  box-shadow: 0 4px 14px rgb(0 0 0 / 15%);
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-.floating-button:hover {
-  box-shadow: 0 6px 20px rgb(0 0 0 / 25%);
-  transform: scale(1.08) translateY(-2px);
-}
-
-/* --- Responsive Styles --- */
-.task-dates-row {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-.date-col {
-  flex: 1;
-}
-
-.date-label {
-  margin-bottom: 5px;
-  font-size: 12px;
-  color: #666;
-}
-
-.subtask-input {
-  flex: 1;
-  margin: 0 8px;
-}
-
-.subtask-actions {
-  display: flex;
+  right: 32px;
+  bottom: 36px;
+  z-index: 10;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 72px;
+  height: 72px;
+  padding: 0;
+  font-size: 30px;
+  color: #fff;
+  cursor: pointer;
+  background:
+    linear-gradient(145deg, #4aa3ff 0%, #0b73f6 52%, #075bd8 100%);
+  border: 1px solid rgb(255 255 255 / 42%);
+  border-radius: 50%;
+  box-shadow:
+    0 18px 38px rgb(22 119 255 / 32%),
+    0 8px 18px rgb(7 91 216 / 20%),
+    inset 0 1px 0 rgb(255 255 255 / 36%);
+  transition:
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    filter 0.2s ease;
 }
 
-.priority-tag {
-  margin-right: 8px;
+.floating-add-button::before {
+  position: absolute;
+  inset: 8px;
+  pointer-events: none;
+  content: '';
+  border: 1px solid rgb(255 255 255 / 22%);
+  border-radius: 50%;
 }
 
-.subtask-date {
-  width: 140px;
-  margin-right: 4px;
+.floating-add-button:hover {
+  filter: brightness(1.04);
+  box-shadow:
+    0 22px 44px rgb(22 119 255 / 38%),
+    0 10px 22px rgb(7 91 216 / 24%),
+    inset 0 1px 0 rgb(255 255 255 / 44%);
+  transform: translateY(-2px);
 }
 
-.subtask-star-btn {
-  margin-right: 8px;
+.floating-add-button:active {
+  transform: translateY(0) scale(0.98);
+}
+
+:deep(.floating-add-button .anticon) {
+  font-size: 32px;
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 14%));
+}
+
+.todo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-top: 8px;
+}
+
+.form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-label {
+  font-size: 13px;
+  color: #4b5563;
+}
+
+.date-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 768px) {
+  .todo-page {
+    min-height: calc(100vh - 96px);
+    padding: 16px 12px 92px;
+  }
+
+  .todo-title {
+    margin-bottom: 12px;
+    font-size: 22px;
+  }
+
+  .filter-control,
+  .date-range-control {
+    width: 100%;
+  }
+
+  .todo-list {
+    padding: 0 16px;
+  }
+
+  .todo-item {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px 14px;
+    min-height: 96px;
+    padding: 16px 0;
+  }
+
+  .todo-main {
+    grid-template-columns: 1fr;
+    grid-column: 2;
+    gap: 3px;
+  }
+
+  .todo-item-title {
+    font-size: 17px;
+  }
+
+  .todo-item-detail {
+    font-size: 14px;
+  }
+
+  .todo-date {
+    grid-column: 2;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .todo-actions {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
+
+  :deep(.todo-actions .ant-btn) {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+  }
+
+  .date-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .floating-add-button {
+    right: 22px;
+    bottom: 26px;
+    width: 64px;
+    height: 64px;
+    font-size: 28px;
+  }
 }
 </style>

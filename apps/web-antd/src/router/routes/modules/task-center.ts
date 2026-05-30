@@ -3,17 +3,18 @@ import type { RouteRecordRaw } from 'vue-router';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
-      icon: 'mdi:clipboard-text-clock-outline',
-      title: '任务中心',
+      icon: 'mdi:format-list-checks',
       order: 1,
+      title: '待办',
     },
     name: 'TaskCenter',
     path: '/task-center',
+    redirect: '/task-center/todo',
     children: [
       {
         meta: {
-          title: '待办',
           icon: 'mdi:format-list-checks',
+          title: '待办清单',
         },
         name: 'TaskCenterTodo',
         path: '/task-center/todo',
@@ -21,12 +22,21 @@ const routes: RouteRecordRaw[] = [
       },
       {
         meta: {
-          title: '目标管理',
-          icon: 'mdi:target',
+          icon: 'mdi:clipboard-alert-outline',
+          title: '复盘',
         },
-        name: 'TaskCenterGoal',
-        path: '/task-center/goal',
-        component: () => import('#/views/task-center/goal/index.vue'),
+        name: 'TaskCenterTodoReview',
+        path: '/task-center/todo/review',
+        component: () => import('#/views/task-center/todo/review/index.vue'),
+      },
+      {
+        meta: {
+          icon: 'mdi:cog-outline',
+          title: '配置',
+        },
+        name: 'TaskCenterTodoConfig',
+        path: '/task-center/todo/config',
+        component: () => import('#/views/task-center/todo/config/index.vue'),
       },
     ],
   },

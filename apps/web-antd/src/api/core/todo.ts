@@ -36,9 +36,16 @@ export interface Task {
   columnId: number;
   content: string;
   detail?: string;
+  failureReason?: string;
+  isCompleted?: number; // 0: uncompleted, 1: completed, 2: failed
   startTime?: string;
   endTime?: string;
   dueDate?: string;
+  theme?: string;
+  typeColor?: string;
+  typeDeleted?: boolean;
+  typeId?: number;
+  typeName?: string;
   details?: Detail[];
   unCompletedCount?: number;
 }
@@ -47,7 +54,29 @@ export interface TaskListResult {
   items: Task[];
 }
 
-export async function getTaskList(data: any) {
+export interface TaskType {
+  color?: string;
+  id: number;
+  name: string;
+  sortOrder?: number;
+  theme?: string;
+  userId: number;
+}
+
+export interface TaskQueryParams {
+  endDate?: string;
+  get?: number;
+  hasFailureReason?: boolean;
+  isCompleted?: 0 | 1 | 2;
+  pageSize?: number;
+  startDate?: string;
+  statusGroup?: 'valid';
+  taskId?: number;
+  theme?: string;
+  typeId?: number;
+}
+
+export async function getTaskList(data: TaskQueryParams) {
   return await requestClient.get<TaskListResult>('/tasks', { params: data });
 }
 
@@ -95,4 +124,20 @@ export async function deleteTask(data: any) {
 
 export async function reSortTask(data: any) {
   return await requestClient.post('/tasks/reSort', data);
+}
+
+export async function getTaskTypeList() {
+  return await requestClient.get<TaskType[]>('/taskTypes');
+}
+
+export async function saveTaskType(data: Partial<TaskType>) {
+  return await requestClient.post<TaskType>('/taskTypes/save', data);
+}
+
+export async function updateTaskType(data: Partial<TaskType>) {
+  return await requestClient.post<TaskType>('/taskTypes/update', data);
+}
+
+export async function deleteTaskType(data: Pick<TaskType, 'id'>) {
+  return await requestClient.post<void>('/taskTypes/delete', data);
 }
