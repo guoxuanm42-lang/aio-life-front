@@ -25,7 +25,7 @@ import {
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
 
 type ThemeKey = 'blue' | 'cyan' | 'teal' | 'green' | 'purple' | 'indigo' | 'pink' | 'orange';
-type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'archived';
+type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'shelved' | 'archived';
 type ThoughtStatusFilter = 'all' | ThoughtStatus;
 
 const route = useRoute();
@@ -46,6 +46,7 @@ const statusSelectOptions: Array<{ label: string; value: ThoughtStatusFilter }> 
   { label: '待处理', value: 'pending' },
   { label: '进行中', value: 'ongoing' },
   { label: '已完成', value: 'done' },
+  { label: '已搁置', value: 'shelved' },
   { label: '已归档', value: 'archived' },
 ];
 
@@ -53,7 +54,13 @@ const statusFilter = ref<ThoughtStatusFilter>('pending');
 
 const getThoughtStatusKey = (status: any): ThoughtStatus => {
   const key = String(status ?? '').trim();
-  if (key === 'pending' || key === 'ongoing' || key === 'done' || key === 'archived') {
+  if (
+    key === 'pending' ||
+    key === 'ongoing' ||
+    key === 'done' ||
+    key === 'shelved' ||
+    key === 'archived'
+  ) {
     return key;
   }
   return 'pending';
@@ -64,6 +71,7 @@ const getThoughtStatusLabel = (status: any): string => {
   if (key === 'pending') return '待处理';
   if (key === 'ongoing') return '进行中';
   if (key === 'done') return '已完成';
+  if (key === 'shelved') return '已搁置';
   return '已归档';
 };
 
@@ -248,6 +256,8 @@ let latestLoadSeq = 0;
 
 const showModal = ref(false);
 const currentEditId = ref<null | number | string>(null);
+const currentModalCreateTime = ref('');
+const modalMode = ref<'edit' | 'view'>('view');
 
 interface ThoughtForm {
   subject: string;
@@ -273,9 +283,18 @@ const form = reactive<ThoughtForm>({
 
 const isExtraOpen = ref(false);
 const isContentEditing = ref(false);
+const detailEditingField = ref<null | 'content' | 'subject'>(null);
+const detailSubjectDraft = ref('');
+const detailContentDraft = ref('');
+const inlineSaving = ref(false);
+
+const isExistingThoughtEdit = computed(() => currentEditId.value !== null);
 
 const contentCharCount = computed(() => String(form.content ?? '').trim().length);
-const eventCount = computed(() => (form.events ?? []).length);
+const validModalEvents = computed(() =>
+  (form.events ?? []).filter((event) => event.content.trim() !== ''),
+);
+const eventCount = computed(() => validModalEvents.value.length);
 
 const formAccent = computed(() => {
   const key = (form.themeKey || 'blue') as ThemeKey;
@@ -283,9 +302,72 @@ const formAccent = computed(() => {
 });
 
 // 计算属性
-const modalTitle = computed(() =>
-  currentEditId.value === null ? '添加新思考' : '编辑思考',
-);
+const modalTitle = computed(() => {
+  if (currentEditId.value === null) return '新增闪念';
+  return modalMode.value === 'view' ? '闪念详情' : '编辑闪念';
+});
+
+const modalDetailTitle = computed(() => {
+  const subject = form.subject.trim();
+  if (subject) return subject;
+  const content = form.content.trim();
+  if (!content) return '未命名闪念';
+  return content.split(/\r?\n/)[0]?.trim() || content;
+});
+
+const modalDetailContent = computed(() => form.content.trim() || '—');
+
+const resetDetailInlineEdit = () => {
+  detailEditingField.value = null;
+  detailSubjectDraft.value = '';
+  detailContentDraft.value = '';
+};
+
+const beginDetailInlineEdit = (field: 'content' | 'subject') => {
+  if (modalMode.value !== 'view' || currentEditId.value === null) return;
+  detailEditingField.value = field;
+  detailSubjectDraft.value = form.subject.trim();
+  detailContentDraft.value = form.content;
+};
+
+const cancelDetailInlineEdit = () => {
+  resetDetailInlineEdit();
+};
+
+const buildThoughtPayload = () => {
+  const subject = form.subject.trim();
+  const content = form.content.trim();
+  const finalSubject = subject || (content ? getThoughtCardTitle({ id: 0, content } as any) : '');
+  if (!finalSubject) {
+    message.warning('主题内容不能为空');
+    return null;
+  }
+  form.subject = finalSubject;
+
+  if (!form.themeKey) {
+    message.warning('类型不能为空');
+    return null;
+  }
+
+  const validEvents = form.events.filter(
+    (event) => event.content.trim() !== '',
+  );
+
+  const payload: any = {
+    subject: finalSubject,
+    topic: finalSubject,
+    content,
+    themeKey: form.themeKey,
+    status: form.status,
+    events: validEvents.map((e) => ({ ...e })),
+  };
+
+  if (currentEditId.value !== null) {
+    payload.id = currentEditId.value;
+  }
+
+  return payload;
+};
 
 const getThoughtThemeKey = (thought: Thought): ThemeKey => {
   const themeKey = String(thought?.themeKey ?? '').trim() as ThemeKey;
@@ -334,8 +416,11 @@ const openAddModal = () => {
   form.themeKey = activeCategoryThemeKey.value || 'blue';
   form.status = 'pending';
   currentEditId.value = null;
+  currentModalCreateTime.value = new Date().toISOString();
+  modalMode.value = 'edit';
   isExtraOpen.value = false;
   isContentEditing.value = false;
+  resetDetailInlineEdit();
   showModal.value = true;
 };
 
@@ -364,8 +449,11 @@ const openEditModal = (id: number | string) => {
             },
           ];
     currentEditId.value = id;
+    currentModalCreateTime.value = thought.createTime;
+    modalMode.value = 'view';
     isExtraOpen.value = false;
     isContentEditing.value = false;
+    resetDetailInlineEdit();
     showModal.value = true;
   }
 };
@@ -374,6 +462,15 @@ const closeCardModal = () => {
   showModal.value = false;
   isExtraOpen.value = false;
   isContentEditing.value = false;
+  modalMode.value = 'view';
+  resetDetailInlineEdit();
+};
+
+const enterEditMode = () => {
+  modalMode.value = 'edit';
+  isExtraOpen.value = currentEditId.value !== null;
+  isContentEditing.value = false;
+  resetDetailInlineEdit();
 };
 
 const addEvent = () => {
@@ -389,39 +486,60 @@ const removeEventById = (id: number | string) => {
   if (idx !== -1) form.events.splice(idx, 1);
 };
 
+const saveDetailInlineField = async (field: 'content' | 'subject') => {
+  if (currentEditId.value === null || inlineSaving.value) return;
+
+  const oldSubject = form.subject;
+  const oldContent = form.content;
+  if (field === 'subject') {
+    form.subject = detailSubjectDraft.value.trim();
+  } else {
+    form.content = detailContentDraft.value;
+  }
+
+  const payload = buildThoughtPayload();
+  if (!payload) {
+    form.subject = oldSubject;
+    form.content = oldContent;
+    return;
+  }
+
+  inlineSaving.value = true;
+  try {
+    await updateThink(toRaw(payload));
+    resetDetailInlineEdit();
+    await loadThoughts();
+    message.success('保存成功');
+  } catch {
+    form.subject = oldSubject;
+    form.content = oldContent;
+    message.error('保存失败');
+  } finally {
+    inlineSaving.value = false;
+  }
+};
+
+const handleDetailInlineBlur = (field: 'content' | 'subject') => {
+  if (detailEditingField.value !== field) return;
+  void saveDetailInlineField(field);
+};
+
+const handleDetailInlineKeydown = (event: KeyboardEvent, field: 'content' | 'subject') => {
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    cancelDetailInlineEdit();
+    return;
+  }
+
+  if (event.key === 'Enter' && (field === 'subject' || event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    void saveDetailInlineField(field);
+  }
+};
+
 const saveCard = async () => {
-  const subject = form.subject.trim();
-  const content = form.content.trim();
-  const finalSubject = subject || (content ? getThoughtCardTitle({ id: 0, content } as any) : '');
-  if (!finalSubject) {
-    message.warning('主题内容不能为空');
-    return;
-  }
-  form.subject = finalSubject;
-
-  if (!form.themeKey) {
-    message.warning('类型不能为空');
-    return;
-  }
-
-  const validEvents = form.events.filter(
-    (event) => event.content.trim() !== '',
-  );
-
-  // 构造提交数据
-  const payload: any = {
-    subject: finalSubject,
-    topic: finalSubject,
-    content,
-    themeKey: form.themeKey,
-    status: form.status,
-    events: validEvents.map((e) => ({ ...e })),
-  };
-
-  // 只有在编辑模式下才传 id
-  if (currentEditId.value !== null) {
-    payload.id = currentEditId.value;
-  }
+  const payload = buildThoughtPayload();
+  if (!payload) return;
 
   try {
     if (currentEditId.value === null) {
@@ -645,10 +763,103 @@ watch(
       :footer="null"
       :mask-closable="false"
       :destroy-on-close="true"
+      width="720px"
       centered
       @cancel="closeCardModal"
     >
+      <div
+        v-if="modalMode === 'view'"
+        class="thought-detail"
+        :style="{
+          '--thought-accent': formAccent.accent,
+          '--thought-accent-rgb': formAccent.rgb,
+        }"
+      >
+        <div class="thought-detail-meta-row">
+          <span class="thought-detail-tag">
+            {{ getCategoryTitleByThemeKey(form.themeKey) }}
+          </span>
+          <span class="thought-detail-tag is-status">
+            {{ getThoughtStatusLabel(form.status) }}
+          </span>
+          <span class="thought-detail-time">
+            {{ currentModalCreateTime ? formatDate(currentModalCreateTime) : '—' }}
+          </span>
+        </div>
+
+        <Input
+          v-if="detailEditingField === 'subject'"
+          v-model:value="detailSubjectDraft"
+          class="thought-detail-title-input"
+          :maxlength="60"
+          :disabled="inlineSaving"
+          autofocus
+          allow-clear
+          @blur="handleDetailInlineBlur('subject')"
+          @keydown="handleDetailInlineKeydown($event, 'subject')"
+        />
+        <h2
+          v-else
+          class="thought-detail-title is-editable"
+          title="双击编辑"
+          @dblclick="beginDetailInlineEdit('subject')"
+        >
+          {{ modalDetailTitle }}
+        </h2>
+
+        <section class="thought-detail-section">
+          <div class="thought-detail-section-title">闪念内容</div>
+          <Input.TextArea
+            v-if="detailEditingField === 'content'"
+            v-model:value="detailContentDraft"
+            class="thought-detail-content-editor"
+            :auto-size="{ minRows: 5, maxRows: 12 }"
+            :disabled="inlineSaving"
+            autofocus
+            @blur="handleDetailInlineBlur('content')"
+            @keydown="handleDetailInlineKeydown($event, 'content')"
+          />
+          <div
+            v-else
+            class="thought-detail-content is-editable"
+            title="双击编辑"
+            @dblclick="beginDetailInlineEdit('content')"
+          >
+            {{ modalDetailContent }}
+          </div>
+        </section>
+
+        <section class="thought-detail-section">
+          <div class="thought-detail-section-title">扩展信息</div>
+          <div class="thought-detail-summary">
+            内容 {{ contentCharCount }}字 · 事件 {{ eventCount }}个
+          </div>
+        </section>
+
+        <section v-if="validModalEvents.length > 0" class="thought-detail-section">
+          <div class="thought-detail-section-title">关联事件流</div>
+          <div class="thought-detail-events">
+            <div
+              v-for="event in [...validModalEvents].reverse()"
+              :key="event.id"
+              class="thought-detail-event"
+            >
+              <div class="thought-detail-event-content">{{ event.content }}</div>
+              <div class="thought-detail-event-time">{{ formatDate(event.create_time) }}</div>
+            </div>
+          </div>
+        </section>
+
+        <div class="thought-detail-footer">
+          <Button shape="round" @click="closeCardModal">关闭</Button>
+          <Button type="primary" shape="round" @click="enterEditMode">
+            编辑闪念
+          </Button>
+        </div>
+      </div>
+
       <Form
+        v-else
         layout="vertical"
         class="modern-form"
         :style="{
@@ -656,7 +867,7 @@ watch(
           '--thought-accent-rgb': formAccent.rgb,
         }"
       >
-        <Form.Item label="主题内容" required>
+        <Form.Item v-if="!isExistingThoughtEdit" label="主题内容" required>
           <Input
             v-model:value="form.subject"
             placeholder="给这条闪念取一个主题"
@@ -699,7 +910,7 @@ watch(
           </div>
         </Form.Item>
 
-        <Form.Item label="闪念内容">
+        <Form.Item v-if="!isExistingThoughtEdit" label="闪念内容">
           <div v-if="!isContentEditing" class="modal-content-preview">
             <div class="modal-content-preview-text">
               {{ form.content?.trim() ? form.content.trim() : '—' }}
@@ -1100,7 +1311,7 @@ watch(
   display: flex;
   align-items: flex-start;
   gap: 16px;
-  padding-right: 52px;
+  padding-right: 64px;
   margin-bottom: 14px;
 }
 
@@ -1163,8 +1374,8 @@ watch(
 
 .protocol-badge {
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: -12px;
+  right: -10px;
   width: 42px;
   height: 42px;
   border-radius: 14px;
@@ -1263,6 +1474,35 @@ watch(
   background:
     linear-gradient(var(--badge-fg) 0 0) 50% 25% / 48% 2px no-repeat,
     linear-gradient(var(--badge-fg) 0 0) 50% 55% / 76% 2px no-repeat;
+}
+
+.protocol-badge[data-theme='teal']::before {
+  inset: 10px;
+  background:
+    linear-gradient(120deg, transparent 0 14%, var(--badge-fg) 14% 24%, transparent 24% 100%) 0 54% / 34% 38% no-repeat,
+    linear-gradient(72deg, transparent 0 34%, var(--badge-fg) 34% 45%, transparent 45% 100%) 28% 46% / 28% 66% no-repeat,
+    linear-gradient(108deg, transparent 0 48%, var(--badge-fg) 48% 58%, transparent 58% 100%) 50% 48% / 30% 58% no-repeat,
+    linear-gradient(76deg, transparent 0 36%, var(--badge-fg) 36% 48%, transparent 48% 100%) 72% 52% / 32% 42% no-repeat;
+  border-top: 2px solid transparent;
+  border-bottom: 2px solid transparent;
+  border-radius: 4px;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 16%));
+}
+
+.protocol-badge[data-theme='teal']::after {
+  border-radius: inherit;
+}
+
+.protocol-badge[data-theme='indigo']::before {
+  inset: 10px;
+  background:
+    linear-gradient(135deg, transparent 0 42%, var(--badge-fg) 42% 52%, transparent 52% 100%) 3px 45% / 9px 16px no-repeat,
+    linear-gradient(45deg, transparent 0 42%, var(--badge-fg) 42% 52%, transparent 52% 100%) 3px 55% / 9px 16px no-repeat,
+    linear-gradient(45deg, transparent 0 42%, var(--badge-fg) 42% 52%, transparent 52% 100%) calc(100% - 12px) 45% / 9px 16px no-repeat,
+    linear-gradient(135deg, transparent 0 42%, var(--badge-fg) 42% 52%, transparent 52% 100%) calc(100% - 12px) 55% / 9px 16px no-repeat,
+    linear-gradient(108deg, transparent 0 42%, var(--badge-fg) 42% 52%, transparent 52% 100%) 50% 50% / 8px 24px no-repeat;
+  border-radius: 5px;
+  filter: drop-shadow(0 2px 4px rgb(0 0 0 / 16%));
 }
 
 .protocol-badge::after {
@@ -1384,7 +1624,7 @@ watch(
 @media (max-width: 768px) {
   .protocol-top {
     gap: 12px;
-    padding-right: 48px;
+    padding-right: 58px;
   }
   .protocol-icon {
     width: 56px;
@@ -1491,6 +1731,205 @@ watch(
 }
 
 /* Modal 内部样式 */
+.thought-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  color: rgb(0 0 0 / 0.78);
+}
+
+.thought-detail-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.thought-detail-tag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1;
+  color: rgb(var(--thought-accent-rgb) / 0.92);
+  background: rgb(var(--thought-accent-rgb) / 0.12);
+  border: 1px solid rgb(var(--thought-accent-rgb) / 0.18);
+  box-shadow:
+    0 10px 18px rgb(var(--thought-accent-rgb) / 0.1),
+    inset 0 1px 0 rgb(255 255 255 / 0.85);
+}
+
+.thought-detail-tag.is-status {
+  background: rgb(var(--thought-accent-rgb) / 0.18);
+}
+
+.thought-detail-time {
+  margin-left: auto;
+  font-size: 13px;
+  color: rgb(0 0 0 / 0.48);
+  white-space: nowrap;
+}
+
+.thought-detail-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.42;
+  color: rgb(0 0 0 / 0.82);
+  letter-spacing: 0;
+  word-break: break-word;
+}
+
+.thought-detail-title.is-editable,
+.thought-detail-content.is-editable {
+  cursor: text;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.thought-detail-title.is-editable {
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 12px;
+}
+
+.thought-detail-title.is-editable:hover {
+  background: rgb(var(--thought-accent-rgb) / 0.06);
+}
+
+.thought-detail-title-input {
+  min-height: 42px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1.42;
+}
+
+.thought-detail-section {
+  display: grid;
+  gap: 8px;
+}
+
+.thought-detail-section-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: rgb(0 0 0 / 0.58);
+}
+
+.thought-detail-content {
+  min-height: 132px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  font-size: 16px;
+  line-height: 1.75;
+  color: rgb(0 0 0 / 0.72);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background:
+    linear-gradient(
+      145deg,
+      rgb(255 255 255 / 0.78) 0%,
+      rgb(var(--thought-accent-rgb) / 0.08) 100%
+    );
+  border: 1px solid rgb(var(--thought-accent-rgb) / 0.12);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 12px 28px rgb(0 0 0 / 0.04);
+}
+
+.thought-detail-content.is-editable:hover {
+  border-color: rgb(var(--thought-accent-rgb) / 0.28);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.8),
+    0 14px 30px rgb(var(--thought-accent-rgb) / 0.08);
+}
+
+.thought-detail-content-editor {
+  min-height: 132px;
+  padding: 16px 18px;
+  border-radius: 16px;
+  font-size: 16px;
+  line-height: 1.75;
+  background:
+    linear-gradient(
+      145deg,
+      rgb(255 255 255 / 0.86) 0%,
+      rgb(var(--thought-accent-rgb) / 0.08) 100%
+    );
+}
+
+.thought-detail-summary {
+  padding: 12px 14px;
+  border-radius: 14px;
+  font-size: 13px;
+  color: rgb(0 0 0 / 0.52);
+  background: rgb(255 255 255 / 0.62);
+  border: 1px solid rgb(0 0 0 / 0.06);
+}
+
+.thought-detail-events {
+  display: grid;
+  gap: 10px;
+}
+
+.thought-detail-event {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgb(128 128 128 / 4%);
+  border: 1px solid rgb(0 0 0 / 0.04);
+}
+
+.thought-detail-event-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgb(0 0 0 / 0.7);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thought-detail-event-time {
+  margin-top: 6px;
+  font-size: 12px;
+  color: rgb(0 0 0 / 0.42);
+}
+
+.thought-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 14px;
+  border-top: 1px solid rgb(0 0 0 / 0.06);
+}
+
+@media (max-width: 768px) {
+  .thought-detail-time {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  .thought-detail-title {
+    font-size: 20px;
+  }
+
+  .thought-detail-title-input {
+    font-size: 20px;
+  }
+
+  .thought-detail-footer {
+    justify-content: stretch;
+  }
+
+  .thought-detail-footer :deep(.ant-btn) {
+    flex: 1;
+  }
+}
+
 .modal-status-capsule {
   display: inline-flex;
   align-items: center;
