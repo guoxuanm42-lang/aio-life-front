@@ -3,6 +3,17 @@ import type { RouteRecordRaw } from 'vue-router';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
+      icon: 'mdi:food-fork-drink',
+      title: '美食',
+      backTop: false,
+      order: 4,
+    },
+    name: 'foodRecord',
+    path: '/my-hub/food-record',
+    component: () => import('#/views/my-hub/food-record/index.vue'),
+  },
+  {
+    meta: {
       icon: 'ic:baseline-view-in-ar',
       keepAlive: true,
       order: 3,
