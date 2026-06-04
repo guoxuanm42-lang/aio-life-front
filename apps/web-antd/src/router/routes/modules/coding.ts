@@ -30,6 +30,15 @@ const routes: RouteRecordRaw[] = [
         path: '/coding/leetcode',
         component: () => import('#/views/coding/leetcode/index.vue'),
       },
+      {
+        meta: {
+          icon: 'lucide:box',
+          title: 'MCP 工具列表',
+        },
+        name: 'McpTools',
+        path: '/coding/mcp-tools',
+        component: () => import('#/views/coding/mcp-tools/index.vue'),
+      },
     ],
   },
 ];

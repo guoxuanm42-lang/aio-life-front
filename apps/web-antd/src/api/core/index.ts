@@ -12,6 +12,7 @@ export * from './mbti';
 export * from './memo';
 export * from './menu';
 export * from './message';
+export * from './mcp';
 export * from './milestone';
 export * from './performance';
 export * from './sysDictData';
