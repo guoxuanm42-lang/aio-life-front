@@ -74,11 +74,18 @@ const loading = ref(false);
 const saving = ref(false);
 const modalVisible = ref(false);
 const isEditing = ref(false);
+const createMode = ref<'detail' | 'quick'>('quick');
 const defaultColumnId = ref<number>();
 const form = ref<TodoForm>(createEmptyForm());
 const filters = ref<TodoFilters>(loadSavedFilters());
 
-const modalTitle = computed(() => (isEditing.value ? '编辑代办' : '新增代办'));
+const isQuickCreate = computed(
+  () => !isEditing.value && createMode.value === 'quick',
+);
+const modalTitle = computed(() => {
+  if (isEditing.value) return '编辑代办';
+  return isQuickCreate.value ? '新增代办' : '详细编辑';
+});
 const hasActiveFilters = computed(
   () =>
     filters.value.isCompleted !== 0 ||
@@ -359,6 +366,7 @@ async function setQuickDateRange(range: QuickDateRange) {
 
 function openCreateModal() {
   isEditing.value = false;
+  createMode.value = 'quick';
   form.value = {
     ...createEmptyForm(),
     columnId: defaultColumnId.value,
@@ -370,6 +378,7 @@ function openEditModal(record: Record<string, any>) {
   const task = record as Task;
   const selectedType = getTaskType(task.typeId);
   isEditing.value = true;
+  createMode.value = 'detail';
   form.value = {
     columnId: task.columnId,
     content: task.content,
@@ -393,16 +402,19 @@ async function handleSave() {
 
   saving.value = true;
   try {
+    const isQuick = isQuickCreate.value;
+    const createStartTime = dayjs();
+    const createEndTime = createStartTime.endOf('day');
     const payload = {
       columnId: form.value.columnId ?? defaultColumnId.value,
       content,
-      detail: form.value.detail?.trim() ?? '',
-      dueDate: formatDateTimeForSubmit(form.value.endTime),
-      endTime: formatDateTimeForSubmit(form.value.endTime),
+      detail: isQuick ? '' : (form.value.detail?.trim() ?? ''),
+      dueDate: formatDateTimeForSubmit(isQuick ? createEndTime : form.value.endTime),
+      endTime: formatDateTimeForSubmit(isQuick ? createEndTime : form.value.endTime),
       id: form.value.id,
-      isCompleted: form.value.isCompleted,
-      startTime: formatDateTimeForSubmit(form.value.startTime),
-      typeId: form.value.typeId ?? 0,
+      isCompleted: isQuick ? 0 : form.value.isCompleted,
+      startTime: formatDateTimeForSubmit(isQuick ? createStartTime : form.value.startTime),
+      typeId: isQuick ? 0 : (form.value.typeId ?? 0),
     };
 
     if (isEditing.value) {
@@ -420,6 +432,18 @@ async function handleSave() {
   } finally {
     saving.value = false;
   }
+}
+
+function handleQuickCreateEnter(event: KeyboardEvent) {
+  if (!isQuickCreate.value) {
+    return;
+  }
+  event.preventDefault();
+  void handleSave();
+}
+
+function openCreateDetailMode() {
+  createMode.value = 'detail';
 }
 
 async function handleCompleteChange(record: Record<string, any>, checked: boolean) {
@@ -629,86 +653,107 @@ async function handleDelete(record: Record<string, any>) {
       v-model:open="modalVisible"
       :confirm-loading="saving"
       :title="modalTitle"
-      ok-text="确定"
+      :ok-text="isQuickCreate ? '保存' : '确定'"
       cancel-text="取消"
-      width="640px"
+      :width="isQuickCreate ? '520px' : '640px'"
+      :wrap-class-name="isQuickCreate ? 'todo-quick-create-modal-wrap' : ''"
       @ok="handleSave"
     >
-      <div class="todo-form">
-        <label class="form-item">
-          <span class="form-label">代办内容</span>
-          <AInput
-            v-model:value="form.content"
-            placeholder="请输入代办内容"
-            auto-focus
-          />
-        </label>
+      <div class="todo-form" :class="{ 'is-quick-create': isQuickCreate }">
+        <template v-if="isQuickCreate">
+          <label class="form-item quick-create-content">
+            <span class="form-label">代办内容</span>
+            <AInput
+              v-model:value="form.content"
+              placeholder="请输入代办内容"
+              auto-focus
+              size="large"
+              @press-enter="handleQuickCreateEnter"
+            />
+          </label>
+          <div class="quick-create-actions">
+            <AButton type="link" @click="openCreateDetailMode">
+              详细编辑
+            </AButton>
+          </div>
+        </template>
 
-        <div class="date-grid">
+        <template v-else>
           <label class="form-item">
-            <span class="form-label">开始时间</span>
-            <ADatePicker
-              v-model:value="form.startTime"
-              show-time
-              style="width: 100%"
+            <span class="form-label">代办内容</span>
+            <AInput
+              v-model:value="form.content"
+              placeholder="请输入代办内容"
+              auto-focus
             />
           </label>
 
+          <div class="date-grid">
+            <label class="form-item">
+              <span class="form-label">开始时间</span>
+              <ADatePicker
+                v-model:value="form.startTime"
+                show-time
+                style="width: 100%"
+              />
+            </label>
+
+            <label class="form-item">
+              <span class="form-label">结束时间</span>
+              <ADatePicker
+                v-model:value="form.endTime"
+                show-time
+                style="width: 100%"
+              />
+            </label>
+          </div>
+
+          <div class="date-grid">
+            <label class="form-item">
+              <span class="form-label">主题</span>
+              <ASelect
+                v-model:value="form.theme"
+                allow-clear
+                placeholder="选择主题以筛选类型"
+                @change="handleFormThemeChange"
+              >
+                <ASelectOption
+                  v-for="item in themeOptions"
+                  :key="item.value"
+                  :value="item.value"
+                >
+                  {{ item.label }}
+                </ASelectOption>
+              </ASelect>
+            </label>
+
+            <label class="form-item">
+              <span class="form-label">类型</span>
+              <ASelect
+                v-model:value="form.typeId"
+                allow-clear
+                placeholder="未分类"
+              >
+                <ASelectOption
+                  v-for="item in formFilteredTaskTypes"
+                  :key="item.id"
+                  :value="item.id"
+                >
+                  {{ item.name }}
+                </ASelectOption>
+              </ASelect>
+            </label>
+          </div>
+
           <label class="form-item">
-            <span class="form-label">结束时间</span>
-            <ADatePicker
-              v-model:value="form.endTime"
-              show-time
-              style="width: 100%"
+            <span class="form-label">备注</span>
+            <ATextarea
+              v-model:value="form.detail"
+              placeholder="可以补充说明"
+              :rows="4"
             />
           </label>
-        </div>
-
-        <div class="date-grid">
-          <label class="form-item">
-            <span class="form-label">主题</span>
-            <ASelect
-              v-model:value="form.theme"
-              allow-clear
-              placeholder="选择主题以筛选类型"
-              @change="handleFormThemeChange"
-            >
-              <ASelectOption
-                v-for="item in themeOptions"
-                :key="item.value"
-                :value="item.value"
-              >
-                {{ item.label }}
-              </ASelectOption>
-            </ASelect>
-          </label>
-
-          <label class="form-item">
-            <span class="form-label">类型</span>
-            <ASelect
-              v-model:value="form.typeId"
-              allow-clear
-              placeholder="未分类"
-            >
-              <ASelectOption
-                v-for="item in formFilteredTaskTypes"
-                :key="item.id"
-                :value="item.id"
-              >
-                {{ item.name }}
-              </ASelectOption>
-            </ASelect>
-          </label>
-        </div>
-
-        <label class="form-item">
-          <span class="form-label">备注</span>
-          <ATextarea
-            v-model:value="form.detail"
-            placeholder="可以补充说明"
-            :rows="4"
-          />
-        </label>
+        </template>
       </div>
     </AModal>
   </div>
@@ -953,6 +998,11 @@ async function handleDelete(record: Record<string, any>) {
   padding-top: 8px;
 }
 
+.todo-form.is-quick-create {
+  gap: 20px;
+  padding: 12px 0 4px;
+}
+
 .form-item {
   display: flex;
   flex-direction: column;
@@ -962,6 +1012,31 @@ async function handleDelete(record: Record<string, any>) {
 .form-label {
   font-size: 13px;
   color: #4b5563;
+}
+
+.quick-create-content .form-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: #1f2937;
+}
+
+.quick-create-content :deep(.ant-input) {
+  min-height: 52px;
+  padding: 10px 14px;
+  font-size: 18px;
+  border-radius: 12px;
+}
+
+.quick-create-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: -8px;
+}
+
+.quick-create-actions :deep(.ant-btn) {
+  height: 36px;
+  padding: 0;
+  font-weight: 700;
 }
 
 .date-grid {
@@ -1039,6 +1114,68 @@ async function handleDelete(record: Record<string, any>) {
     width: 64px;
     height: 64px;
     font-size: 28px;
+  }
+
+  :global(.todo-quick-create-modal-wrap) {
+    overflow: hidden;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal) {
+    top: auto;
+    width: 100vw !important;
+    max-width: none;
+    padding-bottom: 0;
+    margin: 0;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-content) {
+    min-height: 42dvh;
+    padding: 22px 18px 0;
+    border-radius: 22px 22px 0 0;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-header) {
+    margin-bottom: 18px;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-title) {
+    font-size: 20px;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-body) {
+    padding-bottom: 12px;
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-footer) {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    gap: 12px;
+    padding: 14px 0 18px;
+    margin-top: 18px;
+    background: var(--ant-color-bg-elevated, #fff);
+  }
+
+  :global(.todo-quick-create-modal-wrap .ant-modal-footer .ant-btn) {
+    flex: 1;
+    min-height: 44px;
+    margin-inline-start: 0;
+    font-size: 16px;
+    border-radius: 999px;
+  }
+
+  .todo-form.is-quick-create {
+    padding-top: 2px;
+  }
+
+  .quick-create-content :deep(.ant-input) {
+    min-height: 56px;
+    font-size: 18px;
+  }
+
+  .quick-create-actions :deep(.ant-btn) {
+    min-height: 40px;
+    font-size: 15px;
   }
 }
 </style>
