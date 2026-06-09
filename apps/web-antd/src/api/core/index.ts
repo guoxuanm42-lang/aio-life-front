@@ -2,6 +2,7 @@ export * from './api-key';
 export * from './auth';
 export * from './bilibili-video';
 export * from './common';
+export * from './csdn';
 export * from './device';
 export * from './exerciseRecord';
 export * from './expense';
