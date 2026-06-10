@@ -2,7 +2,7 @@
 import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { DeleteOutlined, PlusOutlined } from '@ant-design/icons-vue';
+import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { IconifyIcon } from '@vben/icons';
 import {
   Button,
@@ -50,7 +50,14 @@ const statusSelectOptions: Array<{ label: string; value: ThoughtStatusFilter }> 
   { label: '已归档', value: 'archived' },
 ];
 
+const createStatusSelectOptions = statusSelectOptions.filter(
+  (item): item is { label: string; value: ThoughtStatus } =>
+    item.value !== 'all',
+);
+
 const statusFilter = ref<ThoughtStatusFilter>('pending');
+const subjectKeyword = ref('');
+let subjectSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const getThoughtStatusKey = (status: any): ThoughtStatus => {
   const key = String(status ?? '').trim();
@@ -282,7 +289,6 @@ const form = reactive<ThoughtForm>({
 });
 
 const isExtraOpen = ref(false);
-const isContentEditing = ref(false);
 const detailEditingField = ref<null | 'content' | 'subject'>(null);
 const detailSubjectDraft = ref('');
 const detailContentDraft = ref('');
@@ -419,7 +425,6 @@ const openAddModal = () => {
   currentModalCreateTime.value = new Date().toISOString();
   modalMode.value = 'edit';
   isExtraOpen.value = false;
-  isContentEditing.value = false;
   resetDetailInlineEdit();
   showModal.value = true;
 };
@@ -452,7 +457,6 @@ const openEditModal = (id: number | string) => {
     currentModalCreateTime.value = thought.createTime;
     modalMode.value = 'view';
     isExtraOpen.value = false;
-    isContentEditing.value = false;
     resetDetailInlineEdit();
     showModal.value = true;
   }
@@ -461,7 +465,6 @@ const openEditModal = (id: number | string) => {
 const closeCardModal = () => {
   showModal.value = false;
   isExtraOpen.value = false;
-  isContentEditing.value = false;
   modalMode.value = 'view';
   resetDetailInlineEdit();
 };
@@ -469,7 +472,6 @@ const closeCardModal = () => {
 const enterEditMode = () => {
   modalMode.value = 'edit';
   isExtraOpen.value = currentEditId.value !== null;
-  isContentEditing.value = false;
   resetDetailInlineEdit();
 };
 
@@ -584,6 +586,7 @@ const loadThoughts = async () => {
   const loadSeq = ++latestLoadSeq;
   const currentThemeKey = activeCategoryThemeKey.value;
   const currentStatus = statusFilter.value;
+  const currentSubjectKeyword = subjectKeyword.value.trim();
   loading.value = true;
   try {
     const condition: Record<string, any> = {};
@@ -592,6 +595,9 @@ const loadThoughts = async () => {
     }
     if (currentStatus !== 'all') {
       condition.status = currentStatus;
+    }
+    if (currentSubjectKeyword) {
+      condition.subject = currentSubjectKeyword;
     }
     const res = await queryThink({ page: 1, pageSize: 50, condition });
     if (loadSeq !== latestLoadSeq) {
@@ -640,6 +646,14 @@ const loadThoughts = async () => {
   }
 };
 
+const handleSubjectSearch = async () => {
+  if (subjectSearchTimer) {
+    clearTimeout(subjectSearchTimer);
+  }
+  subjectKeyword.value = subjectKeyword.value.trim();
+  await loadThoughts();
+};
+
 onMounted(async () => {
   await loadThoughts();
 });
@@ -655,6 +669,18 @@ watch(
   () => statusFilter.value,
   async () => {
     await loadThoughts();
+  },
+);
+
+watch(
+  () => subjectKeyword.value,
+  () => {
+    if (subjectSearchTimer) {
+      clearTimeout(subjectSearchTimer);
+    }
+    subjectSearchTimer = setTimeout(() => {
+      void loadThoughts();
+    }, 300);
   },
 );
 </script>
@@ -673,6 +699,30 @@ watch(
         >
           {{ item.label }}
         </button>
+      </div>
+      <div class="think-subject-search">
+        <Input
+          v-model:value="subjectKeyword"
+          allow-clear
+          class="think-subject-search-input"
+          placeholder="搜索主题内容"
+          @press-enter="handleSubjectSearch"
+        >
+          <template #prefix>
+            <SearchOutlined />
+          </template>
+        </Input>
+        <Button
+          class="think-subject-search-button"
+          type="primary"
+          shape="round"
+          @click="handleSubjectSearch"
+        >
+          <template #icon>
+            <SearchOutlined />
+          </template>
+          搜索
+        </Button>
       </div>
     </div>
     <Spin :spinning="loading">
@@ -765,6 +815,9 @@ watch(
       :destroy-on-close="true"
       width="720px"
       centered
+      :wrap-class-name="
+        !isExistingThoughtEdit ? 'thought-create-modal-wrap' : ''
+      "
       @cancel="closeCardModal"
     >
       <div
@@ -862,6 +915,7 @@ watch(
         v-else
         layout="vertical"
         class="modern-form"
+        :class="{ 'is-create-form': !isExistingThoughtEdit }"
         :style="{
           '--thought-accent': formAccent.accent,
           '--thought-accent-rgb': formAccent.rgb,
@@ -879,7 +933,9 @@ watch(
         <Form.Item label="状态" required>
           <div class="modal-status-capsule">
             <button
-              v-for="item in statusSelectOptions"
+              v-for="item in isExistingThoughtEdit
+                ? statusSelectOptions
+                : createStatusSelectOptions"
               :key="item.value"
               type="button"
               class="modal-capsule-item"
@@ -910,16 +966,26 @@ watch(
           </div>
         </Form.Item>
 
-        <Form.Item v-if="!isExistingThoughtEdit" label="闪念内容">
-          <div v-if="!isContentEditing" class="modal-content-preview">
-            <div class="modal-content-preview-text">
-              {{ form.content?.trim() ? form.content.trim() : '—' }}
-            </div>
-            <Button type="link" class="modal-content-toggle" @click="isContentEditing = true">
-              展开编辑
-            </Button>
+        <div class="modal-divider"></div>
+
+        <div class="modal-extra-toggle" @click="isExtraOpen = !isExtraOpen">
+          <div class="modal-extra-title">
+            {{ isExistingThoughtEdit ? '扩展信息' : '补充内容与事件' }}
           </div>
-          <div v-else class="modal-content-editor">
+          <div class="modal-extra-meta">
+            内容 {{ contentCharCount }}字 · 事件 {{ eventCount }}个
+          </div>
+          <div class="modal-extra-arrow" :class="{ 'is-open': isExtraOpen }">
+            ˅
+          </div>
+        </div>
+
+        <div v-if="isExtraOpen" class="modal-extra-body">
+          <Form.Item
+            v-if="!isExistingThoughtEdit"
+            label="闪念内容"
+            class="modal-content-form-item"
+          >
             <Input.TextArea
               v-model:value="form.content"
               :auto-size="{ minRows: 4, maxRows: 10 }"
@@ -927,23 +993,7 @@ watch(
               class="content-textarea"
               :bordered="false"
             />
-            <Button type="link" class="modal-content-toggle" @click="isContentEditing = false">
-              收起编辑
-            </Button>
-          </div>
-        </Form.Item>
-
-        <div class="modal-divider"></div>
-
-        <div class="modal-extra-toggle" @click="isExtraOpen = !isExtraOpen">
-          <div class="modal-extra-title">扩展信息</div>
-          <div class="modal-extra-meta">
-            内容 {{ contentCharCount }}字 · 事件 {{ eventCount }}个
-          </div>
-          <div class="modal-extra-arrow" :class="{ 'is-open': isExtraOpen }">˅</div>
-        </div>
-
-        <div v-if="isExtraOpen" class="modal-extra-body">
+          </Form.Item>
           <div class="events-section">
             <div class="events-header">
               <span class="events-title">关联事件流</span>
@@ -993,7 +1043,13 @@ watch(
                 删除
               </Button>
             </Popconfirm>
-            <Button type="text" @click="isExtraOpen = !isExtraOpen">更多操作</Button>
+            <Button
+              v-if="isExistingThoughtEdit"
+              type="text"
+              @click="isExtraOpen = !isExtraOpen"
+            >
+              更多操作
+            </Button>
           </div>
           <div class="modal-footer-right">
             <Button @click="closeCardModal" shape="round">取消</Button>
@@ -1016,6 +1072,7 @@ watch(
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 14px;
 }
@@ -1065,6 +1122,42 @@ watch(
     0 8px 16px rgb(0 0 0 / 0.08),
     inset 0 1px 0 rgb(255 255 255 / 0.9);
   transform: translateY(-1px);
+}
+
+.think-subject-search {
+  display: flex;
+  align-items: center;
+  width: min(420px, 100%);
+  gap: 8px;
+}
+
+.think-subject-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 36px;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.78);
+  border-color: rgb(0 0 0 / 0.06);
+  box-shadow:
+    0 10px 22px rgb(0 0 0 / 0.05),
+    inset 0 1px 0 rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+}
+
+.think-subject-search-input :deep(.ant-input) {
+  background: transparent;
+}
+
+.think-subject-search-input :deep(.ant-input-prefix) {
+  color: rgb(0 0 0 / 0.42);
+}
+
+.think-subject-search-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
 }
 
 .think-back {
@@ -1196,6 +1289,21 @@ watch(
 @media (max-width: 768px) {
   .think-page {
     padding: 12px;
+  }
+
+  .think-status-capsule {
+    max-width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
+  }
+
+  .think-status-capsule::-webkit-scrollbar {
+    display: none;
+  }
+
+  .think-subject-search {
+    width: 100%;
   }
 
   .cards-grid {
@@ -1945,6 +2053,20 @@ watch(
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
+.is-create-form :deep(.ant-form-item-label > label) {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.is-create-form :deep(.ant-input) {
+  min-height: 44px;
+  font-size: 16px;
+}
+
+.is-create-form .modal-capsule-item {
+  min-height: 44px;
+}
+
 .modal-type-capsule {
   display: flex;
   flex-wrap: nowrap;
@@ -2010,41 +2132,6 @@ watch(
   transform: translateY(-1px);
 }
 
-.modal-content-preview {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.modal-content-preview-text {
-  flex: 1;
-  min-width: 0;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgb(128 128 128 / 4%);
-  font-size: 14px;
-  line-height: 1.6;
-  color: rgb(0 0 0 / 0.72);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  word-break: break-word;
-}
-
-.modal-content-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.modal-content-toggle {
-  padding: 0;
-  height: 32px;
-  font-weight: 700;
-}
-
 .modal-divider {
   margin: 4px 0 10px;
   height: 1px;
@@ -2091,6 +2178,10 @@ watch(
 
 .modal-extra-body {
   margin-top: 10px;
+}
+
+.modal-content-form-item {
+  margin-bottom: 14px;
 }
 
 .modern-form .content-textarea {
@@ -2173,6 +2264,121 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+@media (max-width: 768px) {
+  :global(.thought-create-modal-wrap) {
+    overflow: hidden;
+  }
+
+  :global(.thought-create-modal-wrap .ant-modal) {
+    top: 0;
+    width: 100% !important;
+    max-width: none;
+    height: 100%;
+    padding-bottom: 0;
+    margin: 0;
+  }
+
+  :global(.thought-create-modal-wrap .ant-modal-content) {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  :global(.thought-create-modal-wrap .ant-modal-header) {
+    flex: 0 0 auto;
+    padding: 18px 16px 12px;
+    margin-bottom: 0;
+  }
+
+  :global(.thought-create-modal-wrap .ant-modal-close) {
+    top: 12px;
+    right: 10px;
+    width: 44px;
+    height: 44px;
+  }
+
+  :global(.thought-create-modal-wrap .ant-modal-body) {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 12px 16px 0;
+    overflow-y: auto;
+  }
+
+  .is-create-form {
+    display: flex;
+    flex-direction: column;
+    min-height: 100%;
+  }
+
+  .is-create-form :deep(.ant-form-item) {
+    margin-bottom: 18px;
+  }
+
+  .is-create-form :deep(.ant-form-item-label) {
+    padding-bottom: 8px;
+  }
+
+  .is-create-form .modal-status-capsule {
+    display: flex;
+    flex-wrap: wrap;
+    width: 100%;
+    gap: 6px;
+    padding: 6px;
+    border-radius: 16px;
+  }
+
+  .is-create-form .modal-status-capsule .modal-capsule-item {
+    flex: 1 1 calc(33.333% - 6px);
+    padding: 8px 10px;
+  }
+
+  .is-create-form .modal-type-capsule {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    gap: 8px;
+    overflow: visible;
+  }
+
+  .is-create-form .modal-type-capsule .modal-capsule-item {
+    width: 100%;
+    padding: 8px 10px;
+    font-size: 14px;
+  }
+
+  .is-create-form .modal-divider {
+    margin-top: 0;
+  }
+
+  .is-create-form .modal-extra-toggle {
+    min-height: 48px;
+  }
+
+  .is-create-form .modal-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+    margin-top: auto;
+    padding: 14px 0 16px;
+    background: var(--ant-color-bg-elevated, #fff);
+  }
+
+  .is-create-form .modal-footer-left:empty {
+    display: none;
+  }
+
+  .is-create-form .modal-footer-right {
+    width: 100%;
+  }
+
+  .is-create-form .modal-footer-right :deep(.ant-btn) {
+    flex: 1;
+    min-height: 44px;
+  }
 }
 
 /* 隐藏原生 textarea 滚动条但保留功能 */

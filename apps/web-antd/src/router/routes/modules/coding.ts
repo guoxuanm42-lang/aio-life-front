@@ -3,13 +3,36 @@ import type { RouteRecordRaw } from 'vue-router';
 const routes: RouteRecordRaw[] = [
   {
     meta: {
-      icon: 'lucide:code-2',
+      icon: 'lucide:wrench',
       keepAlive: true,
       order: 3,
-      title: '编程看板',
+      title: '研发管理',
     },
     name: 'Coding',
     path: '/coding',
+    redirect: '/coding/mcp-tools',
+    children: [
+      {
+        meta: {
+          icon: 'lucide:box',
+          title: 'MCP 工具列表',
+        },
+        name: 'McpTools',
+        path: '/coding/mcp-tools',
+        component: () => import('#/views/coding/mcp-tools/index.vue'),
+      },
+    ],
+  },
+  {
+    meta: {
+      icon: 'lucide:code-2',
+      keepAlive: true,
+      order: 4,
+      title: '编程看板',
+    },
+    name: 'CodingDashboard',
+    path: '/coding-dashboard',
+    redirect: '/coding/github',
     children: [
       {
         meta: {
@@ -29,6 +52,15 @@ const routes: RouteRecordRaw[] = [
         name: 'LeetCode',
         path: '/coding/leetcode',
         component: () => import('#/views/coding/leetcode/index.vue'),
+      },
+      {
+        meta: {
+          icon: 'simple-icons:csdn',
+          title: 'CSDN',
+        },
+        name: 'Csdn',
+        path: '/coding/csdn',
+        component: () => import('#/views/coding/csdn/index.vue'),
       },
     ],
   },
