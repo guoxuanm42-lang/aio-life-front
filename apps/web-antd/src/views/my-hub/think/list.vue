@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, toRaw, watch } from 'vue';
+import type {
+  ThoughtStatisticsDistributionItem,
+  ThoughtStatisticsOverview,
+  ThoughtStatisticsTrendOverview,
+  ThoughtStatisticsTrendReq,
+} from '#/api/core/think';
+import type { EchartsUIType } from '@vben/plugins/echarts';
+
+import { computed, nextTick, onMounted, reactive, ref, toRaw, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
 import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons-vue';
 import { IconifyIcon } from '@vben/icons';
+import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import {
   Button,
   Card,
@@ -13,11 +22,16 @@ import {
   message,
   Modal,
   Popconfirm,
+  Select,
   Spin,
+  TabPane,
+  Tabs,
 } from 'ant-design-vue';
 
 import {
   deleteData as deleteThink,
+  getThoughtStatisticsOverview,
+  getThoughtStatisticsTrend,
   query as queryThink,
   save as saveThink,
   update as updateThink,
@@ -144,6 +158,34 @@ const categoryPresets: Record<
   },
 };
 
+const trendRangeOptions = [
+  { label: '最近 7 天', value: '7d' },
+  { label: '最近 30 天', value: '30d' },
+  { label: '本月', value: 'month' },
+  { label: '本年', value: 'year' },
+];
+
+const trendGroupOptions = [
+  { label: '按日', value: 'day' },
+  { label: '按周', value: 'week' },
+  { label: '按月', value: 'month' },
+];
+
+const trendCategoryOptions = [
+  { label: '全部分类', value: '' },
+  ...Object.values(categoryPresets).map((item) => ({
+    label: item.title,
+    value: item.themeKey,
+  })),
+];
+
+const trendStatusOptions = [
+  { label: '全部状态', value: '' },
+  ...statusSelectOptions
+    .filter((item) => item.value !== 'all')
+    .map((item) => ({ label: item.label, value: item.value })),
+];
+
 const activeCategoryKey = computed<CategoryKey>(() => {
   const seg = route.path.split('/')[2] ?? 'all';
   const key = seg.trim();
@@ -261,6 +303,29 @@ const thoughts = ref<Thought[]>([]);
 const loading = ref(false);
 let latestLoadSeq = 0;
 
+const activeTab = ref<'list' | 'statistics'>('list');
+const statisticsLoading = ref(false);
+const statisticsData = ref<ThoughtStatisticsOverview | null>(null);
+const trendLoading = ref(false);
+const trendData = ref<ThoughtStatisticsTrendOverview | null>(null);
+const statusChartRef = ref<EchartsUIType>();
+const categoryChartRef = ref<EchartsUIType>();
+const trendChartRef = ref<EchartsUIType>();
+const categoryTrendChartRef = ref<EchartsUIType>();
+const activityChartRef = ref<EchartsUIType>();
+const { renderEcharts: renderStatusChart } = useEcharts(statusChartRef);
+const { renderEcharts: renderCategoryChart } = useEcharts(categoryChartRef);
+const { renderEcharts: renderTrendChart } = useEcharts(trendChartRef);
+const { renderEcharts: renderCategoryTrendChart } = useEcharts(categoryTrendChartRef);
+const { renderEcharts: renderActivityChart } = useEcharts(activityChartRef);
+
+const trendFilters = reactive<Required<ThoughtStatisticsTrendReq>>({
+  range: '30d',
+  groupBy: 'day',
+  category: '',
+  status: '',
+});
+
 const showModal = ref(false);
 const currentEditId = ref<null | number | string>(null);
 const currentModalCreateTime = ref('');
@@ -306,6 +371,79 @@ const formAccent = computed(() => {
   const key = (form.themeKey || 'blue') as ThemeKey;
   return getThemePreset(key);
 });
+
+const emptyStatisticsSummary = {
+  totalCount: 0,
+  weekNewCount: 0,
+  monthNewCount: 0,
+  pendingCount: 0,
+  doneCount: 0,
+  archivedCount: 0,
+  conversionRate: 0,
+  backlogCount: 0,
+  highValueCount: 0,
+};
+
+const statisticsSummary = computed(
+  () => statisticsData.value?.summary ?? emptyStatisticsSummary,
+);
+
+const primaryStatisticsCards = computed(() => [
+  {
+    label: '总闪念数',
+    value: statisticsSummary.value.totalCount,
+    hint: '累计记录',
+    tone: 'blue',
+  },
+  {
+    label: '待处理',
+    value: statisticsSummary.value.pendingCount,
+    hint: '需要关注',
+    tone: 'amber',
+  },
+  {
+    label: '本月新增',
+    value: statisticsSummary.value.monthNewCount,
+    hint: '本月活跃',
+    tone: 'green',
+  },
+  {
+    label: '转化率',
+    value: statisticsSummary.value.conversionRate,
+    suffix: '%',
+    hint: '完成占比',
+    tone: 'purple',
+  },
+]);
+
+const secondaryStatisticsItems = computed(() => [
+  { label: '本周新增', value: statisticsSummary.value.weekNewCount },
+  { label: '已完成', value: statisticsSummary.value.doneCount },
+  { label: '已归档', value: statisticsSummary.value.archivedCount },
+  { label: '积压数', value: statisticsSummary.value.backlogCount },
+]);
+
+const hasStatusDistributionData = computed(() =>
+  (statisticsData.value?.statusDistribution ?? []).some((item) => item.count > 0),
+);
+
+const hasCategoryDistributionData = computed(() =>
+  (statisticsData.value?.categoryDistribution ?? []).some((item) => item.count > 0),
+);
+
+const hasTrendData = computed(() =>
+  (trendData.value?.trend ?? []).some((item) => item.count > 0),
+);
+
+const hasCategoryTrendData = computed(() =>
+  (trendData.value?.categoryTrends ?? []).some((category) =>
+    category.points.some((point) => point.count > 0),
+  ),
+);
+
+const hasActivityData = computed(() =>
+  (trendData.value?.activity ?? []).some((item) => item.count > 0),
+);
 
 // 计算属性
 const modalTitle = computed(() => {
@@ -511,6 +649,7 @@ const saveDetailInlineField = async (field: 'content' | 'subject') => {
     await updateThink(toRaw(payload));
     resetDetailInlineEdit();
     await loadThoughts();
+    await refreshThoughtStatisticsAfterMutation();
     message.success('保存成功');
   } catch {
     form.subject = oldSubject;
@@ -551,6 +690,7 @@ const saveCard = async () => {
     }
     closeCardModal();
     await loadThoughts();
+    await refreshThoughtStatisticsAfterMutation();
     message.success('保存成功');
   } catch {
     message.error('保存失败');
@@ -561,6 +701,7 @@ const handleDelete = async (id: number | string) => {
   try {
     await deleteThink({ idList: [id] });
     thoughts.value = thoughts.value.filter((t) => t.id !== id);
+    await refreshThoughtStatisticsAfterMutation();
     message.success('删除成功');
     closeCardModal();
   } catch {
@@ -579,6 +720,229 @@ const formatDate = (dateString: string) => {
   const minutes = padZero(date.getMinutes());
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const toSafeCount = (value: unknown) => {
+  const count = Number(value ?? 0);
+  return Number.isFinite(count) ? count : 0;
+};
+
+const buildDistributionPieOption = (
+  title: string,
+  data: ThoughtStatisticsDistributionItem[],
+) => ({
+  color: ['#1677ff', '#22c55e', '#2dd4bf', '#a855f7', '#ec4899', '#6366f1', '#f97316', '#94a3b8'],
+  tooltip: {
+    trigger: 'item',
+    formatter: (params: any) =>
+      `${params.name}<br/>数量：${params.value}<br/>占比：${params.data.percent}%`,
+  },
+  legend: {
+    bottom: 0,
+    type: 'scroll',
+    itemWidth: 10,
+    itemHeight: 10,
+    textStyle: {
+      color: '#64748b',
+      fontSize: 12,
+    },
+  },
+  series: [
+    {
+      name: title,
+      type: 'pie',
+      radius: ['45%', '72%'],
+      center: ['50%', '44%'],
+      avoidLabelOverlap: true,
+      itemStyle: {
+        borderColor: '#fff',
+        borderRadius: 6,
+        borderWidth: 3,
+      },
+      label: {
+        formatter: '{b}\n{d}%',
+      },
+      data: data
+        .filter((item) => item.count > 0)
+        .map((item) => ({
+          name: item.name,
+          value: item.count,
+          percent: item.percent,
+        })),
+    },
+  ],
+});
+
+const buildTrendLineOption = () => {
+  const points = trendData.value?.trend ?? [];
+  return {
+    color: ['#1677ff'],
+    grid: { bottom: 36, left: 38, right: 20, top: 28 },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: points.map((item) => item.date),
+      axisLabel: { color: '#64748b' },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
+    },
+    series: [
+      {
+        name: '新增闪念',
+        type: 'line',
+        smooth: true,
+        symbolSize: 7,
+        areaStyle: { color: 'rgba(22, 119, 255, 0.12)' },
+        data: points.map((item) => toSafeCount(item.count)),
+      },
+    ],
+  };
+};
+
+const buildCategoryTrendBarOption = () => {
+  const categoryTrends = trendData.value?.categoryTrends ?? [];
+  const categories = categoryTrends.map((item) => item.categoryName);
+  const values = categoryTrends.map((item) =>
+    item.points.reduce((sum, point) => sum + toSafeCount(point.count), 0),
+  );
+  return {
+    color: ['#22c55e'],
+    grid: { bottom: 36, left: 38, right: 20, top: 28 },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: categories,
+      axisLabel: { color: '#64748b' },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
+    },
+    series: [
+      {
+        name: '分类新增',
+        type: 'bar',
+        barMaxWidth: 34,
+        itemStyle: { borderRadius: [8, 8, 0, 0] },
+        data: values,
+      },
+    ],
+  };
+};
+
+const buildActivityBarOption = () => {
+  const points = trendData.value?.activity ?? [];
+  return {
+    color: ['#a855f7'],
+    grid: { bottom: 36, left: 38, right: 20, top: 28 },
+    tooltip: { trigger: 'axis' },
+    xAxis: {
+      type: 'category',
+      data: points.map((item) => item.date),
+      axisLabel: { color: '#64748b' },
+    },
+    yAxis: {
+      type: 'value',
+      minInterval: 1,
+      axisLabel: { color: '#64748b' },
+      splitLine: { lineStyle: { color: '#e2e8f0' } },
+    },
+    series: [
+      {
+        name: '活跃度',
+        type: 'bar',
+        barMaxWidth: 18,
+        itemStyle: { borderRadius: [8, 8, 0, 0] },
+        data: points.map((item) => toSafeCount(item.count)),
+      },
+    ],
+  };
+};
+
+const renderStatisticsCharts = async () => {
+  const data = statisticsData.value;
+  if (!data) return;
+  await nextTick();
+  if (hasStatusDistributionData.value) {
+    renderStatusChart(
+      buildDistributionPieOption('状态分布', data.statusDistribution) as any,
+    );
+  }
+  if (hasCategoryDistributionData.value) {
+    renderCategoryChart(
+      buildDistributionPieOption('分类分布', data.categoryDistribution) as any,
+    );
+  }
+};
+
+const renderTrendCharts = async () => {
+  const data = trendData.value;
+  if (!data) return;
+  await nextTick();
+  if (hasTrendData.value) {
+    renderTrendChart(buildTrendLineOption() as any);
+  }
+  if (hasCategoryTrendData.value) {
+    renderCategoryTrendChart(buildCategoryTrendBarOption() as any);
+  }
+  if (hasActivityData.value) {
+    renderActivityChart(buildActivityBarOption() as any);
+  }
+};
+
+const loadThoughtStatistics = async () => {
+  statisticsLoading.value = true;
+  try {
+    statisticsData.value = await getThoughtStatisticsOverview();
+    await renderStatisticsCharts();
+  } catch {
+    message.error('统计数据加载失败');
+  } finally {
+    statisticsLoading.value = false;
+  }
+};
+
+const loadThoughtTrend = async () => {
+  trendLoading.value = true;
+  try {
+    trendData.value = await getThoughtStatisticsTrend({ ...trendFilters });
+    await renderTrendCharts();
+  } catch {
+    message.error('趋势数据加载失败');
+  } finally {
+    trendLoading.value = false;
+  }
+};
+
+const loadStatisticsTabData = async () => {
+  if (!statisticsData.value) {
+    await loadThoughtStatistics();
+  } else {
+    await renderStatisticsCharts();
+  }
+  if (!trendData.value) {
+    await loadThoughtTrend();
+  } else {
+    await renderTrendCharts();
+  }
+};
+
+const invalidateThoughtStatistics = () => {
+  statisticsData.value = null;
+  trendData.value = null;
+};
+
+const refreshThoughtStatisticsAfterMutation = async () => {
+  invalidateThoughtStatistics();
+  if (activeTab.value === 'statistics') {
+    await loadStatisticsTabData();
+  }
 };
 
 // 生命周期
@@ -683,10 +1047,30 @@ watch(
     }, 300);
   },
 );
+
+watch(
+  () => activeTab.value,
+  async (tab) => {
+    if (tab !== 'statistics') return;
+    await loadStatisticsTabData();
+  },
+);
+
+watch(
+  () => ({ ...trendFilters }),
+  async () => {
+    trendData.value = null;
+    if (activeTab.value === 'statistics') {
+      await loadThoughtTrend();
+    }
+  },
+);
 </script>
 
 <template>
   <div class="think-page">
+    <Tabs v-model:active-key="activeTab" class="think-content-tabs">
+      <TabPane key="list" tab="记录列表">
     <div class="think-header">
       <div class="think-status-capsule">
         <button
@@ -805,7 +1189,146 @@ watch(
       </div>
     </Spin>
 
-    <GlobalFloatBtn @click="openAddModal" />
+      </TabPane>
+      <TabPane key="statistics" tab="统计洞察">
+        <Spin :spinning="statisticsLoading">
+          <div class="thought-statistics-panel">
+            <div class="thought-statistics-core">
+              <Card
+                v-for="item in primaryStatisticsCards"
+                :key="item.label"
+                :bordered="false"
+                class="thought-primary-stat-card"
+                :data-tone="item.tone"
+              >
+                <div class="thought-primary-stat-card-label">{{ item.label }}</div>
+                <div class="thought-primary-stat-card-value">
+                  <span>{{ item.value }}</span>
+                  <em v-if="item.suffix">{{ item.suffix }}</em>
+                </div>
+                <div class="thought-primary-stat-card-hint">{{ item.hint }}</div>
+              </Card>
+            </div>
+
+            <div class="thought-secondary-stat-strip">
+              <div
+                v-for="item in secondaryStatisticsItems"
+                :key="item.label"
+                class="thought-secondary-stat-item"
+              >
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+
+            <div class="thought-analysis-section">
+              <div class="thought-analysis-title">分布分析</div>
+              <div class="thought-chart-grid">
+                <Card title="状态分布图" :bordered="false" class="thought-chart-card">
+                  <div class="thought-chart-body">
+                    <EchartsUI ref="statusChartRef" height="280px" />
+                    <Empty
+                      v-if="!hasStatusDistributionData"
+                      class="thought-chart-empty"
+                      description="暂无状态数据"
+                    />
+                  </div>
+                </Card>
+                <Card title="分类分布图" :bordered="false" class="thought-chart-card">
+                  <div class="thought-chart-body">
+                    <EchartsUI ref="categoryChartRef" height="280px" />
+                    <Empty
+                      v-if="!hasCategoryDistributionData"
+                      class="thought-chart-empty"
+                      description="暂无分类数据"
+                    />
+                  </div>
+                </Card>
+              </div>
+            </div>
+
+            <div class="thought-trend-section">
+              <div class="thought-trend-header">
+                <div class="thought-analysis-title">趋势分析</div>
+                <div class="thought-trend-filters">
+                  <Select
+                    v-model:value="trendFilters.range"
+                    :options="trendRangeOptions"
+                    class="thought-trend-select"
+                  />
+                  <Select
+                    v-model:value="trendFilters.groupBy"
+                    :options="trendGroupOptions"
+                    class="thought-trend-select"
+                  />
+                  <Select
+                    v-model:value="trendFilters.category"
+                    :options="trendCategoryOptions"
+                    class="thought-trend-select"
+                  />
+                  <Select
+                    v-model:value="trendFilters.status"
+                    :options="trendStatusOptions"
+                    class="thought-trend-select"
+                  />
+                </div>
+              </div>
+
+              <Spin :spinning="trendLoading">
+                <div
+                  v-if="trendData?.burstDays?.length"
+                  class="thought-burst-strip"
+                >
+                  <span class="thought-burst-label">闪念爆发日</span>
+                  <span
+                    v-for="item in trendData.burstDays"
+                    :key="item.date"
+                    class="thought-burst-item"
+                  >
+                    {{ item.date }}：{{ item.count }} 条
+                  </span>
+                </div>
+
+                <div class="thought-trend-grid">
+                  <Card title="新增趋势" :bordered="false" class="thought-chart-card">
+                    <div class="thought-chart-body">
+                      <EchartsUI ref="trendChartRef" height="280px" />
+                      <Empty
+                        v-if="!hasTrendData"
+                        class="thought-chart-empty"
+                        description="暂无趋势数据"
+                      />
+                    </div>
+                  </Card>
+                  <Card title="分类新增" :bordered="false" class="thought-chart-card">
+                    <div class="thought-chart-body">
+                      <EchartsUI ref="categoryTrendChartRef" height="280px" />
+                      <Empty
+                        v-if="!hasCategoryTrendData"
+                        class="thought-chart-empty"
+                        description="暂无分类趋势数据"
+                      />
+                    </div>
+                  </Card>
+                  <Card title="活跃度" :bordered="false" class="thought-chart-card thought-trend-wide-card">
+                    <div class="thought-chart-body">
+                      <EchartsUI ref="activityChartRef" height="280px" />
+                      <Empty
+                        v-if="!hasActivityData"
+                        class="thought-chart-empty"
+                        description="暂无活跃度数据"
+                      />
+                    </div>
+                  </Card>
+                </div>
+              </Spin>
+            </div>
+          </div>
+        </Spin>
+      </TabPane>
+    </Tabs>
+
+    <GlobalFloatBtn v-if="activeTab === 'list'" @click="openAddModal" />
 
     <Modal
       v-model:open="showModal"
@@ -1068,6 +1591,257 @@ watch(
   margin: 0 auto;
 }
 
+.think-content-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 16px;
+}
+
+.thought-statistics-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.thought-statistics-core {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.thought-primary-stat-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 14px;
+  background:
+    linear-gradient(135deg, rgb(255 255 255 / 0.96), rgb(248 250 252 / 0.9));
+  box-shadow:
+    0 14px 34px rgb(15 23 42 / 0.08),
+    inset 0 1px 0 rgb(255 255 255 / 0.72);
+}
+
+.thought-primary-stat-card::before {
+  content: '';
+  position: absolute;
+  top: 18px;
+  bottom: 18px;
+  left: 0;
+  width: 4px;
+  border-radius: 0 999px 999px 0;
+  background: var(--stat-accent, #1677ff);
+}
+
+.thought-primary-stat-card::after {
+  content: '';
+  position: absolute;
+  right: -36px;
+  bottom: -42px;
+  width: 116px;
+  height: 116px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--stat-accent, #1677ff) 13%, transparent);
+}
+
+.thought-primary-stat-card[data-tone='blue'] {
+  --stat-accent: #1677ff;
+}
+
+.thought-primary-stat-card[data-tone='amber'] {
+  --stat-accent: #f59e0b;
+}
+
+.thought-primary-stat-card[data-tone='green'] {
+  --stat-accent: #22c55e;
+}
+
+.thought-primary-stat-card[data-tone='purple'] {
+  --stat-accent: #a855f7;
+}
+
+.thought-primary-stat-card-label {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 12px;
+  color: rgb(15 23 42 / 0.58);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.thought-primary-stat-card-value {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  margin-bottom: 10px;
+  color: #020617;
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+}
+
+.thought-primary-stat-card-value span {
+  min-width: 0;
+}
+
+.thought-primary-stat-card-value em {
+  color: var(--stat-accent, #1677ff);
+  font-size: 15px;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.thought-primary-stat-card-hint {
+  position: relative;
+  z-index: 1;
+  color: rgb(15 23 42 / 0.45);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.thought-secondary-stat-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 12px;
+  background: rgb(226 232 240 / 0.72);
+}
+
+.thought-secondary-stat-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: rgb(255 255 255 / 0.84);
+}
+
+.thought-secondary-stat-item span {
+  color: rgb(15 23 42 / 0.62);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.thought-secondary-stat-item strong {
+  color: #020617;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.thought-analysis-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.thought-analysis-title {
+  color: #1e293b;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.thought-trend-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+}
+
+.thought-trend-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.thought-trend-filters {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.thought-trend-select {
+  width: 132px;
+}
+
+.thought-burst-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(245 158 11 / 0.2);
+  border-radius: 12px;
+  background: rgb(255 251 235 / 0.86);
+}
+
+.thought-burst-label {
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.thought-burst-item {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgb(245 158 11 / 0.12);
+  color: #78350f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.thought-trend-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.thought-trend-wide-card {
+  grid-column: 1 / -1;
+}
+
+.thought-chart-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.thought-chart-card {
+  min-width: 0;
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.86);
+  box-shadow:
+    0 10px 24px rgb(15 23 42 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.72);
+}
+
+.thought-chart-card :deep(.ant-card-head-title) {
+  font-size: 16px;
+  font-weight: 800;
+}
+
+.thought-chart-body {
+  position: relative;
+  min-height: 280px;
+}
+
+.thought-chart-empty {
+  position: absolute;
+  inset: 0;
+  min-height: 280px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  background: rgb(255 255 255 / 0.86);
+}
+
 .think-header {
   display: flex;
   align-items: center;
@@ -1289,6 +2063,40 @@ watch(
 @media (max-width: 768px) {
   .think-page {
     padding: 12px;
+  }
+
+  .thought-statistics-core {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thought-secondary-stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thought-chart-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .thought-trend-header {
+    align-items: stretch;
+  }
+
+  .thought-trend-filters {
+    justify-content: flex-start;
+    width: 100%;
+  }
+
+  .thought-trend-select {
+    flex: 1 1 calc(50% - 8px);
+    min-width: 128px;
+  }
+
+  .thought-trend-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .thought-trend-wide-card {
+    grid-column: auto;
   }
 
   .think-status-capsule {
@@ -2378,6 +3186,24 @@ watch(
   .is-create-form .modal-footer-right :deep(.ant-btn) {
     flex: 1;
     min-height: 44px;
+  }
+}
+
+@media (max-width: 480px) {
+  .thought-statistics-core {
+    grid-template-columns: 1fr;
+  }
+
+  .thought-secondary-stat-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .thought-primary-stat-card-value {
+    font-size: 30px;
+  }
+
+  .thought-trend-select {
+    flex-basis: 100%;
   }
 }
 
