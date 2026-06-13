@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import type {
+  ThoughtActionDetail,
+  ThoughtEmotionDetail,
+  ThoughtReflectionDetail,
+  ThoughtStatusLog,
   ThoughtStatisticsDistributionItem,
   ThoughtStatisticsOverview,
   ThoughtStatisticsTrendOverview,
   ThoughtStatisticsTrendReq,
+  ThoughtType,
+  ThoughtTypeFilter,
 } from '#/api/core/think';
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
@@ -30,6 +36,7 @@ import {
 
 import {
   deleteData as deleteThink,
+  detail as getThoughtDetail,
   getThoughtStatisticsOverview,
   getThoughtStatisticsTrend,
   query as queryThink,
@@ -37,10 +44,26 @@ import {
   update as updateThink,
 } from '#/api/core/think';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
+import ThinkActionBoard from './ThinkActionBoard.vue';
+import ThinkEmotionJournal from './ThinkEmotionJournal.vue';
+import ThinkReflectionLibrary from './ThinkReflectionLibrary.vue';
+import ThoughtActionEditor from './ThoughtActionEditor.vue';
+import ThoughtEmotionEditor from './ThoughtEmotionEditor.vue';
+import ThoughtReflectionEditor from './ThoughtReflectionEditor.vue';
 
 type ThemeKey = 'blue' | 'cyan' | 'teal' | 'green' | 'purple' | 'indigo' | 'pink' | 'orange';
 type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'shelved' | 'archived';
 type ThoughtStatusFilter = 'all' | ThoughtStatus;
+type ThoughtViewKey = 'action' | 'all' | 'emotion' | 'reflection' | 'statistics';
+type WorkflowActionTone = 'danger' | 'default' | 'primary';
+
+interface WorkflowAction {
+  defaultReason: string;
+  key: string;
+  label: string;
+  targetStatus: ThoughtStatus;
+  tone?: WorkflowActionTone;
+}
 
 const route = useRoute();
 
@@ -64,12 +87,69 @@ const statusSelectOptions: Array<{ label: string; value: ThoughtStatusFilter }> 
   { label: '已归档', value: 'archived' },
 ];
 
-const createStatusSelectOptions = statusSelectOptions.filter(
-  (item): item is { label: string; value: ThoughtStatus } =>
+const thoughtTypeOptions: Array<{ label: string; value: ThoughtTypeFilter }> = [
+  { label: '全部', value: 'all' },
+  { label: '想法行动', value: 'action' },
+  { label: '情绪心情', value: 'emotion' },
+  { label: '复盘沉淀', value: 'reflection' },
+];
+
+const createThoughtTypeOptions = thoughtTypeOptions.filter(
+  (item): item is { label: string; value: ThoughtType } =>
     item.value !== 'all',
 );
 
+const valueLevelOptions = [
+  { label: '普通', value: 'normal' },
+  { label: '有价值', value: 'valuable' },
+  { label: '高价值', value: 'high' },
+];
+
+const archiveTypeOptions = [
+  { label: '经验', value: 'experience' },
+  { label: '教训', value: 'lesson' },
+  { label: '方法', value: 'method' },
+  { label: '灵感', value: 'inspiration' },
+  { label: '决策依据', value: 'decision' },
+];
+
+const lessonTypeOptions = [
+  { label: '经验', value: 'experience' },
+  { label: '教训', value: 'lesson' },
+  { label: '方法', value: 'method' },
+  { label: '决策', value: 'decision' },
+];
+
+const emotionTypeOptions = [
+  { label: '沮丧', value: 'sad' },
+  { label: '生气', value: 'angry' },
+  { label: '焦虑', value: 'anxious' },
+  { label: '压力', value: 'stress' },
+  { label: '开心', value: 'happy' },
+  { label: '兴奋', value: 'excited' },
+  { label: '感动', value: 'moved' },
+  { label: '灵感', value: 'inspired' },
+];
+
+const shelveReasonTagOptions = [
+  { label: '不现实', value: 'unrealistic' },
+  { label: '没时间', value: 'no_time' },
+  { label: '价值不高', value: 'low_value' },
+  { label: '条件不具备', value: 'blocked' },
+  { label: '重复想法', value: 'duplicate' },
+  { label: '其他', value: 'other' },
+];
+
+const restartPolicyOptions = [
+  { label: '不重启', value: 'no' },
+  { label: '以后再看', value: 'later' },
+  { label: '满足条件后重启', value: 'conditional' },
+];
+
+const emotionIntensityOptions = [1, 2, 3, 4, 5];
+
 const statusFilter = ref<ThoughtStatusFilter>('pending');
+const thoughtTypeFilter = ref<ThoughtTypeFilter>('all');
 const subjectKeyword = ref('');
 let subjectSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -94,6 +174,141 @@ const getThoughtStatusLabel = (status: any): string => {
   if (key === 'done') return '已完成';
   if (key === 'shelved') return '已搁置';
   return '已归档';
+};
+
+const getThoughtTypeKey = (thoughtType: any): ThoughtType => {
+  const key = String(thoughtType ?? '').trim();
+  if (key === 'action' || key === 'emotion' || key === 'reflection') {
+    return key;
+  }
+  return 'action';
+};
+
+const getThoughtTypeLabel = (thoughtType: any): string => {
+  const key = getThoughtTypeKey(thoughtType);
+  if (key === 'emotion') return '情绪心情';
+  if (key === 'reflection') return '复盘沉淀';
+  return '想法行动';
+};
+
+const statusLabelMap: Record<ThoughtType, Record<ThoughtStatus, string>> = {
+  action: {
+    pending: '待处理',
+    ongoing: '进行中',
+    done: '已完成',
+    shelved: '已搁置',
+    archived: '已归档',
+  },
+  emotion: {
+    pending: '已记录',
+    ongoing: '待观察',
+    done: '已缓解',
+    shelved: '不再关注',
+    archived: '已沉淀',
+  },
+  reflection: {
+    pending: '待整理',
+    ongoing: '整理中',
+    done: '已沉淀',
+    shelved: '暂不整理',
+    archived: '已归档',
+  },
+};
+
+const thoughtStatusValues: ThoughtStatus[] = [
+  'pending',
+  'ongoing',
+  'done',
+  'shelved',
+  'archived',
+];
+
+const workflowActionMap: Record<ThoughtType, Record<ThoughtStatus, WorkflowAction[]>> = {
+  action: {
+    pending: [
+      { key: 'start', label: '开始处理', targetStatus: 'ongoing', tone: 'primary', defaultReason: '开始处理这个想法行动' },
+      { key: 'done', label: '标记完成', targetStatus: 'done', tone: 'primary', defaultReason: '已经处理完成' },
+      { key: 'shelve', label: '搁置', targetStatus: 'shelved', tone: 'danger', defaultReason: '暂时搁置这个想法行动' },
+    ],
+    ongoing: [
+      { key: 'done', label: '标记完成', targetStatus: 'done', tone: 'primary', defaultReason: '已经处理完成' },
+      { key: 'shelve', label: '搁置', targetStatus: 'shelved', tone: 'danger', defaultReason: '处理中断，暂时搁置' },
+      { key: 'back-pending', label: '退回待处理', targetStatus: 'pending', defaultReason: '退回待处理，后续重新安排' },
+    ],
+    done: [
+      { key: 'archive', label: '归档', targetStatus: 'archived', tone: 'primary', defaultReason: '完成后归档为长期沉淀' },
+      { key: 'reopen', label: '重新打开', targetStatus: 'ongoing', defaultReason: '需要继续处理' },
+    ],
+    shelved: [
+      { key: 'reopen', label: '重新打开', targetStatus: 'pending', tone: 'primary', defaultReason: '重新打开搁置事项' },
+    ],
+    archived: [
+      { key: 'restart', label: '重新处理', targetStatus: 'ongoing', tone: 'primary', defaultReason: '归档内容需要重新处理' },
+    ],
+  },
+  emotion: {
+    pending: [
+      { key: 'observe', label: '继续观察', targetStatus: 'ongoing', tone: 'primary', defaultReason: '这条情绪需要继续观察' },
+      { key: 'relieved', label: '已缓解', targetStatus: 'done', tone: 'primary', defaultReason: '情绪已经缓解' },
+      { key: 'ignore', label: '不再关注', targetStatus: 'shelved', tone: 'danger', defaultReason: '这条情绪暂时不再关注' },
+    ],
+    ongoing: [
+      { key: 'relieved', label: '已缓解', targetStatus: 'done', tone: 'primary', defaultReason: '观察后确认已经缓解' },
+      { key: 'archive', label: '沉淀为经验', targetStatus: 'archived', tone: 'primary', defaultReason: '这条情绪值得沉淀为经验' },
+      { key: 'ignore', label: '不再关注', targetStatus: 'shelved', tone: 'danger', defaultReason: '观察后决定不再关注' },
+    ],
+    done: [
+      { key: 'archive', label: '沉淀为经验', targetStatus: 'archived', tone: 'primary', defaultReason: '缓解过程值得沉淀为经验' },
+      { key: 'reobserve', label: '重新观察', targetStatus: 'ongoing', defaultReason: '情绪再次出现，需要重新观察' },
+    ],
+    shelved: [
+      { key: 'refocus', label: '重新关注', targetStatus: 'pending', tone: 'primary', defaultReason: '重新关注这条情绪记录' },
+    ],
+    archived: [
+      { key: 'reobserve', label: '重新观察', targetStatus: 'ongoing', tone: 'primary', defaultReason: '已沉淀情绪需要重新观察' },
+    ],
+  },
+  reflection: {
+    pending: [
+      { key: 'start', label: '开始整理', targetStatus: 'ongoing', tone: 'primary', defaultReason: '开始整理这条复盘沉淀' },
+      { key: 'pause', label: '暂不整理', targetStatus: 'shelved', tone: 'danger', defaultReason: '暂时不整理这条复盘' },
+    ],
+    ongoing: [
+      { key: 'settle', label: '标记沉淀', targetStatus: 'done', tone: 'primary', defaultReason: '已经完成整理并沉淀' },
+      { key: 'pause', label: '暂不整理', targetStatus: 'shelved', tone: 'danger', defaultReason: '整理中断，暂时不整理' },
+      { key: 'back-pending', label: '退回待整理', targetStatus: 'pending', defaultReason: '退回待整理，后续重新安排' },
+    ],
+    done: [
+      { key: 'archive', label: '归档', targetStatus: 'archived', tone: 'primary', defaultReason: '已沉淀内容归档保存' },
+      { key: 'rework', label: '重新整理', targetStatus: 'ongoing', defaultReason: '需要重新整理这条沉淀' },
+    ],
+    shelved: [
+      { key: 'rework', label: '重新整理', targetStatus: 'pending', tone: 'primary', defaultReason: '重新整理暂不整理的复盘' },
+    ],
+    archived: [
+      { key: 'rework', label: '重新整理', targetStatus: 'ongoing', tone: 'primary', defaultReason: '已归档内容需要重新整理' },
+    ],
+  },
+};
+
+const getThoughtStatusDisplayLabel = (
+  status: any,
+  thoughtType?: ThoughtType | string,
+): string => {
+  void getThoughtStatusLabel;
+  return statusLabelMap[getThoughtTypeKey(thoughtType)][getThoughtStatusKey(status)];
+};
+
+const getThoughtStatusOptions = (
+  thoughtType?: ThoughtType | string,
+  includeAll = false,
+): Array<{ label: string; value: ThoughtStatusFilter }> => {
+  const options: Array<{ label: string; value: ThoughtStatusFilter }> =
+    thoughtStatusValues.map((value) => ({
+      label: getThoughtStatusDisplayLabel(value, thoughtType),
+      value,
+    }));
+  return includeAll ? [{ label: '全部', value: 'all' }, ...options] : options;
 };
 
 const categoryPresets: Record<
@@ -297,13 +512,14 @@ interface Thought {
   createTime: string;
   themeKey?: ThemeKey | string;
   status?: ThoughtStatus | string;
+  thoughtType?: ThoughtType | string;
 }
 
 const thoughts = ref<Thought[]>([]);
 const loading = ref(false);
 let latestLoadSeq = 0;
 
-const activeTab = ref<'list' | 'statistics'>('list');
+const activeTab = ref<ThoughtViewKey>('all');
 const statisticsLoading = ref(false);
 const statisticsData = ref<ThoughtStatisticsOverview | null>(null);
 const trendLoading = ref(false);
@@ -319,7 +535,7 @@ const { renderEcharts: renderTrendChart } = useEcharts(trendChartRef);
 const { renderEcharts: renderCategoryTrendChart } = useEcharts(categoryTrendChartRef);
 const { renderEcharts: renderActivityChart } = useEcharts(activityChartRef);
 
-const trendFilters = reactive<Required<ThoughtStatisticsTrendReq>>({
+const trendFilters = reactive<ThoughtStatisticsTrendReq>({
   range: '30d',
   groupBy: 'day',
   category: '',
@@ -337,6 +553,39 @@ interface ThoughtForm {
   events: Event[];
   themeKey: '' | ThemeKey;
   status: ThoughtStatus;
+  thoughtType: ThoughtType;
+}
+
+interface ThoughtActionDetailForm extends ThoughtActionDetail {
+  archiveReason: string;
+  archiveType: string;
+  nextAction: string;
+  reflection: string;
+  restartPolicy: string;
+  resultSummary: string;
+  shelveReason: string;
+  shelveReasonTag: string;
+  valueLevel: string;
+}
+
+interface ThoughtEmotionDetailForm extends ThoughtEmotionDetail {
+  copingAction: string;
+  emotionIntensity: number | undefined;
+  emotionNeed: string;
+  emotionTrigger: string;
+  emotionType: string;
+  ignoredReason: string;
+  reflectionSummary: string;
+}
+
+interface ThoughtReflectionDetailForm extends ThoughtReflectionDetail {
+  archiveType: string;
+  improvementAction: string;
+  lessonType: string;
+  reflectionSummary: string;
+  relatedProject: string;
+  tags: string;
+  valueLevel: string;
 }
 
 const form = reactive<ThoughtForm>({
@@ -351,13 +600,59 @@ const form = reactive<ThoughtForm>({
   ],
   themeKey: '',
   status: 'pending',
+  thoughtType: 'action',
 });
 
+const actionDetail = reactive<ThoughtActionDetailForm>({
+  resultSummary: '',
+  reflection: '',
+  nextAction: '',
+  shelveReason: '',
+  shelveReasonTag: '',
+  restartPolicy: '',
+  archiveReason: '',
+  valueLevel: '',
+  archiveType: '',
+});
+
+const emotionDetail = reactive<ThoughtEmotionDetailForm>({
+  emotionType: '',
+  emotionIntensity: undefined,
+  emotionTrigger: '',
+  emotionNeed: '',
+  copingAction: '',
+  reflectionSummary: '',
+  ignoredReason: '',
+});
+
+const reflectionDetail = reactive<ThoughtReflectionDetailForm>({
+  reflectionSummary: '',
+  lessonType: '',
+  archiveType: '',
+  valueLevel: '',
+  improvementAction: '',
+  relatedProject: '',
+  tags: '',
+});
+
+const modalStatusOptions = computed(
+  () =>
+    getThoughtStatusOptions(form.thoughtType).filter(
+      (item): item is { label: string; value: ThoughtStatus } =>
+        item.value !== 'all',
+    ),
+);
+
 const isExtraOpen = ref(false);
+const originalStatus = ref<ThoughtStatus>('pending');
+const pendingWorkflowAction = ref<WorkflowAction | null>(null);
+const workflowChangeReason = ref('');
+const statusLogs = ref<ThoughtStatusLog[]>([]);
 const detailEditingField = ref<null | 'content' | 'subject'>(null);
 const detailSubjectDraft = ref('');
 const detailContentDraft = ref('');
 const inlineSaving = ref(false);
+const detailLoading = ref(false);
 
 const isExistingThoughtEdit = computed(() => currentEditId.value !== null);
 
@@ -366,6 +661,31 @@ const validModalEvents = computed(() =>
   (form.events ?? []).filter((event) => event.content.trim() !== ''),
 );
 const eventCount = computed(() => validModalEvents.value.length);
+
+const availableWorkflowActions = computed(
+  () => workflowActionMap[getThoughtTypeKey(form.thoughtType)][getThoughtStatusKey(form.status)] ?? [],
+);
+
+const hasPendingWorkflowChange = computed(
+  () =>
+    pendingWorkflowAction.value !== null &&
+    currentEditId.value !== null &&
+    form.status !== originalStatus.value,
+);
+
+const normalizedStatusLogs = computed(() =>
+  statusLogs.value.map((log) => {
+    const rawFromStatus = log.fromStatus ?? log.from_status;
+    return {
+      changeReason: log.changeReason ?? '',
+      createTime: log.createTime ?? log.create_time ?? '',
+      fromStatus: rawFromStatus ? getThoughtStatusKey(rawFromStatus) : '',
+      id: log.id ?? `${log.createTime ?? log.create_time}-${log.toStatus ?? log.to_status}`,
+      thoughtType: getThoughtTypeKey(log.thoughtType ?? log.thought_type),
+      toStatus: getThoughtStatusKey(log.toStatus ?? log.to_status),
+    };
+  }),
+);
 
 const formAccent = computed(() => {
   const key = (form.themeKey || 'blue') as ThemeKey;
@@ -386,6 +706,10 @@ const emptyStatisticsSummary = {
 
 const statisticsSummary = computed(
   () => statisticsData.value?.summary ?? emptyStatisticsSummary,
+);
+
+const thoughtTypeStatistics = computed(
+  () => statisticsData.value?.typeSummaries ?? [],
 );
 
 const primaryStatisticsCards = computed(() => [
@@ -423,6 +747,9 @@ const secondaryStatisticsItems = computed(() => [
   { label: '积压数', value: statisticsSummary.value.backlogCount },
 ]);
 
+const isActionTypeSummary = (item: { thoughtType?: string }) =>
+  item.thoughtType === 'action';
+
 const hasStatusDistributionData = computed(() =>
   (statisticsData.value?.statusDistribution ?? []).some((item) => item.count > 0),
 );
@@ -451,6 +778,12 @@ const modalTitle = computed(() => {
   return modalMode.value === 'view' ? '闪念详情' : '编辑闪念';
 });
 
+const modalWrapClassName = computed(() =>
+  !isExistingThoughtEdit.value
+    ? 'thought-editor-modal-wrap thought-create-modal-wrap'
+    : 'thought-editor-modal-wrap',
+);
+
 const modalDetailTitle = computed(() => {
   const subject = form.subject.trim();
   if (subject) return subject;
@@ -478,6 +811,132 @@ const cancelDetailInlineEdit = () => {
   resetDetailInlineEdit();
 };
 
+const resetWorkflowDraft = () => {
+  pendingWorkflowAction.value = null;
+  workflowChangeReason.value = '';
+};
+
+const applyWorkflowAction = (action: WorkflowAction) => {
+  form.status = action.targetStatus;
+  pendingWorkflowAction.value = action;
+  workflowChangeReason.value = action.defaultReason;
+};
+
+const resetThoughtDetails = () => {
+  statusLogs.value = [];
+  Object.assign(actionDetail, {
+    resultSummary: '',
+    reflection: '',
+    nextAction: '',
+    shelveReason: '',
+    shelveReasonTag: '',
+    restartPolicy: '',
+    archiveReason: '',
+    valueLevel: '',
+    archiveType: '',
+  });
+  Object.assign(emotionDetail, {
+    emotionType: '',
+    emotionIntensity: undefined,
+    emotionTrigger: '',
+    emotionNeed: '',
+    copingAction: '',
+    reflectionSummary: '',
+    ignoredReason: '',
+  });
+  Object.assign(reflectionDetail, {
+    reflectionSummary: '',
+    lessonType: '',
+    archiveType: '',
+    valueLevel: '',
+    improvementAction: '',
+    relatedProject: '',
+    tags: '',
+  });
+};
+
+const applyThoughtDetails = (detail: any) => {
+  const action = detail?.actionDetail ?? {};
+  Object.assign(actionDetail, {
+    resultSummary: action.resultSummary ?? '',
+    reflection: action.reflection ?? '',
+    nextAction: action.nextAction ?? '',
+    shelveReason: action.shelveReason ?? '',
+    shelveReasonTag: action.shelveReasonTag ?? '',
+    restartPolicy: action.restartPolicy ?? '',
+    archiveReason: action.archiveReason ?? '',
+    valueLevel: action.valueLevel ?? '',
+    archiveType: action.archiveType ?? '',
+  });
+  const emotion = detail?.emotionDetail ?? {};
+  Object.assign(emotionDetail, {
+    emotionType: emotion.emotionType ?? '',
+    emotionIntensity: emotion.emotionIntensity ?? undefined,
+    emotionTrigger: emotion.emotionTrigger ?? '',
+    emotionNeed: emotion.emotionNeed ?? '',
+    copingAction: emotion.copingAction ?? '',
+    reflectionSummary: emotion.reflectionSummary ?? '',
+    ignoredReason: emotion.ignoredReason ?? '',
+  });
+  const reflection = detail?.reflectionDetail ?? {};
+  Object.assign(reflectionDetail, {
+    reflectionSummary: reflection.reflectionSummary ?? '',
+    lessonType: reflection.lessonType ?? '',
+    archiveType: reflection.archiveType ?? '',
+    valueLevel: reflection.valueLevel ?? '',
+    improvementAction: reflection.improvementAction ?? '',
+    relatedProject: reflection.relatedProject ?? '',
+    tags: reflection.tags ?? '',
+  });
+  statusLogs.value = Array.isArray(detail?.statusLogs) ? detail.statusLogs : [];
+};
+
+const buildCurrentDetailPayload = () => {
+  if (form.thoughtType === 'emotion') {
+    return { emotionDetail: { ...toRaw(emotionDetail) } };
+  }
+  if (form.thoughtType === 'reflection') {
+    return { reflectionDetail: { ...toRaw(reflectionDetail) } };
+  }
+  return { actionDetail: { ...toRaw(actionDetail) } };
+};
+
+const hydrateThoughtDetail = async (id: number | string) => {
+  detailLoading.value = true;
+  try {
+    const detail = await getThoughtDetail(id);
+    const thought = detail?.thought;
+    if (thought) {
+      form.subject = (thought.subject ?? '').trim();
+      form.content = thought.content ?? '';
+      form.themeKey = (thought.themeKey as any) ?? '';
+      form.status = getThoughtStatusKey(thought.status);
+      originalStatus.value = form.status;
+      form.thoughtType = getThoughtTypeKey(thought.thoughtType ?? thought.thought_type);
+      currentModalCreateTime.value = thought.createTime ?? currentModalCreateTime.value;
+    }
+    const evs = Array.isArray(detail?.events) ? detail.events : [];
+    form.events =
+      evs.length > 0
+        ? evs.map((e: any) => ({
+            ...e,
+            create_time: e?.create_time ?? e?.createTime ?? new Date().toISOString(),
+          }))
+        : [
+            {
+              id: Date.now(),
+              content: '',
+              create_time: new Date().toISOString(),
+            },
+          ];
+    applyThoughtDetails(detail);
+  } catch {
+    message.warning('扩展信息加载失败');
+  } finally {
+    detailLoading.value = false;
+  }
+};
+
 const buildThoughtPayload = () => {
   const subject = form.subject.trim();
   const content = form.content.trim();
@@ -503,8 +962,14 @@ const buildThoughtPayload = () => {
     content,
     themeKey: form.themeKey,
     status: form.status,
+    thoughtType: form.thoughtType,
     events: validEvents.map((e) => ({ ...e })),
+    ...buildCurrentDetailPayload(),
   };
+
+  if (hasPendingWorkflowChange.value) {
+    payload.changeReason = workflowChangeReason.value.trim();
+  }
 
   if (currentEditId.value !== null) {
     payload.id = currentEditId.value;
@@ -547,6 +1012,28 @@ const getThoughtCardPreview = (thought: Thought) => {
 };
 
 // 方法
+const getActiveThoughtTypeFilter = (): ThoughtTypeFilter => {
+  if (
+    activeTab.value === 'action' ||
+    activeTab.value === 'emotion' ||
+    activeTab.value === 'reflection'
+  ) {
+    return activeTab.value;
+  }
+  return thoughtTypeFilter.value;
+};
+
+const getCreateDefaultThoughtType = (): ThoughtType => {
+  if (
+    activeTab.value === 'action' ||
+    activeTab.value === 'emotion' ||
+    activeTab.value === 'reflection'
+  ) {
+    return activeTab.value;
+  }
+  return 'action';
+};
+
 const openAddModal = () => {
   form.subject = '';
   form.content = '';
@@ -559,6 +1046,10 @@ const openAddModal = () => {
   ];
   form.themeKey = activeCategoryThemeKey.value || 'blue';
   form.status = 'pending';
+  originalStatus.value = 'pending';
+  form.thoughtType = getCreateDefaultThoughtType();
+  resetThoughtDetails();
+  resetWorkflowDraft();
   currentEditId.value = null;
   currentModalCreateTime.value = new Date().toISOString();
   modalMode.value = 'edit';
@@ -567,13 +1058,18 @@ const openAddModal = () => {
   showModal.value = true;
 };
 
-const openEditModal = (id: number | string) => {
+const openEditModal = async (id: number | string) => {
   const thought = thoughts.value.find((t) => t.id === id);
   if (thought) {
+    resetThoughtDetails();
     form.subject = (thought.subject ?? '').trim();
     form.content = thought.content;
     form.themeKey = (thought.themeKey as any) ?? '';
     form.status = getThoughtStatusKey((thought as any).status);
+    originalStatus.value = form.status;
+    form.thoughtType = getThoughtTypeKey(
+      (thought as any).thoughtType ?? (thought as any).thought_type,
+    );
     const evs = Array.isArray(thought.events) ? thought.events : [];
     form.events =
       evs.length > 0
@@ -597,6 +1093,7 @@ const openEditModal = (id: number | string) => {
     isExtraOpen.value = false;
     resetDetailInlineEdit();
     showModal.value = true;
+    await hydrateThoughtDetail(id);
   }
 };
 
@@ -605,6 +1102,7 @@ const closeCardModal = () => {
   isExtraOpen.value = false;
   modalMode.value = 'view';
   resetDetailInlineEdit();
+  resetWorkflowDraft();
 };
 
 const enterEditMode = () => {
@@ -637,7 +1135,12 @@ const saveDetailInlineField = async (field: 'content' | 'subject') => {
     form.content = detailContentDraft.value;
   }
 
+  const oldWorkflowAction = pendingWorkflowAction.value;
+  const oldWorkflowReason = workflowChangeReason.value;
+  resetWorkflowDraft();
   const payload = buildThoughtPayload();
+  pendingWorkflowAction.value = oldWorkflowAction;
+  workflowChangeReason.value = oldWorkflowReason;
   if (!payload) {
     form.subject = oldSubject;
     form.content = oldContent;
@@ -678,7 +1181,7 @@ const handleDetailInlineKeydown = (event: KeyboardEvent, field: 'content' | 'sub
   }
 };
 
-const saveCard = async () => {
+const submitCard = async (options: { backToDetail?: boolean } = {}) => {
   const payload = buildThoughtPayload();
   if (!payload) return;
 
@@ -688,13 +1191,33 @@ const saveCard = async () => {
     } else {
       await updateThink(toRaw(payload));
     }
-    closeCardModal();
     await loadThoughts();
     await refreshThoughtStatisticsAfterMutation();
+    if (options.backToDetail && currentEditId.value !== null) {
+      await hydrateThoughtDetail(currentEditId.value);
+      modalMode.value = 'view';
+      isExtraOpen.value = false;
+      resetDetailInlineEdit();
+      resetWorkflowDraft();
+    } else {
+      closeCardModal();
+    }
     message.success('保存成功');
   } catch {
     message.error('保存失败');
   }
+};
+
+const saveCard = async () => {
+  await submitCard();
+};
+
+const saveCardAndBackToDetail = async () => {
+  if (currentEditId.value === null) {
+    await submitCard();
+    return;
+  }
+  await submitCard({ backToDetail: true });
 };
 
 const handleDelete = async (id: number | string) => {
@@ -950,6 +1473,7 @@ const loadThoughts = async () => {
   const loadSeq = ++latestLoadSeq;
   const currentThemeKey = activeCategoryThemeKey.value;
   const currentStatus = statusFilter.value;
+  const currentThoughtType = getActiveThoughtTypeFilter();
   const currentSubjectKeyword = subjectKeyword.value.trim();
   loading.value = true;
   try {
@@ -959,6 +1483,9 @@ const loadThoughts = async () => {
     }
     if (currentStatus !== 'all') {
       condition.status = currentStatus;
+    }
+    if (currentThoughtType !== 'all') {
+      condition.thoughtType = currentThoughtType;
     }
     if (currentSubjectKeyword) {
       condition.subject = currentSubjectKeyword;
@@ -979,6 +1506,7 @@ const loadThoughts = async () => {
         content: t?.content ?? t?.text ?? t?.title ?? t?.summary ?? '',
         themeKey: t?.themeKey ?? t?.theme_key ?? '',
         status: getThoughtStatusKey(t?.status),
+        thoughtType: getThoughtTypeKey(t?.thoughtType ?? t?.thought_type),
         events: Array.isArray(t?.events)
           ? t.events.map((e: any) => ({
               ...e,
@@ -996,6 +1524,10 @@ const loadThoughts = async () => {
       .filter((t: Thought) => {
         if (currentStatus === 'all') return true;
         return getThoughtStatusKey(t.status) === currentStatus;
+      })
+      .filter((t: Thought) => {
+        if (currentThoughtType === 'all') return true;
+        return getThoughtTypeKey(t.thoughtType) === currentThoughtType;
       })
       .toSorted(
         (a: Thought, b: Thought) =>
@@ -1037,6 +1569,13 @@ watch(
 );
 
 watch(
+  () => thoughtTypeFilter.value,
+  async () => {
+    await loadThoughts();
+  },
+);
+
+watch(
   () => subjectKeyword.value,
   () => {
     if (subjectSearchTimer) {
@@ -1051,8 +1590,18 @@ watch(
 watch(
   () => activeTab.value,
   async (tab) => {
-    if (tab !== 'statistics') return;
-    await loadStatisticsTabData();
+    if (tab === 'statistics') {
+      await loadStatisticsTabData();
+      return;
+    }
+    await loadThoughts();
+  },
+);
+
+watch(
+  () => form.thoughtType,
+  () => {
+    resetWorkflowDraft();
   },
 );
 
@@ -1070,7 +1619,7 @@ watch(
 <template>
   <div class="think-page">
     <Tabs v-model:active-key="activeTab" class="think-content-tabs">
-      <TabPane key="list" tab="记录列表">
+      <TabPane key="all" tab="全部记录">
     <div class="think-header">
       <div class="think-status-capsule">
         <button
@@ -1080,6 +1629,18 @@ watch(
           class="think-status-capsule-item"
           :class="{ 'is-active': statusFilter === item.value }"
           @click="statusFilter = item.value"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+      <div class="think-type-capsule">
+        <button
+          v-for="item in thoughtTypeOptions"
+          :key="item.value"
+          type="button"
+          class="think-type-capsule-item"
+          :class="{ 'is-active': thoughtTypeFilter === item.value }"
+          @click="thoughtTypeFilter = item.value"
         >
           {{ item.label }}
         </button>
@@ -1148,6 +1709,7 @@ watch(
             <div class="protocol-content">
               <div class="protocol-pill">
                 <span>{{ getCategoryTitleByThemeKey(getThoughtThemeKey(thought)) }}</span>
+                <span class="protocol-pill-type">{{ getThoughtTypeLabel(thought.thoughtType) }}</span>
               </div>
               <h3 class="protocol-title">
                 {{ getThoughtCardTitle(thought) }}
@@ -1179,7 +1741,7 @@ watch(
                 </span>
                 <span class="protocol-meta-sep"></span>
                 <span class="protocol-meta-status">{{
-                  getThoughtStatusLabel((thought as any).status)
+                  getThoughtStatusDisplayLabel((thought as any).status, thought.thoughtType)
                 }}</span>
               </div>
               <span class="protocol-arrow">›</span>
@@ -1189,6 +1751,75 @@ watch(
       </div>
     </Spin>
 
+      </TabPane>
+      <TabPane key="action" tab="想法行动">
+        <ThinkActionBoard
+          v-model:status-filter="statusFilter"
+          v-model:thought-type-filter="thoughtTypeFilter"
+          v-model:subject-keyword="subjectKeyword"
+          :thoughts="thoughts"
+          :loading="loading"
+          :status-options="statusSelectOptions"
+          :thought-type-options="thoughtTypeOptions"
+          :get-thought-style="getThoughtStyle"
+          :get-thought-theme-key="getThoughtThemeKey"
+          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
+          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
+          :get-thought-type-label="getThoughtTypeLabel"
+          :get-thought-card-title="getThoughtCardTitle"
+          :get-thought-card-preview="getThoughtCardPreview"
+          :format-date="formatDate"
+          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
+          @search="handleSubjectSearch"
+          @add="openAddModal"
+          @edit="openEditModal"
+        />
+      </TabPane>
+      <TabPane key="emotion" tab="情绪心情">
+        <ThinkEmotionJournal
+          v-model:status-filter="statusFilter"
+          v-model:thought-type-filter="thoughtTypeFilter"
+          v-model:subject-keyword="subjectKeyword"
+          :thoughts="thoughts"
+          :loading="loading"
+          :status-options="statusSelectOptions"
+          :thought-type-options="thoughtTypeOptions"
+          :get-thought-style="getThoughtStyle"
+          :get-thought-theme-key="getThoughtThemeKey"
+          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
+          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
+          :get-thought-type-label="getThoughtTypeLabel"
+          :get-thought-card-title="getThoughtCardTitle"
+          :get-thought-card-preview="getThoughtCardPreview"
+          :format-date="formatDate"
+          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
+          @search="handleSubjectSearch"
+          @add="openAddModal"
+          @edit="openEditModal"
+        />
+      </TabPane>
+      <TabPane key="reflection" tab="复盘沉淀">
+        <ThinkReflectionLibrary
+          v-model:status-filter="statusFilter"
+          v-model:thought-type-filter="thoughtTypeFilter"
+          v-model:subject-keyword="subjectKeyword"
+          :thoughts="thoughts"
+          :loading="loading"
+          :status-options="statusSelectOptions"
+          :thought-type-options="thoughtTypeOptions"
+          :get-thought-style="getThoughtStyle"
+          :get-thought-theme-key="getThoughtThemeKey"
+          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
+          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
+          :get-thought-type-label="getThoughtTypeLabel"
+          :get-thought-card-title="getThoughtCardTitle"
+          :get-thought-card-preview="getThoughtCardPreview"
+          :format-date="formatDate"
+          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
+          @search="handleSubjectSearch"
+          @add="openAddModal"
+          @edit="openEditModal"
+        />
       </TabPane>
       <TabPane key="statistics" tab="统计洞察">
         <Spin :spinning="statisticsLoading">
@@ -1218,6 +1849,65 @@ watch(
               >
                 <span>{{ item.label }}</span>
                 <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+
+            <div
+              v-if="thoughtTypeStatistics.length"
+              class="thought-type-stat-section"
+            >
+              <div class="thought-analysis-title">类型状态分区</div>
+              <div class="thought-type-stat-grid">
+                <Card
+                  v-for="item in thoughtTypeStatistics"
+                  :key="item.thoughtType"
+                  :bordered="false"
+                  class="thought-type-stat-card"
+                  :data-type="item.thoughtType"
+                >
+                  <div class="thought-type-stat-head">
+                    <span>{{ item.typeName || getThoughtTypeLabel(item.thoughtType) }}</span>
+                    <strong>{{ item.totalCount }}</strong>
+                  </div>
+                  <div
+                    v-if="isActionTypeSummary(item)"
+                    class="thought-type-stat-metrics"
+                  >
+                    <div>
+                      <span>积压</span>
+                      <strong>{{ item.backlogCount }}</strong>
+                    </div>
+                    <div>
+                      <span>完成</span>
+                      <strong>{{ item.doneCount }}</strong>
+                    </div>
+                    <div>
+                      <span>搁置</span>
+                      <strong>{{ item.shelvedCount }}</strong>
+                    </div>
+                    <div>
+                      <span>归档</span>
+                      <strong>{{ item.archivedCount }}</strong>
+                    </div>
+                    <div>
+                      <span>转化率</span>
+                      <strong>{{ item.conversionRate }}%</strong>
+                    </div>
+                  </div>
+                  <div class="thought-type-status-list">
+                    <div
+                      v-for="statusItem in item.statusDistribution"
+                      :key="`${item.thoughtType}-${statusItem.key}`"
+                      class="thought-type-status-row"
+                    >
+                      <span>{{ statusItem.name }}</span>
+                      <div>
+                        <strong>{{ statusItem.count }}</strong>
+                        <em>{{ statusItem.percent }}%</em>
+                      </div>
+                    </div>
+                  </div>
+                </Card>
               </div>
             </div>
 
@@ -1328,7 +2018,7 @@ watch(
       </TabPane>
     </Tabs>
 
-    <GlobalFloatBtn v-if="activeTab === 'list'" @click="openAddModal" />
+    <GlobalFloatBtn v-if="activeTab !== 'statistics'" @click="openAddModal" />
 
     <Modal
       v-model:open="showModal"
@@ -1338,9 +2028,7 @@ watch(
       :destroy-on-close="true"
       width="720px"
       centered
-      :wrap-class-name="
-        !isExistingThoughtEdit ? 'thought-create-modal-wrap' : ''
-      "
+      :wrap-class-name="modalWrapClassName"
       @cancel="closeCardModal"
     >
       <div
@@ -1355,8 +2043,11 @@ watch(
           <span class="thought-detail-tag">
             {{ getCategoryTitleByThemeKey(form.themeKey) }}
           </span>
+          <span class="thought-detail-tag is-type">
+            {{ getThoughtTypeLabel(form.thoughtType) }}
+          </span>
           <span class="thought-detail-tag is-status">
-            {{ getThoughtStatusLabel(form.status) }}
+            {{ getThoughtStatusDisplayLabel(form.status, form.thoughtType) }}
           </span>
           <span class="thought-detail-time">
             {{ currentModalCreateTime ? formatDate(currentModalCreateTime) : '—' }}
@@ -1412,6 +2103,42 @@ watch(
           </div>
         </section>
 
+        <section class="thought-detail-section">
+          <div class="thought-detail-section-title">结构化详情</div>
+          <Spin :spinning="detailLoading">
+            <ThoughtActionEditor
+              v-if="form.thoughtType === 'action'"
+              mode="view"
+              :form="form"
+              :detail="actionDetail"
+              :thought-theme-presets="thoughtThemePresets"
+              :value-level-options="valueLevelOptions"
+              :archive-type-options="archiveTypeOptions"
+              :shelve-reason-tag-options="shelveReasonTagOptions"
+              :restart-policy-options="restartPolicyOptions"
+              :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
+              :format-date="formatDate"
+            />
+            <ThoughtEmotionEditor
+              v-else-if="form.thoughtType === 'emotion'"
+              mode="view"
+              :form="form"
+              :detail="emotionDetail"
+              :emotion-type-options="emotionTypeOptions"
+              :emotion-intensity-options="emotionIntensityOptions"
+            />
+            <ThoughtReflectionEditor
+              v-else
+              mode="view"
+              :form="form"
+              :detail="reflectionDetail"
+              :lesson-type-options="lessonTypeOptions"
+              :archive-type-options="archiveTypeOptions"
+              :value-level-options="valueLevelOptions"
+            />
+          </Spin>
+        </section>
+
         <section v-if="validModalEvents.length > 0" class="thought-detail-section">
           <div class="thought-detail-section-title">关联事件流</div>
           <div class="thought-detail-events">
@@ -1422,6 +2149,34 @@ watch(
             >
               <div class="thought-detail-event-content">{{ event.content }}</div>
               <div class="thought-detail-event-time">{{ formatDate(event.create_time) }}</div>
+            </div>
+          </div>
+        </section>
+
+        <section v-if="normalizedStatusLogs.length > 0" class="thought-detail-section">
+          <div class="thought-detail-section-title">状态时间线</div>
+          <div class="thought-status-timeline">
+            <div
+              v-for="log in normalizedStatusLogs"
+              :key="log.id"
+              class="thought-status-log"
+            >
+              <div class="thought-status-log-dot"></div>
+              <div class="thought-status-log-body">
+                <div class="thought-status-log-title">
+                  <span v-if="log.fromStatus">
+                    {{ getThoughtStatusDisplayLabel(log.fromStatus, log.thoughtType) }}
+                    ->
+                  </span>
+                  <strong>{{ getThoughtStatusDisplayLabel(log.toStatus, log.thoughtType) }}</strong>
+                </div>
+                <div v-if="log.changeReason" class="thought-status-log-reason">
+                  {{ log.changeReason }}
+                </div>
+                <div v-if="log.createTime" class="thought-status-log-time">
+                  {{ formatDate(log.createTime) }}
+                </div>
+              </div>
             </div>
           </div>
         </section>
@@ -1444,54 +2199,120 @@ watch(
           '--thought-accent-rgb': formAccent.rgb,
         }"
       >
-        <Form.Item v-if="!isExistingThoughtEdit" label="主题内容" required>
-          <Input
-            v-model:value="form.subject"
-            placeholder="给这条闪念取一个主题"
-            :maxlength="60"
-            allow-clear
-          />
-        </Form.Item>
-
-        <Form.Item label="状态" required>
-          <div class="modal-status-capsule">
+        <Form.Item :label="'\u95ea\u5ff5\u7c7b\u578b'" required>
+          <div class="modal-thought-type-capsule">
             <button
-              v-for="item in isExistingThoughtEdit
-                ? statusSelectOptions
-                : createStatusSelectOptions"
+              v-for="item in createThoughtTypeOptions"
               :key="item.value"
               type="button"
               class="modal-capsule-item"
-              :disabled="item.value === 'all'"
-              :class="{
-                'is-active': form.status === item.value,
-                'is-disabled': item.value === 'all',
-              }"
-              @click="item.value !== 'all' && (form.status = item.value as ThoughtStatus)"
+              :class="{ 'is-active': form.thoughtType === item.value }"
+              @click="form.thoughtType = item.value"
             >
               {{ item.label }}
             </button>
           </div>
         </Form.Item>
 
-        <Form.Item label="类型" required>
-          <div class="modal-type-capsule">
+        <Form.Item label="状态流转" required>
+          <div class="workflow-current-status">
+            当前状态：
+            <strong>{{ getThoughtStatusDisplayLabel(form.status, form.thoughtType) }}</strong>
+          </div>
+          <div class="modal-workflow-actions">
             <button
-              v-for="item in thoughtThemePresets"
+              v-for="item in availableWorkflowActions"
               :key="item.key"
               type="button"
-              class="modal-capsule-item"
-              :class="{ 'is-active': form.themeKey === item.key }"
-              @click="form.themeKey = item.key"
+              class="modal-workflow-action"
+              :class="[
+                `is-${item.tone || 'default'}`,
+                { 'is-active': pendingWorkflowAction?.key === item.key },
+              ]"
+              @click="applyWorkflowAction(item)"
             >
-              {{ getCategoryTitleByThemeKey(item.key) }}
+              {{ item.label }}
             </button>
           </div>
+          <div v-if="hasPendingWorkflowChange" class="workflow-reason-box">
+            <div class="workflow-reason-title">
+              将变更为：
+              <strong>{{ getThoughtStatusDisplayLabel(form.status, form.thoughtType) }}</strong>
+            </div>
+            <Input.TextArea
+              v-model:value="workflowChangeReason"
+              :auto-size="{ minRows: 2, maxRows: 4 }"
+              placeholder="填写本次状态变化原因，可留空"
+            />
+          </div>
+          <div v-else-if="availableWorkflowActions.length === 0" class="workflow-empty">
+            当前状态暂无推荐动作
+          </div>
         </Form.Item>
-
+        <div v-if="false" class="modal-status-capsule">
+          <button
+              v-for="item in modalStatusOptions"
+              :key="item.value"
+              type="button"
+              class="modal-capsule-item"
+              :class="{
+                'is-active': form.status === item.value,
+              }"
+              @click="form.status = item.value"
+            >
+              {{ item.label }}
+          </button>
+        </div>
         <div class="modal-divider"></div>
 
-        <div class="modal-extra-toggle" @click="isExtraOpen = !isExtraOpen">
+        <div class="modal-business-editor">
+          <ThoughtActionEditor
+            v-if="form.thoughtType === 'action'"
+            mode="edit"
+            :form="form"
+            :detail="actionDetail"
+            :thought-theme-presets="thoughtThemePresets"
+            :value-level-options="valueLevelOptions"
+            :archive-type-options="archiveTypeOptions"
+            :shelve-reason-tag-options="shelveReasonTagOptions"
+            :restart-policy-options="restartPolicyOptions"
+            :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
+            :format-date="formatDate"
+            :on-add-event="addEvent"
+            :on-remove-event="removeEventById"
+            :current-status="originalStatus"
+            :pending-workflow-action-key="pendingWorkflowAction?.key"
+            :pending-workflow-target-status="pendingWorkflowAction?.targetStatus"
+            :has-pending-workflow-change="hasPendingWorkflowChange"
+          />
+          <ThoughtEmotionEditor
+            v-else-if="form.thoughtType === 'emotion'"
+            mode="edit"
+            :form="form"
+            :detail="emotionDetail"
+            :emotion-type-options="emotionTypeOptions"
+            :emotion-intensity-options="emotionIntensityOptions"
+            :current-status="originalStatus"
+            :pending-workflow-action-key="pendingWorkflowAction?.key"
+            :pending-workflow-target-status="pendingWorkflowAction?.targetStatus"
+            :has-pending-workflow-change="hasPendingWorkflowChange"
+          />
+          <ThoughtReflectionEditor
+            v-else
+            mode="edit"
+            :form="form"
+            :detail="reflectionDetail"
+            :lesson-type-options="lessonTypeOptions"
+            :archive-type-options="archiveTypeOptions"
+            :value-level-options="valueLevelOptions"
+            :current-status="originalStatus"
+            :pending-workflow-action-key="pendingWorkflowAction?.key"
+            :pending-workflow-target-status="pendingWorkflowAction?.targetStatus"
+            :has-pending-workflow-change="hasPendingWorkflowChange"
+          />
+        </div>
+
+        <div v-if="false" class="modal-extra-toggle" @click="isExtraOpen = !isExtraOpen">
           <div class="modal-extra-title">
             {{ isExistingThoughtEdit ? '扩展信息' : '补充内容与事件' }}
           </div>
@@ -1503,7 +2324,7 @@ watch(
           </div>
         </div>
 
-        <div v-if="isExtraOpen" class="modal-extra-body">
+        <div v-if="false && isExtraOpen" class="modal-extra-body">
           <Form.Item
             v-if="!isExistingThoughtEdit"
             label="闪念内容"
@@ -1517,7 +2338,35 @@ watch(
               :bordered="false"
             />
           </Form.Item>
-          <div class="events-section">
+                    <div v-if="form.thoughtType === 'action'" class="thought-detail-form-grid">
+            <Form.Item :label="'\u5904\u7406\u7ed3\u679c'"><Input.TextArea v-model:value="actionDetail.resultSummary" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u5fc3\u5f97/\u590d\u76d8'"><Input.TextArea v-model:value="actionDetail.reflection" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u540e\u7eed\u52a8\u4f5c'"><Input.TextArea v-model:value="actionDetail.nextAction" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u6401\u7f6e\u539f\u56e0'"><Input.TextArea v-model:value="actionDetail.shelveReason" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u6401\u7f6e\u6807\u7b7e'"><Select v-model:value="actionDetail.shelveReasonTag" :options="shelveReasonTagOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u662f\u5426\u53ef\u91cd\u542f'"><Select v-model:value="actionDetail.restartPolicy" :options="restartPolicyOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u5f52\u6863\u539f\u56e0'"><Input.TextArea v-model:value="actionDetail.archiveReason" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u4ef7\u503c\u7b49\u7ea7'"><Select v-model:value="actionDetail.valueLevel" :options="valueLevelOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u6c89\u6dc0\u7c7b\u578b'"><Select v-model:value="actionDetail.archiveType" :options="archiveTypeOptions" allow-clear /></Form.Item>
+          </div>
+          <div v-else-if="form.thoughtType === 'emotion'" class="thought-detail-form-grid">
+            <Form.Item :label="'\u60c5\u7eea\u7c7b\u578b'"><Select v-model:value="emotionDetail.emotionType" :options="emotionTypeOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u60c5\u7eea\u5f3a\u5ea6'"><div class="emotion-intensity-capsule"><button v-for="value in emotionIntensityOptions" :key="value" type="button" class="modal-capsule-item" :class="{ 'is-active': emotionDetail.emotionIntensity === value }" @click="emotionDetail.emotionIntensity = value">{{ value }}</button></div></Form.Item>
+            <Form.Item :label="'\u89e6\u53d1\u539f\u56e0'"><Input.TextArea v-model:value="emotionDetail.emotionTrigger" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u80cc\u540e\u9700\u6c42'"><Input.TextArea v-model:value="emotionDetail.emotionNeed" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u7f13\u89e3\u52a8\u4f5c'"><Input.TextArea v-model:value="emotionDetail.copingAction" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u590d\u76d8\u7ed3\u8bba'"><Input.TextArea v-model:value="emotionDetail.reflectionSummary" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u4e0d\u518d\u5173\u6ce8\u539f\u56e0'"><Input.TextArea v-model:value="emotionDetail.ignoredReason" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+          </div>
+          <div v-else class="thought-detail-form-grid">
+            <Form.Item :label="'\u590d\u76d8\u7ed3\u8bba'"><Input.TextArea v-model:value="reflectionDetail.reflectionSummary" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u7ecf\u9a8c/\u6559\u8bad/\u65b9\u6cd5/\u51b3\u7b56'"><Select v-model:value="reflectionDetail.lessonType" :options="lessonTypeOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u6c89\u6dc0\u7c7b\u578b'"><Select v-model:value="reflectionDetail.archiveType" :options="archiveTypeOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u4ef7\u503c\u7b49\u7ea7'"><Select v-model:value="reflectionDetail.valueLevel" :options="valueLevelOptions" allow-clear /></Form.Item>
+            <Form.Item :label="'\u6539\u8fdb\u52a8\u4f5c'"><Input.TextArea v-model:value="reflectionDetail.improvementAction" :auto-size="{ minRows: 2, maxRows: 5 }" /></Form.Item>
+            <Form.Item :label="'\u5173\u8054\u9879\u76ee'"><Input v-model:value="reflectionDetail.relatedProject" allow-clear /></Form.Item>
+            <Form.Item :label="'\u6807\u7b7e'"><Input v-model:value="reflectionDetail.tags" allow-clear /></Form.Item>
+          </div><div class="events-section">
             <div class="events-header">
               <span class="events-title">关联事件流</span>
             </div>
@@ -1567,7 +2416,7 @@ watch(
               </Button>
             </Popconfirm>
             <Button
-              v-if="isExistingThoughtEdit"
+              v-if="false && isExistingThoughtEdit"
               type="text"
               @click="isExtraOpen = !isExtraOpen"
             >
@@ -1575,7 +2424,14 @@ watch(
             </Button>
           </div>
           <div class="modal-footer-right">
-            <Button @click="closeCardModal" shape="round">取消</Button>
+            <Button
+              v-if="isExistingThoughtEdit"
+              shape="round"
+              @click="saveCardAndBackToDetail"
+            >
+              保存并返回
+            </Button>
+            <Button v-else @click="closeCardModal" shape="round">取消</Button>
             <Button type="primary" @click="saveCard" shape="round">保存</Button>
           </div>
         </div>
@@ -1729,6 +2585,123 @@ watch(
   font-weight: 800;
 }
 
+.thought-type-stat-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.thought-type-stat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.thought-type-stat-card {
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.9);
+}
+
+.thought-type-stat-card :deep(.ant-card-body) {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+}
+
+.thought-type-stat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.thought-type-stat-head span {
+  min-width: 0;
+  color: #1e293b;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.thought-type-stat-head strong {
+  color: #020617;
+  font-size: 24px;
+  font-weight: 900;
+}
+
+.thought-type-stat-metrics {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.thought-type-stat-metrics div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgb(241 245 249 / 0.82);
+}
+
+.thought-type-stat-metrics span {
+  overflow: hidden;
+  color: rgb(15 23 42 / 0.52);
+  font-size: 11px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thought-type-stat-metrics strong {
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.thought-type-status-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.thought-type-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.thought-type-status-row span {
+  min-width: 0;
+  color: rgb(15 23 42 / 0.68);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.thought-type-status-row div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.thought-type-status-row strong {
+  color: #020617;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.thought-type-status-row em {
+  color: rgb(15 23 42 / 0.4);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+}
+
 .thought-analysis-section {
   display: flex;
   flex-direction: column;
@@ -1851,7 +2824,8 @@ watch(
   margin-bottom: 14px;
 }
 
-.think-status-capsule {
+.think-status-capsule,
+.think-type-capsule {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -1866,7 +2840,8 @@ watch(
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
 }
 
-.think-status-capsule-item {
+.think-status-capsule-item,
+.think-type-capsule-item {
   appearance: none;
   border: 0;
   background: transparent;
@@ -1884,11 +2859,13 @@ watch(
     transform 0.2s ease;
 }
 
-.think-status-capsule-item:hover {
+.think-status-capsule-item:hover,
+.think-type-capsule-item:hover {
   background: rgb(255 255 255 / 0.55);
 }
 
-.think-status-capsule-item.is-active {
+.think-status-capsule-item.is-active,
+.think-type-capsule-item.is-active {
   background: rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
   color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.92);
   box-shadow:
@@ -2070,6 +3047,14 @@ watch(
   }
 
   .thought-secondary-stat-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .thought-type-stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .thought-type-stat-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2486,6 +3471,14 @@ watch(
   backdrop-filter: blur(10px);
 }
 
+.protocol-pill-type {
+  padding-left: 6px;
+  margin-left: 4px;
+  border-left: 1px solid rgb(var(--thought-accent-rgb) / 0.28);
+  color: rgb(0 0 0 / 0.48);
+  font-weight: 700;
+}
+
 .protocol-meta-count {
   display: inline-flex;
   align-items: center;
@@ -2789,9 +3782,94 @@ watch(
   border: 1px solid rgb(0 0 0 / 0.06);
 }
 
+.thought-detail-summary-list {
+  display: grid;
+  gap: 8px;
+}
+
+.thought-detail-summary-item {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.64);
+}
+
+.thought-detail-summary-item span {
+  font-size: 12px;
+  color: rgb(0 0 0 / 0.45);
+}
+
+.thought-detail-summary-item strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgb(0 0 0 / 0.74);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .thought-detail-events {
   display: grid;
   gap: 10px;
+}
+
+.thought-status-timeline {
+  display: grid;
+  gap: 12px;
+}
+
+.thought-status-log {
+  position: relative;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.thought-status-log-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 999px;
+  background: rgb(var(--thought-accent-rgb) / 0.78);
+  box-shadow: 0 0 0 4px rgb(var(--thought-accent-rgb) / 0.12);
+}
+
+.thought-status-log-body {
+  padding: 10px 12px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 12px;
+  background: rgb(255 255 255 / 0.64);
+}
+
+.thought-status-log-title {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  color: rgb(0 0 0 / 0.58);
+  font-size: 13px;
+}
+
+.thought-status-log-title strong {
+  color: rgb(0 0 0 / 0.76);
+  font-weight: 800;
+}
+
+.thought-status-log-reason {
+  margin-top: 6px;
+  color: rgb(0 0 0 / 0.66);
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.thought-status-log-time {
+  margin-top: 6px;
+  color: rgb(0 0 0 / 0.4);
+  font-size: 12px;
 }
 
 .thought-detail-event {
@@ -2846,7 +3924,9 @@ watch(
   }
 }
 
-.modal-status-capsule {
+.modal-status-capsule,
+.modal-thought-type-capsule,
+.emotion-intensity-capsule {
   display: inline-flex;
   align-items: center;
   gap: 2px;
@@ -2988,6 +4068,143 @@ watch(
   margin-top: 10px;
 }
 
+.modal-business-editor {
+  padding: 12px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.46);
+}
+
+.workflow-current-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 999px;
+  color: rgb(0 0 0 / 0.56);
+  background: rgb(255 255 255 / 0.72);
+  font-size: 13px;
+}
+
+.workflow-current-status strong {
+  color: rgb(var(--thought-accent-rgb) / 1);
+  font-weight: 800;
+}
+
+.modal-workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modal-workflow-action {
+  min-height: 36px;
+  padding: 0 16px;
+  border: 1px solid rgb(15 23 42 / 0.1);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.88);
+  color: rgb(15 23 42 / 0.72);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: none;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.modal-workflow-action:hover {
+  transform: translateY(-1px);
+  border-color: rgb(var(--thought-accent-rgb) / 0.28);
+  background: rgb(255 255 255 / 0.96);
+  color: rgb(var(--thought-accent-rgb) / 0.96);
+}
+
+.modal-workflow-action.is-primary {
+  border-color: rgb(15 23 42 / 0.1);
+  background: rgb(255 255 255 / 0.88);
+  color: rgb(15 23 42 / 0.72);
+}
+
+.modal-workflow-action.is-active {
+  border-color: rgb(var(--thought-accent-rgb) / 0.32);
+  background: rgb(var(--thought-accent-rgb) / 0.16);
+  color: rgb(var(--thought-accent-rgb) / 1);
+  box-shadow: 0 10px 22px rgb(var(--thought-accent-rgb) / 0.12);
+}
+
+.modal-workflow-action.is-danger {
+  border-color: rgb(15 23 42 / 0.1);
+  background: rgb(255 255 255 / 0.88);
+  color: rgb(15 23 42 / 0.72);
+}
+
+.modal-workflow-action.is-danger:hover {
+  border-color: rgb(244 63 94 / 0.28);
+  color: #e11d48;
+}
+
+.modal-workflow-action.is-danger.is-active {
+  border-color: rgb(244 63 94 / 0.3);
+  background: rgb(244 63 94 / 0.1);
+  color: #e11d48;
+  box-shadow: 0 10px 22px rgb(244 63 94 / 0.1);
+}
+
+.workflow-reason-box {
+  display: grid;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-top: 12px;
+  border: 1px solid rgb(var(--thought-accent-rgb) / 0.12);
+  border-radius: 14px;
+  background: rgb(var(--thought-accent-rgb) / 0.06);
+}
+
+.workflow-reason-title {
+  color: rgb(0 0 0 / 0.58);
+  font-size: 13px;
+}
+
+.workflow-reason-title strong {
+  color: rgb(var(--thought-accent-rgb) / 1);
+}
+
+.workflow-empty {
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: rgb(0 0 0 / 0.48);
+  background: rgb(128 128 128 / 5%);
+  font-size: 13px;
+}
+
+.thought-detail-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  padding: 12px;
+  margin-bottom: 14px;
+  border: 1px solid rgb(0 0 0 / 0.06);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 0.46);
+}
+
+.thought-detail-form-grid :deep(.ant-form-item) {
+  margin-bottom: 12px;
+}
+
+.thought-detail-form-grid :deep(.ant-form-item:first-child),
+.thought-detail-form-grid :deep(.ant-form-item:nth-child(3)),
+.thought-detail-form-grid :deep(.ant-form-item:nth-child(4)),
+.thought-detail-form-grid :deep(.ant-form-item:nth-child(5)),
+.thought-detail-form-grid :deep(.ant-form-item:nth-child(7)) {
+  grid-column: 1 / -1;
+}
+
 .modal-content-form-item {
   margin-bottom: 14px;
 }
@@ -3075,20 +4292,20 @@ watch(
 }
 
 @media (max-width: 768px) {
-  :global(.thought-create-modal-wrap) {
+  :global(.thought-editor-modal-wrap) {
     overflow: hidden;
   }
 
-  :global(.thought-create-modal-wrap .ant-modal) {
+  :global(.thought-editor-modal-wrap .ant-modal) {
     top: 0;
-    width: 100% !important;
-    max-width: none;
-    height: 100%;
+    width: 100vw !important;
+    max-width: 100vw;
+    height: 100dvh;
     padding-bottom: 0;
     margin: 0;
   }
 
-  :global(.thought-create-modal-wrap .ant-modal-content) {
+  :global(.thought-editor-modal-wrap .ant-modal-content) {
     display: flex;
     flex-direction: column;
     height: 100dvh;
@@ -3096,55 +4313,86 @@ watch(
     border-radius: 0;
   }
 
-  :global(.thought-create-modal-wrap .ant-modal-header) {
+  :global(.thought-editor-modal-wrap .ant-modal-header) {
     flex: 0 0 auto;
     padding: 18px 16px 12px;
     margin-bottom: 0;
   }
 
-  :global(.thought-create-modal-wrap .ant-modal-close) {
+  :global(.thought-editor-modal-wrap .ant-modal-close) {
     top: 12px;
     right: 10px;
     width: 44px;
     height: 44px;
   }
 
-  :global(.thought-create-modal-wrap .ant-modal-body) {
+  :global(.thought-editor-modal-wrap .ant-modal-body) {
     flex: 1 1 auto;
     min-height: 0;
     padding: 12px 16px 0;
     overflow-y: auto;
   }
 
-  .is-create-form {
+  .modern-form {
     display: flex;
     flex-direction: column;
     min-height: 100%;
   }
 
-  .is-create-form :deep(.ant-form-item) {
+  .modern-form :deep(.ant-form-item) {
     margin-bottom: 18px;
   }
 
-  .is-create-form :deep(.ant-form-item-label) {
+  .modern-form :deep(.ant-form-item-label) {
     padding-bottom: 8px;
   }
 
-  .is-create-form .modal-status-capsule {
+  .modern-form :deep(.ant-form-item-label > label) {
+    font-size: 15px;
+  }
+
+  .modern-form :deep(.ant-input),
+  .modern-form :deep(.ant-input-affix-wrapper),
+  .modern-form :deep(textarea) {
+    font-size: 16px;
+  }
+
+  .modern-form :deep(.ant-select-selector) {
+    min-height: 40px !important;
+    font-size: 16px;
+  }
+
+  .modern-form :deep(.ant-select-selection-item),
+  .modern-form :deep(.ant-select-selection-placeholder) {
+    font-size: 16px;
+    line-height: 38px !important;
+  }
+
+  .modal-workflow-actions,
+  .modal-status-capsule {
     display: flex;
     flex-wrap: wrap;
     width: 100%;
     gap: 6px;
+  }
+
+  .modal-status-capsule {
     padding: 6px;
     border-radius: 16px;
   }
 
-  .is-create-form .modal-status-capsule .modal-capsule-item {
+  .modal-workflow-action,
+  .modal-capsule-item {
+    min-height: 40px;
+    font-size: 15px;
+  }
+
+  .modal-status-capsule .modal-capsule-item {
     flex: 1 1 calc(33.333% - 6px);
     padding: 8px 10px;
   }
 
-  .is-create-form .modal-type-capsule {
+  .modal-type-capsule {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
@@ -3152,40 +4400,59 @@ watch(
     overflow: visible;
   }
 
-  .is-create-form .modal-type-capsule .modal-capsule-item {
+  .modal-type-capsule .modal-capsule-item {
     width: 100%;
     padding: 8px 10px;
-    font-size: 14px;
   }
 
-  .is-create-form .modal-divider {
+  .modal-divider {
     margin-top: 0;
   }
 
-  .is-create-form .modal-extra-toggle {
+  .modal-extra-toggle {
     min-height: 48px;
   }
 
-  .is-create-form .modal-footer {
+  .modal-business-editor {
+    padding: 10px;
+    border-radius: 14px;
+  }
+
+  .workflow-current-status {
+    min-height: 40px;
+    font-size: 15px;
+  }
+
+  .workflow-reason-box {
+    padding: 12px;
+  }
+
+  .modal-footer {
     position: sticky;
     bottom: 0;
     z-index: 2;
     margin-top: auto;
     padding: 14px 0 16px;
-    background: var(--ant-color-bg-elevated, #fff);
+    background: linear-gradient(
+      180deg,
+      rgb(255 255 255 / 0.76),
+      var(--ant-color-bg-elevated, #fff) 34%
+    );
+    backdrop-filter: blur(12px);
   }
 
-  .is-create-form .modal-footer-left:empty {
+  .modal-footer-left:empty {
     display: none;
   }
 
-  .is-create-form .modal-footer-right {
+  .modal-footer-right {
     width: 100%;
   }
 
-  .is-create-form .modal-footer-right :deep(.ant-btn) {
+  .modal-footer-right :deep(.ant-btn) {
     flex: 1;
     min-height: 44px;
+    font-size: 16px;
   }
 }
 

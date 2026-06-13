@@ -1,5 +1,63 @@
 import { requestClient } from '#/api/request';
 
+export type ThoughtType = 'action' | 'emotion' | 'reflection';
+
+export type ThoughtTypeFilter = 'all' | ThoughtType;
+
+export interface ThoughtActionDetail {
+  archiveReason?: string;
+  archiveType?: string;
+  nextAction?: string;
+  reflection?: string;
+  restartPolicy?: string;
+  resultSummary?: string;
+  shelveReason?: string;
+  shelveReasonTag?: string;
+  valueLevel?: string;
+}
+
+export interface ThoughtEmotionDetail {
+  copingAction?: string;
+  emotionIntensity?: number;
+  emotionNeed?: string;
+  emotionTrigger?: string;
+  emotionType?: string;
+  ignoredReason?: string;
+  reflectionSummary?: string;
+}
+
+export interface ThoughtReflectionDetail {
+  archiveType?: string;
+  improvementAction?: string;
+  lessonType?: string;
+  reflectionSummary?: string;
+  relatedProject?: string;
+  tags?: string;
+  valueLevel?: string;
+}
+
+export interface ThoughtStatusLog {
+  changeReason?: string;
+  createTime?: string;
+  create_time?: string;
+  fromStatus?: string;
+  from_status?: string;
+  id?: number | string;
+  thoughtType?: ThoughtType | string;
+  thought_type?: ThoughtType | string;
+  toStatus?: string;
+  to_status?: string;
+}
+
+export interface ThoughtDetail {
+  actionDetail?: ThoughtActionDetail | null;
+  emotionDetail?: ThoughtEmotionDetail | null;
+  events?: any[];
+  reflectionDetail?: ThoughtReflectionDetail | null;
+  statusLogs?: ThoughtStatusLog[];
+  thought?: any;
+}
+
 export interface ThoughtStatisticsSummary {
   archivedCount: number;
   backlogCount: number;
@@ -19,10 +77,23 @@ export interface ThoughtStatisticsDistributionItem {
   percent: number;
 }
 
+export interface ThoughtTypeSummary {
+  archivedCount: number;
+  backlogCount: number;
+  conversionRate: number;
+  doneCount: number;
+  shelvedCount: number;
+  statusDistribution: ThoughtStatisticsDistributionItem[];
+  thoughtType: ThoughtType;
+  totalCount: number;
+  typeName: string;
+}
+
 export interface ThoughtStatisticsOverview {
   categoryDistribution: ThoughtStatisticsDistributionItem[];
   statusDistribution: ThoughtStatisticsDistributionItem[];
   summary: ThoughtStatisticsSummary;
+  typeSummaries?: ThoughtTypeSummary[];
 }
 
 export interface ThoughtStatisticsTrendReq {
@@ -30,6 +101,7 @@ export interface ThoughtStatisticsTrendReq {
   groupBy?: 'day' | 'month' | 'week';
   range?: '30d' | '7d' | 'month' | 'year';
   status?: string;
+  thoughtType?: ThoughtType;
 }
 
 export interface ThoughtStatisticsTrendPoint {
@@ -72,6 +144,10 @@ export async function update(data: any) {
 
 export async function deleteData(data: any) {
   return await requestClient.post('/thought/batchDelete', data);
+}
+
+export async function detail(id: number | string) {
+  return await requestClient.get<ThoughtDetail>(`/thought/${id}/detail`);
 }
 
 export async function getThoughtStatisticsOverview() {
