@@ -43,8 +43,8 @@ export interface ThoughtStatusLog {
   fromStatus?: string;
   from_status?: string;
   id?: number | string;
-  thoughtType?: ThoughtType | string;
-  thought_type?: ThoughtType | string;
+  thoughtType?: string | ThoughtType;
+  thought_type?: string | ThoughtType;
   toStatus?: string;
   to_status?: string;
 }
@@ -101,6 +101,13 @@ export interface ThoughtStatisticsTrendReq {
   groupBy?: 'day' | 'month' | 'week';
   range?: '30d' | '7d' | 'month' | 'year';
   status?: string;
+  thoughtType?: '' | ThoughtType;
+}
+
+export interface ThoughtExportReq {
+  status?: string;
+  subject?: string;
+  themeKey?: string;
   thoughtType?: ThoughtType;
 }
 
@@ -159,4 +166,10 @@ export async function getThoughtStatisticsTrend(params?: ThoughtStatisticsTrendR
     '/thought/statistics/trend',
     { params },
   );
+}
+
+export async function exportThoughts(params?: ThoughtExportReq) {
+  return await requestClient.download<Blob>('/thought/export', {
+    params,
+  });
 }

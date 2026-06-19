@@ -2,6 +2,7 @@
 import type {
   ThoughtActionDetail,
   ThoughtEmotionDetail,
+  ThoughtExportReq,
   ThoughtReflectionDetail,
   ThoughtStatusLog,
   ThoughtStatisticsDistributionItem,
@@ -10,13 +11,21 @@ import type {
   ThoughtStatisticsTrendReq,
   ThoughtType,
   ThoughtTypeFilter,
+  ThoughtTypeSummary,
 } from '#/api/core/think';
 import type { EchartsUIType } from '@vben/plugins/echarts';
 
 import { computed, nextTick, onMounted, reactive, ref, toRaw, watch } from 'vue';
 import { useRoute } from 'vue-router';
 
-import { DeleteOutlined, PlusOutlined, SearchOutlined } from '@ant-design/icons-vue';
+import {
+  DeleteOutlined,
+  DownOutlined,
+  DownloadOutlined,
+  PlusOutlined,
+  SearchOutlined,
+  UpOutlined,
+} from '@ant-design/icons-vue';
 import { IconifyIcon } from '@vben/icons';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import {
@@ -37,6 +46,7 @@ import {
 import {
   deleteData as deleteThink,
   detail as getThoughtDetail,
+  exportThoughts,
   getThoughtStatisticsOverview,
   getThoughtStatisticsTrend,
   query as queryThink,
@@ -44,9 +54,6 @@ import {
   update as updateThink,
 } from '#/api/core/think';
 import GlobalFloatBtn from '#/components/global-float-btn/index.vue';
-import ThinkActionBoard from './ThinkActionBoard.vue';
-import ThinkEmotionJournal from './ThinkEmotionJournal.vue';
-import ThinkReflectionLibrary from './ThinkReflectionLibrary.vue';
 import ThoughtActionEditor from './ThoughtActionEditor.vue';
 import ThoughtEmotionEditor from './ThoughtEmotionEditor.vue';
 import ThoughtReflectionEditor from './ThoughtReflectionEditor.vue';
@@ -54,7 +61,7 @@ import ThoughtReflectionEditor from './ThoughtReflectionEditor.vue';
 type ThemeKey = 'blue' | 'cyan' | 'teal' | 'green' | 'purple' | 'indigo' | 'pink' | 'orange';
 type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'shelved' | 'archived';
 type ThoughtStatusFilter = 'all' | ThoughtStatus;
-type ThoughtViewKey = 'action' | 'all' | 'emotion' | 'reflection' | 'statistics';
+type ThoughtViewKey = 'all' | 'statistics';
 type WorkflowActionTone = 'danger' | 'default' | 'primary';
 
 interface WorkflowAction {
@@ -77,6 +84,23 @@ type CategoryKey =
   | 'creation'
   | 'aio-life'
   | 'travel';
+
+const routeCategoryKeySet = new Set<CategoryKey>([
+  'all',
+  'work',
+  'life',
+  'healthy',
+  'study',
+  'social',
+  'creation',
+  'aio-life',
+  'travel',
+]);
+
+const getRouteCategoryKey = (): CategoryKey => {
+  const key = (route.path.split('/')[2] ?? 'all').trim() as CategoryKey;
+  return routeCategoryKeySet.has(key) ? key : 'all';
+};
 
 const statusSelectOptions: Array<{ label: string; value: ThoughtStatusFilter }> = [
   { label: '全部', value: 'all' },
@@ -148,9 +172,12 @@ const restartPolicyOptions = [
 
 const emotionIntensityOptions = [1, 2, 3, 4, 5];
 
+const categoryFilter = ref<CategoryKey>(getRouteCategoryKey());
 const statusFilter = ref<ThoughtStatusFilter>('pending');
 const thoughtTypeFilter = ref<ThoughtTypeFilter>('all');
 const subjectKeyword = ref('');
+const exportLoading = ref(false);
+const isFilterExpanded = ref(false);
 let subjectSearchTimer: ReturnType<typeof setTimeout> | undefined;
 
 const getThoughtStatusKey = (status: any): ThoughtStatus => {
@@ -401,28 +428,44 @@ const trendStatusOptions = [
     .map((item) => ({ label: item.label, value: item.value })),
 ];
 
-const activeCategoryKey = computed<CategoryKey>(() => {
-  const seg = route.path.split('/')[2] ?? 'all';
-  const key = seg.trim();
-  if (
-    key === 'all' ||
-    key === 'work' ||
-    key === 'life' ||
-    key === 'healthy' ||
-    key === 'study' ||
-    key === 'social' ||
-    key === 'creation' ||
-    key === 'aio-life' ||
-    key === 'travel'
-  ) {
-    return key;
-  }
-  return 'all';
+const trendThoughtTypeOptions = [
+  { label: '全部类型', value: '' },
+  ...thoughtTypeOptions
+    .filter((item) => item.value !== 'all')
+    .map((item) => ({ label: item.label, value: item.value })),
+];
+
+const categoryFilterOptions = [
+  { label: '全部', value: 'all' as CategoryKey },
+  ...Object.entries(categoryPresets).map(([value, item]) => ({
+    label: item.title,
+    value: value as CategoryKey,
+  })),
+];
+
+const filterSummaryItems = computed(() => {
+  const statusLabel =
+    statusSelectOptions.find((item) => item.value === statusFilter.value)?.label ??
+    '全部';
+  const thoughtTypeLabel =
+    thoughtTypeOptions.find((item) => item.value === thoughtTypeFilter.value)
+      ?.label ?? '全部';
+  const categoryLabel =
+    categoryFilterOptions.find((item) => item.value === categoryFilter.value)
+      ?.label ?? '全部';
+  const subject = subjectKeyword.value.trim();
+  return [
+    { label: '状态', value: statusLabel },
+    { label: '类型', value: thoughtTypeLabel },
+    { label: '分类', value: categoryLabel },
+    { label: '关键词', value: subject || '无' },
+  ];
 });
 
 const activeCategoryThemeKey = computed<ThemeKey | ''>(() => {
-  if (activeCategoryKey.value === 'all') return '';
-  return categoryPresets[activeCategoryKey.value].themeKey;
+  const key = categoryFilter.value;
+  if (key === 'all') return '';
+  return categoryPresets[key].themeKey;
 });
 
 const getCategoryTitleByThemeKey = (themeKey: ThemeKey | string | undefined) => {
@@ -540,6 +583,7 @@ const trendFilters = reactive<ThoughtStatisticsTrendReq>({
   groupBy: 'day',
   category: '',
   status: '',
+  thoughtType: '',
 });
 
 const showModal = ref(false);
@@ -747,8 +791,37 @@ const secondaryStatisticsItems = computed(() => [
   { label: '积压数', value: statisticsSummary.value.backlogCount },
 ]);
 
-const isActionTypeSummary = (item: { thoughtType?: string }) =>
-  item.thoughtType === 'action';
+const getStatusSummaryCount = (
+  item: ThoughtTypeSummary,
+  status: ThoughtStatus,
+) =>
+  item.statusDistribution.find((statusItem) => statusItem.key === status)?.count ??
+  0;
+
+const clampPercent = (percent: number) =>
+  Math.min(100, Math.max(0, Number.isFinite(percent) ? percent : 0));
+
+const getTypeSummaryHighlights = (item: ThoughtTypeSummary) => {
+  if (item.thoughtType === 'emotion') {
+    return [
+      { label: '已记录', value: getStatusSummaryCount(item, 'pending') },
+      { label: '已缓解', value: item.doneCount },
+      { label: '沉淀率', value: `${item.conversionRate}%` },
+    ];
+  }
+  if (item.thoughtType === 'reflection') {
+    return [
+      { label: '待整理', value: getStatusSummaryCount(item, 'pending') },
+      { label: '已沉淀', value: item.doneCount },
+      { label: '归档率', value: `${item.conversionRate}%` },
+    ];
+  }
+  return [
+    { label: '积压', value: item.backlogCount },
+    { label: '完成', value: item.doneCount },
+    { label: '转化', value: `${item.conversionRate}%` },
+  ];
+};
 
 const hasStatusDistributionData = computed(() =>
   (statisticsData.value?.statusDistribution ?? []).some((item) => item.count > 0),
@@ -1013,24 +1086,11 @@ const getThoughtCardPreview = (thought: Thought) => {
 
 // 方法
 const getActiveThoughtTypeFilter = (): ThoughtTypeFilter => {
-  if (
-    activeTab.value === 'action' ||
-    activeTab.value === 'emotion' ||
-    activeTab.value === 'reflection'
-  ) {
-    return activeTab.value;
-  }
   return thoughtTypeFilter.value;
 };
 
 const getCreateDefaultThoughtType = (): ThoughtType => {
-  if (
-    activeTab.value === 'action' ||
-    activeTab.value === 'emotion' ||
-    activeTab.value === 'reflection'
-  ) {
-    return activeTab.value;
-  }
+  if (thoughtTypeFilter.value !== 'all') return thoughtTypeFilter.value;
   return 'action';
 };
 
@@ -1550,12 +1610,77 @@ const handleSubjectSearch = async () => {
   await loadThoughts();
 };
 
+const buildThoughtExportFilename = () => {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const timestamp = [
+    now.getFullYear(),
+    pad(now.getMonth() + 1),
+    pad(now.getDate()),
+  ].join('') + '-' + [
+    pad(now.getHours()),
+    pad(now.getMinutes()),
+    pad(now.getSeconds()),
+  ].join('');
+  return `thought-export-${timestamp}.xlsx`;
+};
+
+const handleExportThoughts = async () => {
+  if (exportLoading.value) {
+    return;
+  }
+  exportLoading.value = true;
+  try {
+    const params: ThoughtExportReq = {};
+    if (activeCategoryThemeKey.value) {
+      params.themeKey = activeCategoryThemeKey.value;
+    }
+    if (statusFilter.value !== 'all') {
+      params.status = statusFilter.value;
+    }
+    if (thoughtTypeFilter.value !== 'all') {
+      params.thoughtType = thoughtTypeFilter.value;
+    }
+    const subject = subjectKeyword.value.trim();
+    if (subject) {
+      params.subject = subject;
+    }
+
+    const blob = await exportThoughts(params);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = buildThoughtExportFilename();
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    message.success('导出成功');
+  } catch {
+    message.error('导出失败');
+  } finally {
+    exportLoading.value = false;
+  }
+};
+
 onMounted(async () => {
   await loadThoughts();
 });
 
 watch(
   () => route.fullPath,
+  async () => {
+    const nextCategory = getRouteCategoryKey();
+    if (categoryFilter.value !== nextCategory) {
+      categoryFilter.value = nextCategory;
+      return;
+    }
+    await loadThoughts();
+  },
+);
+
+watch(
+  () => categoryFilter.value,
   async () => {
     await loadThoughts();
   },
@@ -1621,53 +1746,128 @@ watch(
     <Tabs v-model:active-key="activeTab" class="think-content-tabs">
       <TabPane key="all" tab="全部记录">
     <div class="think-header">
-      <div class="think-status-capsule">
-        <button
-          v-for="item in statusSelectOptions"
-          :key="item.value"
-          type="button"
-          class="think-status-capsule-item"
-          :class="{ 'is-active': statusFilter === item.value }"
-          @click="statusFilter = item.value"
-        >
-          {{ item.label }}
-        </button>
-      </div>
-      <div class="think-type-capsule">
-        <button
-          v-for="item in thoughtTypeOptions"
-          :key="item.value"
-          type="button"
-          class="think-type-capsule-item"
-          :class="{ 'is-active': thoughtTypeFilter === item.value }"
-          @click="thoughtTypeFilter = item.value"
-        >
-          {{ item.label }}
-        </button>
-      </div>
-      <div class="think-subject-search">
-        <Input
-          v-model:value="subjectKeyword"
-          allow-clear
-          class="think-subject-search-input"
-          placeholder="搜索主题内容"
-          @press-enter="handleSubjectSearch"
-        >
-          <template #prefix>
-            <SearchOutlined />
-          </template>
-        </Input>
-        <Button
-          class="think-subject-search-button"
-          type="primary"
-          shape="round"
-          @click="handleSubjectSearch"
-        >
-          <template #icon>
-            <SearchOutlined />
-          </template>
-          搜索
-        </Button>
+      <div class="think-filter-toolbar">
+        <div class="think-filter-summary-row">
+          <div class="think-filter-summary">
+            <span
+              v-for="item in filterSummaryItems"
+              :key="item.label"
+              class="think-filter-summary-item"
+            >
+              <em>{{ item.label }}：</em>{{ item.value }}
+            </span>
+          </div>
+          <div class="think-filter-summary-actions">
+            <Button
+              v-if="!isFilterExpanded"
+              class="think-export-button"
+              shape="round"
+              :loading="exportLoading"
+              @click="handleExportThoughts"
+            >
+              <template #icon>
+                <DownloadOutlined />
+              </template>
+              导出
+            </Button>
+            <Button
+              class="think-filter-toggle"
+              type="text"
+              @click="isFilterExpanded = !isFilterExpanded"
+            >
+              <template #icon>
+                <UpOutlined v-if="isFilterExpanded" />
+                <DownOutlined v-else />
+              </template>
+              {{ isFilterExpanded ? '收起筛选' : '展开筛选' }}
+            </Button>
+          </div>
+        </div>
+        <div v-if="isFilterExpanded" class="think-filter-body">
+          <div class="think-filter-group is-status">
+            <span class="think-filter-label">状态：</span>
+            <div class="think-status-capsule">
+              <button
+                v-for="item in statusSelectOptions"
+                :key="item.value"
+                type="button"
+                class="think-status-capsule-item"
+                :class="{ 'is-active': statusFilter === item.value }"
+                @click="statusFilter = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+          <div class="think-filter-group is-type">
+            <span class="think-filter-label">类型：</span>
+            <div class="think-type-capsule">
+              <button
+                v-for="item in thoughtTypeOptions"
+                :key="item.value"
+                type="button"
+                class="think-type-capsule-item"
+                :class="{ 'is-active': thoughtTypeFilter === item.value }"
+                @click="thoughtTypeFilter = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+          <div class="think-filter-group is-category">
+            <span class="think-filter-label">分类：</span>
+            <div class="think-category-capsule">
+              <button
+                v-for="item in categoryFilterOptions"
+                :key="item.value"
+                type="button"
+                class="think-category-capsule-item"
+                :class="{ 'is-active': categoryFilter === item.value }"
+                @click="categoryFilter = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+          </div>
+          <div class="think-filter-group is-search">
+            <span class="think-filter-label">搜索：</span>
+            <div class="think-subject-search">
+              <Input
+                v-model:value="subjectKeyword"
+                allow-clear
+                class="think-subject-search-input"
+                placeholder="搜索主题内容"
+                @press-enter="handleSubjectSearch"
+              >
+                <template #prefix>
+                  <SearchOutlined />
+                </template>
+              </Input>
+              <Button
+                class="think-subject-search-button"
+                type="primary"
+                shape="round"
+                @click="handleSubjectSearch"
+              >
+                <template #icon>
+                  <SearchOutlined />
+                </template>
+                搜索
+              </Button>
+              <Button
+                class="think-export-button"
+                shape="round"
+                :loading="exportLoading"
+                @click="handleExportThoughts"
+              >
+                <template #icon>
+                  <DownloadOutlined />
+                </template>
+                导出
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <Spin :spinning="loading">
@@ -1752,75 +1952,6 @@ watch(
     </Spin>
 
       </TabPane>
-      <TabPane key="action" tab="想法行动">
-        <ThinkActionBoard
-          v-model:status-filter="statusFilter"
-          v-model:thought-type-filter="thoughtTypeFilter"
-          v-model:subject-keyword="subjectKeyword"
-          :thoughts="thoughts"
-          :loading="loading"
-          :status-options="statusSelectOptions"
-          :thought-type-options="thoughtTypeOptions"
-          :get-thought-style="getThoughtStyle"
-          :get-thought-theme-key="getThoughtThemeKey"
-          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
-          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
-          :get-thought-type-label="getThoughtTypeLabel"
-          :get-thought-card-title="getThoughtCardTitle"
-          :get-thought-card-preview="getThoughtCardPreview"
-          :format-date="formatDate"
-          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
-          @search="handleSubjectSearch"
-          @add="openAddModal"
-          @edit="openEditModal"
-        />
-      </TabPane>
-      <TabPane key="emotion" tab="情绪心情">
-        <ThinkEmotionJournal
-          v-model:status-filter="statusFilter"
-          v-model:thought-type-filter="thoughtTypeFilter"
-          v-model:subject-keyword="subjectKeyword"
-          :thoughts="thoughts"
-          :loading="loading"
-          :status-options="statusSelectOptions"
-          :thought-type-options="thoughtTypeOptions"
-          :get-thought-style="getThoughtStyle"
-          :get-thought-theme-key="getThoughtThemeKey"
-          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
-          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
-          :get-thought-type-label="getThoughtTypeLabel"
-          :get-thought-card-title="getThoughtCardTitle"
-          :get-thought-card-preview="getThoughtCardPreview"
-          :format-date="formatDate"
-          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
-          @search="handleSubjectSearch"
-          @add="openAddModal"
-          @edit="openEditModal"
-        />
-      </TabPane>
-      <TabPane key="reflection" tab="复盘沉淀">
-        <ThinkReflectionLibrary
-          v-model:status-filter="statusFilter"
-          v-model:thought-type-filter="thoughtTypeFilter"
-          v-model:subject-keyword="subjectKeyword"
-          :thoughts="thoughts"
-          :loading="loading"
-          :status-options="statusSelectOptions"
-          :thought-type-options="thoughtTypeOptions"
-          :get-thought-style="getThoughtStyle"
-          :get-thought-theme-key="getThoughtThemeKey"
-          :get-category-icon-by-theme-key="getCategoryIconByThemeKey"
-          :get-category-title-by-theme-key="getCategoryTitleByThemeKey"
-          :get-thought-type-label="getThoughtTypeLabel"
-          :get-thought-card-title="getThoughtCardTitle"
-          :get-thought-card-preview="getThoughtCardPreview"
-          :format-date="formatDate"
-          :get-thought-status-display-label="getThoughtStatusDisplayLabel"
-          @search="handleSubjectSearch"
-          @add="openAddModal"
-          @edit="openEditModal"
-        />
-      </TabPane>
       <TabPane key="statistics" tab="统计洞察">
         <Spin :spinning="statisticsLoading">
           <div class="thought-statistics-panel">
@@ -1869,30 +2000,14 @@ watch(
                     <span>{{ item.typeName || getThoughtTypeLabel(item.thoughtType) }}</span>
                     <strong>{{ item.totalCount }}</strong>
                   </div>
-                  <div
-                    v-if="isActionTypeSummary(item)"
-                    class="thought-type-stat-metrics"
-                  >
-                    <div>
-                      <span>积压</span>
-                      <strong>{{ item.backlogCount }}</strong>
-                    </div>
-                    <div>
-                      <span>完成</span>
-                      <strong>{{ item.doneCount }}</strong>
-                    </div>
-                    <div>
-                      <span>搁置</span>
-                      <strong>{{ item.shelvedCount }}</strong>
-                    </div>
-                    <div>
-                      <span>归档</span>
-                      <strong>{{ item.archivedCount }}</strong>
-                    </div>
-                    <div>
-                      <span>转化率</span>
-                      <strong>{{ item.conversionRate }}%</strong>
-                    </div>
+                  <div class="thought-type-stat-metrics">
+                    <template
+                      v-for="highlight in getTypeSummaryHighlights(item)"
+                      :key="`${item.thoughtType}-${highlight.label}`"
+                    >
+                      <span>{{ highlight.label }}</span>
+                      <strong>{{ highlight.value }}</strong>
+                    </template>
                   </div>
                   <div class="thought-type-status-list">
                     <div
@@ -1900,10 +2015,16 @@ watch(
                       :key="`${item.thoughtType}-${statusItem.key}`"
                       class="thought-type-status-row"
                     >
-                      <span>{{ statusItem.name }}</span>
-                      <div>
+                      <span class="thought-type-status-name">{{ statusItem.name }}</span>
+                      <div class="thought-type-status-value">
                         <strong>{{ statusItem.count }}</strong>
                         <em>{{ statusItem.percent }}%</em>
+                      </div>
+                      <div class="thought-type-status-bar">
+                        <span
+                          class="thought-type-status-bar-fill"
+                          :style="{ width: `${clampPercent(statusItem.percent)}%` }"
+                        ></span>
                       </div>
                     </div>
                   </div>
@@ -1949,6 +2070,11 @@ watch(
                   <Select
                     v-model:value="trendFilters.groupBy"
                     :options="trendGroupOptions"
+                    class="thought-trend-select"
+                  />
+                  <Select
+                    v-model:value="trendFilters.thoughtType"
+                    :options="trendThoughtTypeOptions"
                     class="thought-trend-select"
                   />
                   <Select
@@ -2631,28 +2757,26 @@ watch(
 }
 
 .thought-type-stat-metrics {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.thought-type-stat-metrics div {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   min-width: 0;
-  padding: 8px;
-  border-radius: 10px;
-  background: rgb(241 245 249 / 0.82);
+  padding-bottom: 2px;
 }
 
 .thought-type-stat-metrics span {
-  overflow: hidden;
   color: rgb(15 23 42 / 0.52);
-  font-size: 11px;
-  font-weight: 700;
-  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 800;
   white-space: nowrap;
+}
+
+.thought-type-stat-metrics span:not(:first-child)::before {
+  content: '·';
+  margin-right: 8px;
+  color: rgb(15 23 42 / 0.26);
+  font-weight: 900;
 }
 
 .thought-type-stat-metrics strong {
@@ -2668,38 +2792,62 @@ watch(
 }
 
 .thought-type-status-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(64px, 1fr) 44px 48px minmax(72px, 1.1fr);
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   min-width: 0;
 }
 
-.thought-type-status-row span {
+.thought-type-status-name {
   min-width: 0;
   color: rgb(15 23 42 / 0.68);
   font-size: 13px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
-.thought-type-status-row div {
+.thought-type-status-value {
   display: inline-flex;
   align-items: baseline;
-  gap: 6px;
-  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+  grid-column: span 2;
 }
 
-.thought-type-status-row strong {
+.thought-type-status-value strong {
   color: #020617;
   font-size: 15px;
   font-weight: 800;
+  line-height: 1;
 }
 
-.thought-type-status-row em {
+.thought-type-status-value em {
   color: rgb(15 23 42 / 0.4);
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.thought-type-status-bar {
+  position: relative;
+  height: 7px;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(148 163 184 / 0.18);
+}
+
+.thought-type-status-bar-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  display: block;
+  min-width: 0;
+  border-radius: inherit;
+  background: rgb(var(--thought-accent-rgb, 22 119 255) / 0.72);
 }
 
 .thought-analysis-section {
@@ -2816,42 +2964,141 @@ watch(
 }
 
 .think-header {
+  margin-bottom: 18px;
+}
+
+.think-filter-toolbar {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 24px;
+  background: rgb(255 255 255 / 0.58);
+  box-shadow:
+    0 12px 28px rgb(15 23 42 / 0.06),
+    inset 0 1px 0 rgb(255 255 255 / 0.74);
+  backdrop-filter: blur(14px) saturate(1.18);
+  -webkit-backdrop-filter: blur(14px) saturate(1.18);
+}
+
+.think-filter-summary-row {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
-  flex-wrap: wrap;
+  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 14px;
+  min-width: 0;
+}
+
+.think-filter-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.think-filter-summary-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 5px 10px;
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 999px;
+  color: rgb(15 23 42 / 0.66);
+  font-size: 12px;
+  font-weight: 700;
+  background: rgb(255 255 255 / 0.58);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72);
+  white-space: nowrap;
+}
+
+.think-filter-summary-item em {
+  color: rgb(15 23 42 / 0.42);
+  font-style: normal;
+}
+
+.think-filter-summary-actions {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.think-filter-toggle {
+  flex: 0 0 auto;
+  color: rgb(15 23 42 / 0.58);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.think-filter-toggle:hover {
+  color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.92);
+  background: rgb(var(--thought-accent-rgb, 22 119 255) / 0.08);
+}
+
+.think-filter-body {
+  display: flex;
+  align-items: stretch;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.think-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+}
+
+.think-filter-group.is-status,
+.think-filter-group.is-type,
+.think-filter-group.is-category,
+.think-filter-group.is-search {
+  flex: 0 0 auto;
+}
+
+.think-filter-label {
+  flex: 0 0 44px;
+  color: rgb(15 23 42 / 0.5);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
 }
 
 .think-status-capsule,
-.think-type-capsule {
+.think-type-capsule,
+.think-category-capsule {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 5px;
+  gap: 1px;
+  min-width: 0;
+  padding: 3px;
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.78);
-  border: 1px solid rgb(0 0 0 / 0.06);
-  box-shadow:
-    0 10px 22px rgb(0 0 0 / 0.06),
-    inset 0 1px 0 rgb(255 255 255 / 0.8);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  background: rgb(255 255 255 / 0.62);
+  border: 1px solid rgb(15 23 42 / 0.05);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72);
 }
 
 .think-status-capsule-item,
-.think-type-capsule-item {
+.think-type-capsule-item,
+.think-category-capsule-item {
   appearance: none;
   border: 0;
   background: transparent;
   cursor: pointer;
-  padding: 6px 14px;
+  padding: 6px 12px;
   border-radius: 999px;
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
   color: rgb(0 0 0 / 0.68);
+  white-space: nowrap;
   transition:
     background 0.2s ease,
     box-shadow 0.2s ease,
@@ -2859,18 +3106,26 @@ watch(
     transform 0.2s ease;
 }
 
+.think-type-capsule-item,
+.think-category-capsule-item {
+  padding: 6px 10px;
+  font-size: 12px;
+  color: rgb(15 23 42 / 0.58);
+}
+
 .think-status-capsule-item:hover,
-.think-type-capsule-item:hover {
+.think-type-capsule-item:hover,
+.think-category-capsule-item:hover {
   background: rgb(255 255 255 / 0.55);
 }
 
 .think-status-capsule-item.is-active,
-.think-type-capsule-item.is-active {
+.think-type-capsule-item.is-active,
+.think-category-capsule-item.is-active {
   background: rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
   color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.92);
   box-shadow:
-    0 10px 18px rgb(var(--thought-accent-rgb, 22 119 255) / 0.22),
-    0 8px 16px rgb(0 0 0 / 0.08),
+    0 6px 14px rgb(var(--thought-accent-rgb, 22 119 255) / 0.16),
     inset 0 1px 0 rgb(255 255 255 / 0.9);
   transform: translateY(-1px);
 }
@@ -2878,7 +3133,11 @@ watch(
 .think-subject-search {
   display: flex;
   align-items: center;
-  width: min(420px, 100%);
+  flex: 0 1 780px;
+  width: min(780px, 100%);
+  max-width: 100%;
+  min-width: 260px;
+  margin-left: 0;
   gap: 8px;
 }
 
@@ -2908,7 +3167,17 @@ watch(
   flex: 0 0 auto;
   min-height: 36px;
   font-weight: 700;
-  box-shadow: 0 10px 22px rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
+  box-shadow: 0 8px 18px rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
+}
+
+.think-export-button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  border-color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.18);
+  color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.92);
+  font-weight: 700;
+  background: rgb(255 255 255 / 0.7);
+  box-shadow: 0 8px 18px rgb(15 23 42 / 0.06);
 }
 
 .think-back {
@@ -3036,6 +3305,25 @@ watch(
   z-index: 1;
 }
 
+@media (min-width: 769px) and (max-width: 1180px) {
+  .think-filter-group.is-status {
+    flex-basis: 100%;
+  }
+
+  .think-filter-group.is-type {
+    flex: 0 1 auto;
+  }
+
+  .think-filter-group.is-category {
+    flex: 1 1 100%;
+  }
+
+  .think-subject-search {
+    max-width: none;
+    margin-left: 0;
+  }
+}
+
 /* Mobile Adaptation */
 @media (max-width: 768px) {
   .think-page {
@@ -3054,8 +3342,9 @@ watch(
     grid-template-columns: 1fr;
   }
 
-  .thought-type-stat-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .thought-type-status-row {
+    grid-template-columns: minmax(64px, 1fr) 44px 48px minmax(56px, 0.9fr);
+    gap: 8px;
   }
 
   .thought-chart-grid {
@@ -3084,19 +3373,70 @@ watch(
     grid-column: auto;
   }
 
-  .think-status-capsule {
+  .think-filter-toolbar {
+    align-items: stretch;
+    border-radius: 18px;
+    padding: 8px;
+  }
+
+  .think-filter-summary-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .think-filter-summary {
+    gap: 6px;
+  }
+
+  .think-filter-summary-actions {
+    justify-content: flex-end;
+    width: 100%;
+  }
+
+  .think-filter-summary-actions .think-export-button {
+    width: auto;
+  }
+
+  .think-filter-group {
+    width: 100%;
+  }
+
+  .think-status-capsule,
+  .think-type-capsule,
+  .think-category-capsule {
     max-width: 100%;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
   }
 
-  .think-status-capsule::-webkit-scrollbar {
+  .think-status-capsule::-webkit-scrollbar,
+  .think-type-capsule::-webkit-scrollbar,
+  .think-category-capsule::-webkit-scrollbar {
     display: none;
   }
 
   .think-subject-search {
+    flex-basis: 100%;
+    flex-wrap: wrap;
+    max-width: none;
+    min-width: 0;
+    margin-left: 0;
     width: 100%;
+  }
+
+  .think-subject-search-input {
+    flex-basis: 100%;
+  }
+
+  .think-subject-search-button,
+  .think-export-button {
+    flex: 1 1 calc(50% - 4px);
+    width: auto;
+  }
+
+  .think-filter-summary-actions .think-export-button {
+    flex: 0 0 auto;
   }
 
   .cards-grid {
