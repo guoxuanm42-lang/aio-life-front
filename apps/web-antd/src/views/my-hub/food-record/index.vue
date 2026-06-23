@@ -64,6 +64,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import {
   deleteFoodRecordImage,
   deleteFoodRecord,
+  generateFoodRecipeDraft,
   getFoodRecordImageBlob,
   getFoodRecordStatistics,
   getFoodRecordDetail,
@@ -95,6 +96,16 @@ const imageTypeOptions: Array<{ label: string; value: FoodRecordImageType }> = [
   { label: '成品图', value: 'finished' },
   { label: '失败图', value: 'failed' },
   { label: '其他', value: 'other' },
+];
+
+const AI_RECIPE_HISTORY_LIMIT = 5;
+const aiRecipeRefineActions = [
+  { label: '重新生成', instruction: '请基于原始需求重新生成一份不同的食谱草稿' },
+  { label: '更简单', instruction: '请降低难度，减少步骤和复杂处理' },
+  { label: '更清淡', instruction: '请调整为更清淡、少油、少盐的版本' },
+  { label: '更快手', instruction: '请缩短总耗时，优先控制在 20 分钟内' },
+  { label: '换一道', instruction: '请换成另一道符合原始需求的菜' },
+  { label: '用现有食材重做', instruction: '请优先使用当前草稿中的食材重新设计做法' },
 ];
 
 interface FoodRecordFormState extends Omit<FoodRecordSavePayload, 'cookDate'> {
@@ -174,6 +185,12 @@ const formImages = ref<FoodRecordImage[]>([]);
 const imageUploading = ref(false);
 const uploadCaption = ref('');
 const uploadImageType = ref<FoodRecordImageType>('finished');
+const aiRecipeOpen = ref(false);
+const aiRecipePrompt = ref('');
+const aiRecipeLoading = ref(false);
+const aiRecipeDraft = ref<FoodRecordSavePayload | null>(null);
+const aiRecipeDraftHistory = ref<FoodRecordSavePayload[]>([]);
+const aiRecipeDraftIndex = ref(-1);
 const mobileFormActivePanels = reactive<Record<MobileFormSection, boolean>>({
   basic: true,
   images: false,
@@ -296,6 +313,34 @@ const computedTotalMinutes = computed(() => {
   const cook = Number(formState.value.cookMinutes || 0);
   return prep + cook || undefined;
 });
+
+const aiRecipePreviewRows = computed(() => {
+  const draft = aiRecipeDraft.value;
+  if (!draft) return [];
+  return [
+    { label: '菜名', value: draft.dishName },
+    { label: '分类', value: draft.category },
+    { label: '餐次', value: draft.mealType },
+    { label: '预计耗时', value: draft.totalMinutes ? `${draft.totalMinutes} 分钟` : undefined },
+    { label: '标签', value: draft.tags },
+    { label: '总结', value: draft.briefSummary || draft.summary },
+    { label: '下次建议', value: draft.nextTrySuggestion || draft.nextImprove },
+  ].filter((item) => item.value);
+});
+
+const aiRecipeVersionText = computed(() => {
+  const totalCount = aiRecipeDraftHistory.value.length;
+  if (!totalCount || aiRecipeDraftIndex.value < 0) {
+    return '暂无版本';
+  }
+  return `版本 ${aiRecipeDraftIndex.value + 1}/${totalCount}`;
+});
+
+const canSwitchAiRecipePrev = computed(() => aiRecipeDraftIndex.value > 0);
+
+const canSwitchAiRecipeNext = computed(
+  () => aiRecipeDraftIndex.value >= 0 && aiRecipeDraftIndex.value < aiRecipeDraftHistory.value.length - 1,
+);
 
 const normalizeTags = (tags?: string) =>
   (tags || '')
@@ -900,6 +945,80 @@ const openAdd = () => {
   formOpen.value = true;
 };
 
+const openAiRecipe = () => {
+  aiRecipeOpen.value = true;
+};
+
+const pushAiRecipeDraft = (draft: FoodRecordSavePayload) => {
+  const nextHistory = [
+    ...aiRecipeDraftHistory.value.slice(0, aiRecipeDraftIndex.value + 1),
+    draft,
+  ].slice(-AI_RECIPE_HISTORY_LIMIT);
+  aiRecipeDraftHistory.value = nextHistory;
+  aiRecipeDraftIndex.value = nextHistory.length - 1;
+  aiRecipeDraft.value = draft;
+};
+
+const switchAiRecipeVersion = (offset: number) => {
+  const nextIndex = aiRecipeDraftIndex.value + offset;
+  if (nextIndex < 0 || nextIndex >= aiRecipeDraftHistory.value.length) return;
+  aiRecipeDraftIndex.value = nextIndex;
+  aiRecipeDraft.value = aiRecipeDraftHistory.value[nextIndex] || null;
+};
+
+const generateAiRecipe = async (instruction?: string) => {
+  const prompt = aiRecipePrompt.value.trim();
+  if (!prompt) {
+    message.warning('请输入食谱生成需求');
+    return;
+  }
+  const currentDraft = instruction ? aiRecipeDraft.value || undefined : undefined;
+  aiRecipeLoading.value = true;
+  try {
+    const draft = await generateFoodRecipeDraft({
+      currentDraft,
+      instruction,
+      prompt,
+    });
+    if (!instruction) {
+      aiRecipeDraftHistory.value = [];
+      aiRecipeDraftIndex.value = -1;
+    }
+    pushAiRecipeDraft(draft);
+    message.success('食谱草稿已生成');
+  } finally {
+    aiRecipeLoading.value = false;
+  }
+};
+
+const applyAiRecipeDraft = () => {
+  const draft = aiRecipeDraft.value;
+  if (!draft) return;
+  formMode.value = 'add';
+  formState.value = {
+    ...emptyForm(),
+    ...draft,
+    cookDate: draft.cookDate ? dayjs(draft.cookDate) : dayjs(),
+    id: undefined,
+    ingredients: (draft.ingredients || []).map((item, index) => ({
+      ...item,
+      sortOrder: index + 1,
+    })),
+    status: 'draft',
+    steps: (draft.steps || []).map((item, index) => ({
+      ...item,
+      sortOrder: index + 1,
+      stepNo: item.stepNo || index + 1,
+    })),
+  };
+  formImages.value = [];
+  uploadCaption.value = '';
+  uploadImageType.value = 'finished';
+  resetMobileFormPanels();
+  aiRecipeOpen.value = false;
+  formOpen.value = true;
+};
+
 const detailToForm = (detail: FoodRecordDetail): FoodRecordFormState => ({
   ...detail.record,
   cookDate: detail.record.cookDate ? dayjs(detail.record.cookDate) : undefined,
@@ -1200,6 +1319,10 @@ onBeforeUnmount(() => {
           <span>共 {{ total }} 条</span>
         </div>
         <Space>
+          <Button type="primary" @click="openAiRecipe">
+            <template #icon><PlusOutlined /></template>
+            AI 生成食谱
+          </Button>
           <Button :type="viewMode === 'card' ? 'primary' : 'default'" @click="viewMode = 'card'">
             卡片模式
           </Button>
@@ -1986,6 +2109,108 @@ onBeforeUnmount(() => {
     </Modal>
 
     <Modal
+      v-model:open="aiRecipeOpen"
+      class="ai-recipe-modal"
+      :width="isMobile ? '100vw' : 760"
+      wrap-class-name="ai-recipe-modal-wrap"
+      title="AI 生成食谱"
+      :mask-closable="!aiRecipeLoading"
+    >
+      <div class="ai-recipe-body">
+        <Form layout="vertical">
+          <FormItem label="你想吃什么？">
+            <Textarea
+              v-model:value="aiRecipePrompt"
+              :auto-size="{ minRows: 4, maxRows: 8 }"
+              :disabled="aiRecipeLoading"
+              placeholder="想吃低脂晚餐，家里有鸡蛋和西红柿，30 分钟内完成"
+            />
+          </FormItem>
+        </Form>
+
+        <Spin :spinning="aiRecipeLoading">
+          <div v-if="aiRecipeDraft" class="ai-recipe-preview">
+            <div class="ai-recipe-preview-head">
+              <h3>{{ aiRecipeDraft.dishName }}</h3>
+              <Tag color="blue">草稿</Tag>
+            </div>
+            <div class="ai-recipe-version-row">
+              <span>{{ aiRecipeVersionText }}</span>
+              <Space>
+                <Button
+                  size="small"
+                  :disabled="!canSwitchAiRecipePrev || aiRecipeLoading"
+                  @click="switchAiRecipeVersion(-1)"
+                >
+                  上一版
+                </Button>
+                <Button
+                  size="small"
+                  :disabled="!canSwitchAiRecipeNext || aiRecipeLoading"
+                  @click="switchAiRecipeVersion(1)"
+                >
+                  下一版
+                </Button>
+              </Space>
+            </div>
+            <div class="ai-recipe-actions">
+              <Button
+                v-for="action in aiRecipeRefineActions"
+                :key="action.label"
+                size="small"
+                :disabled="aiRecipeLoading"
+                @click="generateAiRecipe(action.instruction)"
+              >
+                {{ action.label }}
+              </Button>
+            </div>
+            <div class="ai-recipe-preview-grid">
+              <div v-for="item in aiRecipePreviewRows" :key="item.label" class="ai-recipe-preview-item">
+                <span>{{ item.label }}</span>
+                <strong>{{ item.value }}</strong>
+              </div>
+            </div>
+
+            <Divider orientation="left">食材</Divider>
+            <div v-if="aiRecipeDraft.ingredients?.length" class="ai-recipe-list">
+              <div v-for="(item, index) in aiRecipeDraft.ingredients" :key="`${item.name}-${index}`">
+                <b>{{ item.name }}</b>
+                <span>{{ [item.quantity, item.unit].filter(Boolean).join('') }}</span>
+                <small v-if="item.remark">{{ item.remark }}</small>
+              </div>
+            </div>
+            <Empty v-else description="暂无食材" />
+
+            <Divider orientation="left">步骤</Divider>
+            <ol v-if="aiRecipeDraft.steps?.length" class="ai-recipe-steps">
+              <li v-for="(item, index) in aiRecipeDraft.steps" :key="`${item.title}-${index}`">
+                <strong>{{ item.title || `步骤 ${index + 1}` }}</strong>
+                <p>{{ item.description }}</p>
+                <span v-if="item.durationMinutes">{{ item.durationMinutes }} 分钟</span>
+              </li>
+            </ol>
+            <Empty v-else description="暂无步骤" />
+          </div>
+          <Empty v-else description="输入需求后生成一份食谱草稿" />
+        </Spin>
+      </div>
+
+      <template #footer>
+        <Space>
+          <Button :disabled="aiRecipeLoading" @click="aiRecipeOpen = false">取消</Button>
+          <Button :loading="aiRecipeLoading" @click="generateAiRecipe()">生成</Button>
+          <Button
+            type="primary"
+            :disabled="!aiRecipeDraft || aiRecipeLoading"
+            @click="applyAiRecipeDraft"
+          >
+            应用到新增表单
+          </Button>
+        </Space>
+      </template>
+    </Modal>
+
+    <Modal
       v-model:open="formOpen"
       class="food-form-modal"
       :confirm-loading="formLoading"
@@ -2468,6 +2693,120 @@ onBeforeUnmount(() => {
   display: inline-block;
   margin-top: 4px;
   color: #6b7280;
+}
+
+.ai-recipe-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-recipe-preview {
+  padding: 14px;
+  background: #f8fafc;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.ai-recipe-preview-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.ai-recipe-preview-head h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: #111827;
+}
+
+.ai-recipe-version-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+  color: #64748b;
+}
+
+.ai-recipe-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.ai-recipe-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-recipe-preview-item {
+  min-width: 0;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+}
+
+.ai-recipe-preview-item span {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.ai-recipe-preview-item strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #111827;
+}
+
+.ai-recipe-list {
+  display: grid;
+  gap: 8px;
+}
+
+.ai-recipe-list > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+}
+
+.ai-recipe-list small {
+  color: #64748b;
+}
+
+.ai-recipe-steps {
+  display: grid;
+  gap: 10px;
+  padding-left: 20px;
+  margin: 0;
+}
+
+.ai-recipe-steps li {
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+}
+
+.ai-recipe-steps p {
+  margin: 6px 0;
+  color: #475569;
+}
+
+.ai-recipe-steps span {
+  color: #64748b;
 }
 
 .record-card-grid {
@@ -3185,6 +3524,32 @@ onBeforeUnmount(() => {
     padding: 12px 14px 0;
     overflow-y: auto;
     background: #f6f8fb;
+  }
+
+  :global(.ai-recipe-modal-wrap .ant-modal) {
+    top: 0;
+    width: 100vw !important;
+    max-width: 100vw;
+    padding-bottom: 0;
+    margin: 0;
+  }
+
+  :global(.ai-recipe-modal-wrap .ant-modal-content) {
+    min-height: 100dvh;
+    border-radius: 0;
+  }
+
+  .ai-recipe-preview-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ai-recipe-version-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ai-recipe-actions :deep(.ant-btn) {
+    flex: 1 1 30%;
   }
 
   .food-record-page {

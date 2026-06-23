@@ -84,6 +84,12 @@ export interface FoodRecordSavePayload extends FoodRecord {
   steps?: FoodRecordStep[];
 }
 
+export interface FoodRecipeGenerateRequest {
+  currentDraft?: FoodRecordSavePayload;
+  instruction?: string;
+  prompt: string;
+}
+
 export interface FoodRecordImageUpdatePayload {
   caption?: string;
   id: string;
@@ -208,4 +214,11 @@ export async function getFoodRecordImageBlob(id: string) {
 
 export async function getFoodRecordStatistics() {
   return await requestClient.get<FoodRecordStatistics>('/food-record/statistics');
+}
+
+export async function generateFoodRecipeDraft(data: FoodRecipeGenerateRequest) {
+  return await requestClient.post<FoodRecordSavePayload>(
+    '/food-record/ai/generate-recipe',
+    data,
+  );
 }
