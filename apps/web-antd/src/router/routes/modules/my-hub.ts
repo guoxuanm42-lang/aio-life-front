@@ -54,6 +54,16 @@ const routes: RouteRecordRaw[] = [
       },
       {
         meta: {
+          title: '题目',
+          icon: 'mdi:code-tags',
+          backTop: false,
+        },
+        name: 'problemNote',
+        path: '/my-hub/problem-note',
+        component: () => import('#/views/my-hub/problem-note/index.vue'),
+      },
+      {
+        meta: {
           icon: 'mdi:chart-line-variant',
           title: '活动',
           backTop: false,
