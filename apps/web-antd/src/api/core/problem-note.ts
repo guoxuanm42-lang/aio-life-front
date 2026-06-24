@@ -7,6 +7,7 @@ export interface ProblemNote {
   id?: string;
   ideaNote?: string;
   problemContent: string;
+  pseudoCode?: string;
   solutionCode?: string;
   status: ProblemNoteStatus;
   tags?: string;

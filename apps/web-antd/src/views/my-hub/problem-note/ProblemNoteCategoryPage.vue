@@ -5,17 +5,20 @@ import type {
 } from '#/api/core/problem-category';
 import type { ProblemNote, ProblemNoteStatus } from '#/api/core/problem-note';
 
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 
 import {
   ArrowLeftOutlined,
   CopyOutlined,
   DeleteOutlined,
   EditOutlined,
+  FullscreenExitOutlined,
+  FullscreenOutlined,
   PlusOutlined,
 } from '@ant-design/icons-vue';
 import {
   Button,
+  Collapse,
   Empty,
   Input,
   InputNumber,
@@ -90,6 +93,12 @@ const modalOpen = ref(false);
 const modalTitle = ref('新增题目');
 const textFontSize = ref(readFontSize(TEXT_FONT_KEY, 18, TEXT_FONT_SIZES));
 const codeFontSize = ref(readFontSize(CODE_FONT_KEY, 16, CODE_FONT_SIZES));
+const isCodeFullscreen = ref(false);
+const activeCollapseKeys = ref<string[]>([
+  'problem',
+  'pseudoCode',
+  'solutionCode',
+]);
 
 const queryState = reactive({
   difficulty: '',
@@ -111,6 +120,7 @@ const formState = reactive<ProblemNote>({
   difficulty: undefined,
   ideaNote: '',
   problemContent: '',
+  pseudoCode: '',
   solutionCode: '',
   status: 'draft',
   tags: '',
@@ -164,8 +174,18 @@ const renderedProblemContent = computed(() =>
 );
 
 const renderedIdeaNote = computed(() =>
-  renderMarkdown(activeNote.value?.ideaNote || '暂无思路备注'),
+  renderMarkdown(activeNote.value?.ideaNote || ''),
 );
+
+const hasPseudoCode = computed(() =>
+  Boolean(activeNote.value?.pseudoCode?.trim()),
+);
+
+const hasSolutionCode = computed(() =>
+  Boolean(activeNote.value?.solutionCode?.trim()),
+);
+
+const hasIdeaNote = computed(() => Boolean(activeNote.value?.ideaNote?.trim()));
 
 function renderMarkdown(content: string) {
   const html = marked.parse(content, {
@@ -240,10 +260,22 @@ function splitTags(tags?: string) {
     .filter(Boolean);
 }
 
+function resetCollapseKeys(note?: ProblemNote | null) {
+  const keys = ['problem'];
+  if (note?.pseudoCode?.trim()) {
+    keys.push('pseudoCode');
+  }
+  if (note?.solutionCode?.trim()) {
+    keys.push('solutionCode');
+  }
+  activeCollapseKeys.value = keys;
+}
+
 function resetForm() {
   formState.id = undefined;
   formState.title = '';
   formState.problemContent = '';
+  formState.pseudoCode = '';
   formState.solutionCode = '';
   formState.ideaNote = '';
   formState.difficulty = undefined;
@@ -260,6 +292,7 @@ function fillForm(note: ProblemNote) {
   formState.id = note.id;
   formState.title = note.title;
   formState.problemContent = note.problemContent;
+  formState.pseudoCode = note.pseudoCode || '';
   formState.solutionCode = note.solutionCode || '';
   formState.ideaNote = note.ideaNote || '';
   formState.difficulty = note.difficulty;
@@ -324,11 +357,13 @@ function backToCategories() {
 async function selectNote(note: ProblemNote) {
   if (!note.id) {
     activeNote.value = note;
+    resetCollapseKeys(note);
     return;
   }
   detailLoading.value = true;
   try {
     activeNote.value = await getProblemNoteDetail(note.id);
+    resetCollapseKeys(activeNote.value);
   } finally {
     detailLoading.value = false;
   }
@@ -382,6 +417,7 @@ async function handleSave() {
       ? await updateProblemNote(payload)
       : await saveProblemNote(payload);
     activeNote.value = saved;
+    resetCollapseKeys(saved);
     modalOpen.value = false;
     message.success('保存成功');
     await fetchNotes();
@@ -445,8 +481,27 @@ async function copyText(content: string | undefined, successText: string) {
   }
 }
 
+function toggleCodeFullscreen() {
+  isCodeFullscreen.value = !isCodeFullscreen.value;
+}
+
+function exitCodeFullscreen() {
+  isCodeFullscreen.value = false;
+}
+
+function handleCodeFullscreenKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape' && isCodeFullscreen.value) {
+    exitCodeFullscreen();
+  }
+}
+
 onMounted(() => {
+  window.addEventListener('keydown', handleCodeFullscreenKeydown);
   fetchCategories();
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleCodeFullscreenKeydown);
 });
 </script>
 
@@ -629,81 +684,164 @@ onMounted(() => {
                 </Space>
               </div>
 
-              <section class="read-section">
-                <div class="section-head">
-                  <h2>题目</h2>
-                  <Space>
-                    <Button size="small" @click="updateFontSize('text', 'decrease')">
-                      A-
-                    </Button>
-                    <span class="font-size-label">{{ textFontSize }}px</span>
-                    <Button size="small" @click="updateFontSize('text', 'increase')">
-                      A+
-                    </Button>
-                    <Button
-                      size="small"
-                      @click="copyText(activeNote.problemContent, '题目已复制')"
-                    >
-                      <template #icon><CopyOutlined /></template>
-                      复制题目
-                    </Button>
-                  </Space>
-                </div>
-                <div
-                  class="markdown-content"
-                  :style="{ fontSize: `${textFontSize}px` }"
-                  v-html="renderedProblemContent"
-                ></div>
-              </section>
+              <Collapse
+                v-model:active-key="activeCollapseKeys"
+                class="detail-collapse"
+                ghost
+              >
+                <Collapse.Panel key="problem">
+                  <template #header>
+                    <div class="section-head collapse-section-head">
+                      <h2>题目</h2>
+                      <Space @click.stop>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('text', 'decrease')"
+                        >
+                          A-
+                        </Button>
+                        <span class="font-size-label">{{ textFontSize }}px</span>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('text', 'increase')"
+                        >
+                          A+
+                        </Button>
+                        <Button
+                          size="small"
+                          @click="copyText(activeNote.problemContent, '题目已复制')"
+                        >
+                          <template #icon><CopyOutlined /></template>
+                          复制题目
+                        </Button>
+                      </Space>
+                    </div>
+                  </template>
+                  <div
+                    class="markdown-content"
+                    :style="{ fontSize: `${textFontSize}px` }"
+                    v-html="renderedProblemContent"
+                  ></div>
+                </Collapse.Panel>
 
-              <section class="read-section">
-                <div class="section-head">
-                  <h2>Java 代码</h2>
-                  <Space>
-                    <Button size="small" @click="updateFontSize('code', 'decrease')">
-                      A-
-                    </Button>
-                    <span class="font-size-label">{{ codeFontSize }}px</span>
-                    <Button size="small" @click="updateFontSize('code', 'increase')">
-                      A+
-                    </Button>
-                    <Button
-                      size="small"
-                      @click="copyText(activeNote.solutionCode, '代码已复制')"
-                    >
-                      <template #icon><CopyOutlined /></template>
-                      复制代码
-                    </Button>
-                  </Space>
-                </div>
-                <div class="code-card">
-                  <div class="code-title">
-                    <span class="code-language">&lt;/&gt; Java</span>
-                    <Button
-                      type="text"
-                      shape="circle"
-                      @click="copyText(activeNote.solutionCode, '代码已复制')"
-                    >
-                      <template #icon><CopyOutlined /></template>
-                    </Button>
-                  </div>
-                  <pre
-                    class="java-code"
-                    :style="{ fontSize: `${codeFontSize}px` }"
-                  ><code class="hljs language-java" v-html="highlightedCode"></code></pre>
-                </div>
-              </section>
+                <Collapse.Panel v-if="hasPseudoCode" key="pseudoCode">
+                  <template #header>
+                    <div class="section-head collapse-section-head">
+                      <h2>伪代码</h2>
+                      <Space @click.stop>
+                        <Button
+                          size="small"
+                          @click="copyText(activeNote.pseudoCode, '伪代码已复制')"
+                        >
+                          <template #icon><CopyOutlined /></template>
+                          复制伪代码
+                        </Button>
+                      </Space>
+                    </div>
+                  </template>
+                  <pre class="pseudo-code">{{ activeNote.pseudoCode }}</pre>
+                </Collapse.Panel>
 
-              <section class="read-section">
-                <div class="section-head">
-                  <h2>思路</h2>
-                </div>
-                <div
-                  class="markdown-content"
-                  :style="{ fontSize: `${textFontSize}px` }"
-                  v-html="renderedIdeaNote"
-                ></div>
-              </section>
+                <Collapse.Panel v-if="hasSolutionCode" key="solutionCode">
+                  <template #header>
+                    <div class="section-head collapse-section-head">
+                      <h2>Java 代码</h2>
+                      <Space @click.stop>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('code', 'decrease')"
+                        >
+                          A-
+                        </Button>
+                        <span class="font-size-label">{{ codeFontSize }}px</span>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('code', 'increase')"
+                        >
+                          A+
+                        </Button>
+                        <Button size="small" @click="toggleCodeFullscreen">
+                          <template #icon>
+                            <FullscreenExitOutlined v-if="isCodeFullscreen" />
+                            <FullscreenOutlined v-else />
+                          </template>
+                          {{ isCodeFullscreen ? '退出全屏' : '全屏' }}
+                        </Button>
+                        <Button
+                          size="small"
+                          @click="copyText(activeNote.solutionCode, '代码已复制')"
+                        >
+                          <template #icon><CopyOutlined /></template>
+                          复制代码
+                        </Button>
+                      </Space>
+                    </div>
+                  </template>
+                  <section
+                    class="code-section"
+                    :class="{ 'code-fullscreen-section': isCodeFullscreen }"
+                  >
+                    <div class="fullscreen-code-toolbar">
+                      <h2>Java 代码</h2>
+                      <Space wrap>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('code', 'decrease')"
+                        >
+                          A-
+                        </Button>
+                        <span class="font-size-label">{{ codeFontSize }}px</span>
+                        <Button
+                          size="small"
+                          @click="updateFontSize('code', 'increase')"
+                        >
+                          A+
+                        </Button>
+                        <Button size="small" @click="toggleCodeFullscreen">
+                          <template #icon><FullscreenExitOutlined /></template>
+                          退出全屏
+                        </Button>
+                        <Button
+                          size="small"
+                          @click="copyText(activeNote.solutionCode, '代码已复制')"
+                        >
+                          <template #icon><CopyOutlined /></template>
+                          复制代码
+                        </Button>
+                      </Space>
+                    </div>
+                    <div class="code-card">
+                      <div class="code-title">
+                        <span class="code-language">&lt;/&gt; Java</span>
+                        <Button
+                          type="text"
+                          shape="circle"
+                          @click="copyText(activeNote.solutionCode, '代码已复制')"
+                        >
+                          <template #icon><CopyOutlined /></template>
+                        </Button>
+                      </div>
+                      <pre
+                        class="java-code"
+                        :style="{ fontSize: `${codeFontSize}px` }"
+                      ><code class="hljs language-java" v-html="highlightedCode"></code></pre>
+                    </div>
+                  </section>
+                </Collapse.Panel>
+
+                <Collapse.Panel v-if="hasIdeaNote" key="ideaNote">
+                  <template #header>
+                    <div class="section-head collapse-section-head">
+                      <h2>思路</h2>
+                    </div>
+                  </template>
+                  <div
+                    class="markdown-content"
+                    :style="{ fontSize: `${textFontSize}px` }"
+                    v-html="renderedIdeaNote"
+                  ></div>
+                </Collapse.Panel>
+              </Collapse>
             </template>
             <Empty v-else description="请选择或新增题目" class="empty-detail" />
           </Spin>
@@ -758,12 +896,17 @@ onMounted(() => {
           placeholder="状态"
           :options="statusOptions"
         />
-        <Input v-model:value="formState.tags" placeholder="标签，多个用逗号分隔" />
       </div>
       <Input.TextArea
         v-model:value="formState.problemContent"
         class="form-textarea"
         placeholder="粘贴题目内容，支持 Markdown"
+        :rows="7"
+      />
+      <Input.TextArea
+        v-model:value="formState.pseudoCode"
+        class="form-textarea code-input"
+        placeholder="粘贴或编写伪代码"
         :rows="7"
       />
       <Input.TextArea
@@ -1038,6 +1181,78 @@ onMounted(() => {
   margin-top: 24px;
 }
 
+.detail-collapse {
+  margin-top: 24px;
+}
+
+.detail-collapse :deep(.ant-collapse-header) {
+  align-items: center;
+  padding: 14px 0 !important;
+}
+
+.detail-collapse :deep(.ant-collapse-content-box) {
+  padding: 8px 0 18px !important;
+}
+
+.collapse-section-head {
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.code-fullscreen-section {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  overflow: hidden;
+  margin: 0;
+  background: #fff;
+  flex-direction: column;
+  padding: 24px;
+}
+
+.fullscreen-code-toolbar {
+  display: none;
+}
+
+.code-fullscreen-section .fullscreen-code-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  margin-bottom: 16px;
+}
+
+.fullscreen-code-toolbar h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.code-fullscreen-section .code-card {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  border-radius: 12px;
+  box-shadow: 0 16px 48px rgb(15 23 42 / 12%);
+  flex-direction: column;
+}
+
+.code-fullscreen-section .code-title {
+  flex-shrink: 0;
+}
+
+.code-fullscreen-section .java-code {
+  min-height: 0;
+  flex: 1;
+}
+
+.code-fullscreen-section :deep(.ant-space) {
+  flex-wrap: wrap;
+}
+
 .section-head {
   align-items: center;
   margin-bottom: 12px;
@@ -1150,6 +1365,22 @@ onMounted(() => {
   font-weight: 700;
 }
 
+.pseudo-code {
+  margin: 0;
+  overflow: auto;
+  border-radius: 12px;
+  background: #f7f7f7;
+  color: #374151;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono',
+    'Courier New', monospace;
+  font-size: 16px;
+  line-height: 1.9;
+  padding: 24px 32px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .code-card {
   overflow: hidden;
   border-radius: 24px;
@@ -1198,7 +1429,7 @@ onMounted(() => {
 
 .form-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px 130px 130px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 170px 140px 140px;
   gap: 12px;
   margin-bottom: 12px;
 }
@@ -1255,6 +1486,31 @@ onMounted(() => {
 
   .detail-panel {
     padding: 18px;
+  }
+
+  .code-fullscreen-section {
+    padding: 12px;
+  }
+
+  .code-fullscreen-section .section-head {
+    gap: 10px;
+  }
+
+  .code-fullscreen-section .fullscreen-code-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .code-fullscreen-section .code-title {
+    padding: 12px 16px 0;
+  }
+
+  .code-fullscreen-section .java-code {
+    padding: 16px;
+  }
+
+  .pseudo-code {
+    padding: 16px;
   }
 
   .form-grid {
