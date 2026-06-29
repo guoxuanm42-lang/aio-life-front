@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { AiAgentConfig } from '#/api/core/ai';
 import type { ChatMessage as AIChatMessage, ChatSession } from '#/api/core/llm';
 import type { Message } from '#/api/core/message';
 
@@ -12,8 +13,11 @@ import { message as antMessage } from 'ant-design-vue';
 import { marked } from 'marked';
 
 import {
-  chatWithLLMApi,
-  chatWithLLMStreamApi,
+  chatWithAiApi,
+  chatWithAiStreamApi,
+  getAiAgentsApi,
+} from '#/api/core/ai';
+import {
   createChatSessionApi,
   deleteChatSessionApi,
   getChatHistoryApi,
@@ -23,6 +27,7 @@ import {
 } from '#/api/core/llm';
 import {
   createMessageApi,
+  deleteMessageApi,
   getMessageListApi,
   markAsReadApi,
 } from '#/api/core/message';
@@ -73,10 +78,50 @@ const selectedConversationId = ref<string | undefined>(
 const aiChatMessages = ref<AIChatMessage[]>([]);
 const aiChatLoading = ref(false);
 const aiChatInput = ref('');
-const aiChatContext = ref('');
 const streamingContent = ref('');
 const isStreaming = ref(false);
 const summarizeLoading = ref(false);
+const aiAgents = ref<AiAgentConfig[]>([]);
+const selectedAgentCode = ref('life_assistant');
+
+const enabledAiAgents = computed(() =>
+  aiAgents.value.filter((agent) => agent.enabled !== false),
+);
+
+const selectedAgent = computed(() =>
+  aiAgents.value.find((agent) => agent.code === selectedAgentCode.value),
+);
+
+const normalizeConversationId = (conversationId?: string) => {
+  if (!conversationId) return undefined;
+  const numericId = Number(conversationId);
+  return Number.isFinite(numericId) ? numericId : conversationId;
+};
+
+const resolveInitialAgentCode = (agents: AiAgentConfig[]) => {
+  const lifeAssistant = agents.find(
+    (agent) => agent.code === 'life_assistant' && agent.enabled !== false,
+  );
+  if (lifeAssistant) return lifeAssistant.code;
+
+  const firstEnabledAgent = agents.find((agent) => agent.enabled !== false);
+  return firstEnabledAgent?.code || 'life_assistant';
+};
+
+const fetchAIAgents = async () => {
+  try {
+    aiAgents.value = await getAiAgentsApi();
+    const selectedStillValid = enabledAiAgents.value.some(
+      (agent) => agent.code === selectedAgentCode.value,
+    );
+    if (!selectedStillValid) {
+      selectedAgentCode.value = resolveInitialAgentCode(aiAgents.value);
+    }
+  } catch (error) {
+    console.error('Failed to fetch AI agents:', error);
+    antMessage.error('获取 AI Agent 列表失败');
+  }
+};
 
 const fetchAISessions = async () => {
   try {
@@ -101,7 +146,6 @@ const fetchAIChatHistory = async (conversationId: string) => {
   try {
     aiChatLoading.value = true;
     aiChatMessages.value = await getChatHistoryApi(conversationId);
-    updateContext();
   } catch (error) {
     console.error('Failed to fetch AI chat history:', error);
   } finally {
@@ -155,6 +199,7 @@ watch(
   (newMenu) => {
     if (newMenu === 'ai-chat') {
       fetchAISessions();
+      fetchAIAgents();
     }
   },
   { immediate: true },
@@ -481,10 +526,12 @@ const handleDeleteConversation = async (userId: string) => {
   }
 };
 
-const aiMessageRef = ref<Message | null>(null);
-
 const handleAISendMessage = async () => {
   if (!aiChatInput.value.trim() || isStreaming.value) return;
+  if (!selectedAgentCode.value || enabledAiAgents.value.length === 0) {
+    antMessage.error('请先启用至少一个 AI Agent');
+    return;
+  }
 
   const content = aiChatInput.value.trim();
   aiChatInput.value = '';
@@ -532,10 +579,12 @@ const handleAISendMessage = async () => {
   aiChatLoading.value = true;
 
   try {
-    chatWithLLMStreamApi(
-      content,
-      aiChatContext.value,
-      selectedConversationId.value,
+    chatWithAiStreamApi(
+      {
+        agentCode: selectedAgentCode.value,
+        conversationId: normalizeConversationId(selectedConversationId.value),
+        message: content,
+      },
       (token) => {
         streamingContent.value += token;
         const lastMsg = aiChatMessages.value[aiChatMessages.value.length - 1];
@@ -546,7 +595,6 @@ const handleAISendMessage = async () => {
       () => {
         isStreaming.value = false;
         aiChatLoading.value = false;
-        updateContext();
 
         // Update session title if it's the first message
         const currentSession = aiSessions.value.find(
@@ -573,15 +621,6 @@ const handleAISendMessage = async () => {
     isStreaming.value = false;
     aiChatLoading.value = false;
   }
-};
-
-const updateContext = () => {
-  aiChatContext.value = aiChatMessages.value
-    .slice(-10)
-    .map((msg) => {
-      return `${msg.role === 'user' ? 'User' : 'AI'}: ${msg.content}`;
-    })
-    .join('\n');
 };
 
 const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
@@ -612,11 +651,11 @@ const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
     aiChatMessages.value.push(summaryMessage);
 
     // Also save this summary to the database as a message
-    await chatWithLLMApi(
-      `请记录以下总结：\n${summary}`,
-      undefined,
-      selectedConversationId.value,
-    );
+    await chatWithAiApi({
+      agentCode: selectedAgentCode.value,
+      conversationId: normalizeConversationId(selectedConversationId.value),
+      message: `请记录以下总结：\n${summary}`,
+    });
   } catch (error) {
     console.error('Failed to summarize time records:', error);
     antMessage.error('总结时迹记录失败，请检查大模型配置');
@@ -670,7 +709,6 @@ const handleDeleteAiMessage = () => {
     // Since there's no single message delete API for AI, we just update local state
     // and maybe the user will add it later.
     antMessage.success('已从本地移除消息');
-    updateContext();
   }
   closeAiMessageContextMenu();
 };
@@ -801,10 +839,25 @@ onUnmounted(() => {
                       ?.title || 'AI 助手'
                   }}
                 </h3>
-                <p class="text-xs text-gray-500">智能对话与时迹分析</p>
+                <p class="text-xs text-gray-500">
+                  {{ selectedAgent?.name || selectedAgentCode }}
+                </p>
               </div>
             </div>
-            <div class="flex gap-2">
+            <div class="flex flex-wrap items-center gap-2">
+              <select
+                v-model="selectedAgentCode"
+                class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+                :disabled="isStreaming || enabledAiAgents.length === 0"
+              >
+                <option
+                  v-for="agent in enabledAiAgents"
+                  :key="agent.code"
+                  :value="agent.code"
+                >
+                  {{ agent.name || agent.code }}
+                </option>
+              </select>
               <button
                 class="rounded-lg bg-green-100 px-3 py-1 text-sm text-green-800 transition-colors hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-50"
                 @click="handleSummarizeTimeRecords('today')"
@@ -895,12 +948,17 @@ onUnmounted(() => {
                 class="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
                 placeholder="输入消息..."
                 @keyup.enter="handleAISendMessage"
-                :disabled="isStreaming"
+                :disabled="isStreaming || enabledAiAgents.length === 0"
               />
               <button
                 class="rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
                 @click="handleAISendMessage"
-                :disabled="aiChatLoading || !aiChatInput.trim() || isStreaming"
+                :disabled="
+                  aiChatLoading ||
+                  !aiChatInput.trim() ||
+                  isStreaming ||
+                  enabledAiAgents.length === 0
+                "
               >
                 <span
                   v-if="aiChatLoading"

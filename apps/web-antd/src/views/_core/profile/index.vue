@@ -6,6 +6,7 @@ import { Profile } from '@vben/common-ui';
 import { useUserStore } from '@vben/stores';
 
 import ApiKeySetting from './api-key-setting.vue';
+import AiSetting from './ai-setting.vue';
 import ProfileBase from './base-setting.vue';
 import LLMSetting from './llm-setting.vue';
 import MbtiSetting from './mbti-setting.vue';
@@ -19,7 +20,7 @@ const userStore = useUserStore();
 const route = useRoute();
 const router = useRouter();
 
-const availableTabs = new Set(['basic', 'bind', 'password', 'api-key', 'llm', 'mbti', 'cbti', 'notice']);
+const availableTabs = new Set(['basic', 'bind', 'password', 'api-key', 'llm', 'ai', 'mbti', 'cbti', 'notice']);
 
 const resolveTab = (value: unknown) => {
   if (typeof value !== 'string') return 'basic';
@@ -48,6 +49,10 @@ const tabs = ref([
   {
     label: '大模型配置',
     value: 'llm',
+  },
+  {
+    label: 'AI 设置',
+    value: 'ai',
   },
   {
     label: 'MBTI测试',
@@ -101,6 +106,7 @@ watch(
       <ProfilePasswordSetting v-if="tabsValue === 'password'" />
       <ApiKeySetting v-if="tabsValue === 'api-key'" />
       <LLMSetting v-if="tabsValue === 'llm'" />
+      <AiSetting v-if="tabsValue === 'ai'" />
       <MbtiSetting v-if="tabsValue === 'mbti'" />
       <CbtiSetting v-if="tabsValue === 'cbti'" />
       <ProfileNotificationSetting v-if="tabsValue === 'notice'" />
