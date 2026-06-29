@@ -964,6 +964,8 @@ onMounted(() => {
                 v-if="result.personality.code && !cbtiImageBroken[result.personality.code]"
                 :src="getCbtiCharacterUrl(result.personality.code)!"
                 class="w-full h-full object-contain"
+                decoding="async"
+                loading="lazy"
                 @error="markCbtiImageBroken(result.personality.code)"
               />
               <span v-else class="text-stone-300 font-mono">NO IMG</span>
@@ -1132,7 +1134,13 @@ onMounted(() => {
 
         <Modal v-model:open="posterVisible" title="CBTI 海报" :footer="null" :width="820">
           <div class="text-xs text-stone-400 mb-3">移动端可长按保存到相册</div>
-          <img v-if="posterUrl" :src="posterUrl" class="w-full rounded-2xl border border-orange-100 bg-white" />
+          <img
+            v-if="posterUrl"
+            :src="posterUrl"
+            class="w-full rounded-2xl border border-orange-100 bg-white"
+            decoding="async"
+            loading="lazy"
+          />
           <div class="flex justify-end gap-2 mt-4">
             <Button class="!rounded-full !font-black" @click="posterVisible = false">关闭</Button>
             <Button type="primary" class="!rounded-full !font-black" :disabled="!posterUrl" @click="savePoster">下载</Button>
@@ -1152,9 +1160,11 @@ onMounted(() => {
           >
             <div class="w-14 h-14 mx-auto mb-2 rounded-lg bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
               <img
-                v-if="p.code && !cbtiImageBroken[p.code]"
+                v-if="typesVisible && p.code && !cbtiImageBroken[p.code]"
                 :src="getCbtiCharacterUrl(p.code)!"
                 class="w-full h-full object-contain"
+                decoding="async"
+                loading="lazy"
                 @error="markCbtiImageBroken(p.code)"
               />
             </div>
@@ -1170,9 +1180,11 @@ onMounted(() => {
           <div class="flex items-center gap-5 mb-5">
             <div class="w-24 h-24 rounded-2xl bg-orange-50 border border-orange-100 overflow-hidden flex items-center justify-center">
               <img
-                v-if="currentTypeDetail.code && !cbtiImageBroken[currentTypeDetail.code]"
+                v-if="typesVisible && currentTypeDetail.code && !cbtiImageBroken[currentTypeDetail.code]"
                 :src="getCbtiCharacterUrl(currentTypeDetail.code)!"
                 class="w-full h-full object-contain"
+                decoding="async"
+                loading="lazy"
                 @error="markCbtiImageBroken(currentTypeDetail.code)"
               />
             </div>
@@ -1223,6 +1235,8 @@ onMounted(() => {
                       v-if="record.personalityCode && !cbtiImageBroken[String(record.personalityCode)]"
                       :src="getCbtiCharacterUrl(String(record.personalityCode))!"
                       class="w-full h-full object-contain"
+                      decoding="async"
+                      loading="lazy"
                       @error="markCbtiImageBroken(String(record.personalityCode))"
                     />
                   </div>
@@ -1301,6 +1315,8 @@ onMounted(() => {
                       v-if="record.code && !cbtiImageBroken[String(record.code)]"
                       :src="getCbtiCharacterUrl(String(record.code))!"
                       class="w-full h-full object-contain"
+                      decoding="async"
+                      loading="lazy"
                       @error="markCbtiImageBroken(String(record.code))"
                     />
                     <span v-else class="text-stone-400 text-xs">无图</span>
@@ -1350,7 +1366,13 @@ onMounted(() => {
           :body-style="{ padding: '12px' }"
         >
           <div class="w-full h-[70vh] rounded-xl border border-stone-200 bg-stone-50 overflow-hidden flex items-center justify-center">
-            <img v-if="adminImagePreviewUrl" :src="adminImagePreviewUrl" class="max-w-full max-h-[70vh] object-contain" />
+            <img
+              v-if="adminImagePreviewUrl"
+              :src="adminImagePreviewUrl"
+              class="max-w-full max-h-[70vh] object-contain"
+              decoding="async"
+              loading="lazy"
+            />
           </div>
         </Modal>
       </Modal>
