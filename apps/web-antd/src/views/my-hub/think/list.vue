@@ -38,8 +38,11 @@ import {
   Modal,
   Popconfirm,
   Select,
+  Space,
   Spin,
   TabPane,
+  Table,
+  Tag,
   Tabs,
 } from 'ant-design-vue';
 
@@ -62,6 +65,7 @@ type ThemeKey = 'blue' | 'cyan' | 'teal' | 'green' | 'purple' | 'indigo' | 'pink
 type ThoughtStatus = 'pending' | 'ongoing' | 'done' | 'shelved' | 'archived';
 type ThoughtStatusFilter = 'all' | ThoughtStatus;
 type ThoughtViewKey = 'all' | 'statistics';
+type ThoughtViewMode = 'card' | 'table';
 type WorkflowActionTone = 'danger' | 'default' | 'primary';
 
 interface WorkflowAction {
@@ -563,6 +567,7 @@ const loading = ref(false);
 let latestLoadSeq = 0;
 
 const activeTab = ref<ThoughtViewKey>('all');
+const thoughtViewMode = ref<ThoughtViewMode>('card');
 const statisticsLoading = ref(false);
 const statisticsData = ref<ThoughtStatisticsOverview | null>(null);
 const trendLoading = ref(false);
@@ -1051,7 +1056,7 @@ const buildThoughtPayload = () => {
   return payload;
 };
 
-const getThoughtThemeKey = (thought: Thought): ThemeKey => {
+const getThoughtThemeKey = (thought: any): ThemeKey => {
   const themeKey = String(thought?.themeKey ?? '').trim() as ThemeKey;
   if (themeKey && thoughtThemePresets.some((p) => p.key === themeKey)) {
     return themeKey;
@@ -1059,7 +1064,7 @@ const getThoughtThemeKey = (thought: Thought): ThemeKey => {
   return 'blue';
 };
 
-const getThoughtStyle = (thought: Thought) => {
+const getThoughtStyle = (thought: any) => {
   const preset = getThemePreset(getThoughtThemeKey(thought));
   return {
     '--thought-accent': preset.accent,
@@ -1067,7 +1072,7 @@ const getThoughtStyle = (thought: Thought) => {
   } as any;
 };
 
-const getThoughtCardTitle = (thought: Thought) => {
+const getThoughtCardTitle = (thought: any) => {
   const subject = (thought?.subject ?? '').trim();
   if (subject) return subject.length > 16 ? `${subject.slice(0, 16)}…` : subject;
   const trimmed = (thought?.content ?? '').trim();
@@ -1077,7 +1082,7 @@ const getThoughtCardTitle = (thought: Thought) => {
   return base.length > 16 ? `${base.slice(0, 16)}…` : base;
 };
 
-const getThoughtCardPreview = (thought: Thought) => {
+const getThoughtCardPreview = (thought: any) => {
   const trimmed = (thought?.content ?? '').trim();
   if (!trimmed) return '';
   const oneLine = trimmed.replace(/\s+/g, ' ');
@@ -1303,6 +1308,40 @@ const formatDate = (dateString: string) => {
   const minutes = padZero(date.getMinutes());
 
   return `${year}-${month}-${day} ${hours}:${minutes}`;
+};
+
+const thoughtTableColumns: any[] = [
+  { title: '标题', key: 'title', width: 220 },
+  { title: '摘要', key: 'preview', ellipsis: true, width: 280 },
+  { title: '类型', key: 'thoughtType', width: 120 },
+  { title: '分类', key: 'category', width: 120 },
+  { title: '状态', key: 'status', width: 120 },
+  { title: '动态数', key: 'events', align: 'center', width: 90 },
+  { title: '创建时间', key: 'createTime', width: 170 },
+  { title: '操作', key: 'action', width: 150 },
+];
+
+const thoughtTablePagination = computed(() => ({
+  pageSize: 10,
+  pageSizeOptions: ['10', '20', '50'],
+  showSizeChanger: true,
+  showTotal: (total: number) => `共 ${total} 条`,
+}));
+
+const getThoughtStatusTagColor = (status: any) => {
+  const key = getThoughtStatusKey(status);
+  if (key === 'ongoing') return 'processing';
+  if (key === 'done') return 'success';
+  if (key === 'shelved') return 'warning';
+  if (key === 'archived') return 'default';
+  return 'magenta';
+};
+
+const getThoughtTypeTagColor = (thoughtType: any) => {
+  const key = getThoughtTypeKey(thoughtType);
+  if (key === 'emotion') return 'pink';
+  if (key === 'reflection') return 'purple';
+  return 'blue';
 };
 
 const toSafeCount = (value: unknown) => {
@@ -1758,6 +1797,24 @@ watch(
             </span>
           </div>
           <div class="think-filter-summary-actions">
+            <div class="think-view-switch" aria-label="视图切换">
+              <button
+                type="button"
+                class="think-view-switch-item"
+                :class="{ 'is-active': thoughtViewMode === 'card' }"
+                @click="thoughtViewMode = 'card'"
+              >
+                卡片视图
+              </button>
+              <button
+                type="button"
+                class="think-view-switch-item"
+                :class="{ 'is-active': thoughtViewMode === 'table' }"
+                @click="thoughtViewMode = 'table'"
+              >
+                表格视图
+              </button>
+            </div>
             <Button
               v-if="!isFilterExpanded"
               class="think-export-button"
@@ -1887,7 +1944,7 @@ watch(
         </div>
       </template>
 
-      <div v-else class="cards-grid">
+      <div v-else-if="thoughtViewMode === 'card'" class="cards-grid">
         <Card
           v-for="thought in thoughts"
           :key="thought.id"
@@ -1948,6 +2005,76 @@ watch(
             </div>
           </div>
         </Card>
+      </div>
+
+      <div v-else class="thought-table-wrap">
+        <Table
+          class="thought-table"
+          :columns="thoughtTableColumns"
+          :data-source="thoughts"
+          :pagination="thoughtTablePagination"
+          row-key="id"
+          size="middle"
+          :scroll="{ x: 1080 }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'title'">
+              <Button
+                type="link"
+                class="thought-table-title"
+                @click="openEditModal(record.id)"
+              >
+                {{ getThoughtCardTitle(record) || '未命名闪念' }}
+              </Button>
+            </template>
+            <template v-else-if="column.key === 'preview'">
+              <span
+                v-if="getThoughtCardPreview(record)"
+                class="thought-table-preview"
+                :title="getThoughtCardPreview(record)"
+              >
+                {{ getThoughtCardPreview(record) }}
+              </span>
+              <span v-else class="thought-table-muted">暂无摘要</span>
+            </template>
+            <template v-else-if="column.key === 'thoughtType'">
+              <Tag :color="getThoughtTypeTagColor(record.thoughtType)">
+                {{ getThoughtTypeLabel(record.thoughtType) }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'category'">
+              <Tag :color="getThemePreset(getThoughtThemeKey(record)).accent">
+                {{ getCategoryTitleByThemeKey(getThoughtThemeKey(record)) }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <Tag :color="getThoughtStatusTagColor(record.status)">
+                {{ getThoughtStatusDisplayLabel(record.status, record.thoughtType) }}
+              </Tag>
+            </template>
+            <template v-else-if="column.key === 'events'">
+              <span class="thought-table-count">{{ (record.events || []).length }}</span>
+            </template>
+            <template v-else-if="column.key === 'createTime'">
+              <span class="thought-table-time">{{ formatDate(record.createTime) }}</span>
+            </template>
+            <template v-else-if="column.key === 'action'">
+              <Space size="small">
+                <Button size="small" type="link" @click="openEditModal(record.id)">
+                  查看
+                </Button>
+                <Popconfirm
+                  title="确认删除这条闪念？"
+                  ok-text="删除"
+                  cancel-text="取消"
+                  @confirm="handleDelete(record.id)"
+                >
+                  <Button size="small" type="link" danger>删除</Button>
+                </Popconfirm>
+              </Space>
+            </template>
+          </template>
+        </Table>
       </div>
     </Spin>
 
@@ -3027,6 +3154,46 @@ watch(
   gap: 8px;
 }
 
+.think-view-switch {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 0 auto;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.68);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.72);
+}
+
+.think-view-switch-item {
+  appearance: none;
+  min-height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 999px;
+  color: rgb(15 23 42 / 0.54);
+  font-size: 12px;
+  font-weight: 800;
+  background: transparent;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    color 0.2s ease;
+}
+
+.think-view-switch-item:hover {
+  color: rgb(var(--thought-accent-rgb, 22 119 255) / 0.92);
+}
+
+.think-view-switch-item.is-active {
+  color: rgb(var(--thought-accent-rgb, 22 119 255) / 1);
+  background: rgb(var(--thought-accent-rgb, 22 119 255) / 0.12);
+  box-shadow: 0 6px 14px rgb(var(--thought-accent-rgb, 22 119 255) / 0.12);
+}
+
 .think-filter-toggle {
   flex: 0 0 auto;
   color: rgb(15 23 42 / 0.58);
@@ -3200,6 +3367,62 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
+}
+
+.thought-table-wrap {
+  overflow: hidden;
+  border: 1px solid rgb(15 23 42 / 0.06);
+  border-radius: 18px;
+  background: rgb(255 255 255 / 0.82);
+  box-shadow:
+    0 16px 36px rgb(15 23 42 / 0.07),
+    inset 0 1px 0 rgb(255 255 255 / 0.72);
+}
+
+.thought-table :deep(.ant-table) {
+  background: transparent;
+}
+
+.thought-table :deep(.ant-table-thead > tr > th) {
+  color: rgb(15 23 42 / 0.56);
+  font-size: 12px;
+  font-weight: 800;
+  background: rgb(248 250 252 / 0.86);
+}
+
+.thought-table :deep(.ant-table-tbody > tr > td) {
+  color: rgb(15 23 42 / 0.72);
+  border-bottom-color: rgb(15 23 42 / 0.06);
+}
+
+.thought-table-title {
+  max-width: 190px;
+  padding: 0;
+  overflow: hidden;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.thought-table-preview {
+  display: inline-block;
+  max-width: 240px;
+  overflow: hidden;
+  color: rgb(15 23 42 / 0.58);
+  text-overflow: ellipsis;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.thought-table-muted {
+  color: rgb(15 23 42 / 0.36);
+}
+
+.thought-table-count,
+.thought-table-time {
+  color: rgb(15 23 42 / 0.58);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
 }
 
 .thought-card {
@@ -3390,7 +3613,14 @@ watch(
 
   .think-filter-summary-actions {
     justify-content: flex-end;
+    flex-wrap: wrap;
     width: 100%;
+  }
+
+  .think-view-switch {
+    flex: 1 1 100%;
+    justify-content: flex-start;
+    overflow-x: auto;
   }
 
   .think-filter-summary-actions .think-export-button {
