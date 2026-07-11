@@ -8,6 +8,10 @@ const dynamicRouteFiles = import.meta.glob('./modules/**/*.ts', {
   eager: true,
 });
 
+const externalRouteFiles = import.meta.glob('./external/**/*.ts', {
+  eager: true,
+});
+
 // 有需要可以自行打开注释，并创建文件夹
 // const externalRouteFiles = import.meta.glob('./external/**/*.ts', { eager: true });
 // const staticRouteFiles = import.meta.glob('./static/**/*.ts', { eager: true });
@@ -19,7 +23,7 @@ const dynamicRoutes: RouteRecordRaw[] = mergeRouteModules(dynamicRouteFiles);
 // const externalRoutes: RouteRecordRaw[] = mergeRouteModules(externalRouteFiles);
 // const staticRoutes: RouteRecordRaw[] = mergeRouteModules(staticRouteFiles);
 const staticRoutes: RouteRecordRaw[] = [];
-const externalRoutes: RouteRecordRaw[] = [];
+const externalRoutes: RouteRecordRaw[] = mergeRouteModules(externalRouteFiles);
 
 /** 路由列表，由基本路由、外部路由和404兜底路由组成
  *  无需走权限验证（会一直显示在菜单中） */

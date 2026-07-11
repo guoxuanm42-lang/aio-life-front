@@ -2,31 +2,24 @@
 import type { PhotoFolderTree, PhotoImage } from '#/api/core/photo-album';
 
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, unref, watch } from 'vue';
+import { useRouter } from 'vue-router';
 
 import { usePreferences } from '@vben/preferences';
 
 import {
   AppstoreOutlined,
   DeleteOutlined,
-  DownloadOutlined,
   EditOutlined,
   FolderAddOutlined,
-  InfoCircleOutlined,
-  LeftOutlined,
-  MinusOutlined,
-  PlusOutlined,
   ReloadOutlined,
-  RightOutlined,
   SearchOutlined,
   StarOutlined,
   SwapOutlined,
-  UndoOutlined,
   UnorderedListOutlined,
   UploadOutlined,
 } from '@ant-design/icons-vue';
 import {
   Button,
-  Drawer,
   Empty,
   FloatButton,
   Form,
@@ -62,6 +55,7 @@ import {
 
 const { isMobile } = usePreferences();
 const isMobileView = computed(() => Boolean(unref(isMobile)));
+const router = useRouter();
 
 const folderTree = ref<PhotoFolderTree[]>([]);
 const selectedFolderId = ref<string>();
@@ -86,12 +80,6 @@ const viewMode = ref<'double' | 'single'>('double');
 const folderModalOpen = ref(false);
 const folderModalMode = ref<'create' | 'edit'>('create');
 const folderForm = reactive({ name: '' });
-const previewOpen = ref(false);
-const previewIndex = ref(0);
-const previewScale = ref(1);
-const previewLoading = ref(false);
-const previewFailed = ref(false);
-const previewInfoOpen = ref(false);
 const imageEditOpen = ref(false);
 const imageMoveOpen = ref(false);
 const editingImage = ref<PhotoImage | null>(null);
@@ -139,11 +127,6 @@ const currentFolderPath = computed(() => currentFolder.value?.label || '请选�
 const currentFolderCoverUrl = computed(() => {
   const coverImageId = currentFolder.value?.coverImageId;
   return coverImageId ? folderCoverUrlMap.value[coverImageId] : undefined;
-});
-const currentPreviewImage = computed(() => images.value[previewIndex.value]);
-const currentPreviewUrl = computed(() => {
-  const id = currentPreviewImage.value?.id;
-  return id ? imageUrlMap.value[id] : undefined;
 });
 const canUseFolderActions = computed(() => Boolean(selectedFolderId.value));
 const hasMore = computed(() => images.value.length < total.value);
@@ -372,41 +355,6 @@ async function uploadBatch(fileList: File[]) {
   }
 }
 
-async function openPreview(index: number) {
-  previewIndex.value = index;
-  previewScale.value = 1;
-  previewFailed.value = false;
-  previewOpen.value = true;
-  await ensurePreviewImage();
-}
-
-async function ensurePreviewImage() {
-  const image = currentPreviewImage.value;
-  if (!image?.id) return;
-  previewLoading.value = !imageUrlMap.value[image.id];
-  previewFailed.value = false;
-  await ensureImageUrl(image.id);
-  previewFailed.value = Boolean(imageUrlFailedMap.value[image.id]);
-  previewLoading.value = false;
-  void ensureImageUrl(images.value[previewIndex.value - 1]?.id);
-  void ensureImageUrl(images.value[previewIndex.value + 1]?.id);
-}
-
-function movePreview(step: -1 | 1) {
-  if (!images.value.length) return;
-  previewIndex.value = (previewIndex.value + step + images.value.length) % images.value.length;
-  previewScale.value = 1;
-  void ensurePreviewImage();
-}
-
-function changePreviewScale(delta: number) {
-  previewScale.value = Math.min(4, Math.max(1, Number((previewScale.value + delta).toFixed(1))));
-}
-
-function resetPreviewScale() {
-  previewScale.value = 1;
-}
-
 function formatFileSize(size?: number) {
   if (!size) return '-';
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`;
@@ -415,27 +363,6 @@ function formatFileSize(size?: number) {
 
 function getImageDisplayName(image: PhotoImage) {
   return image.title || image.originalFilename || '未命名图片';
-}
-
-function sanitizeFilename(name: string) {
-  return name.replace(/[<>:"/\\|?*]+/g, '_').slice(0, 120) || 'photo';
-}
-
-async function savePreviewImage() {
-  const image = currentPreviewImage.value;
-  if (!image?.id) return;
-  let blob = imageBlobMap.get(image.id);
-  if (!blob) {
-    blob = await getPhotoImageBlob(image.id);
-    imageBlobMap.set(image.id, blob);
-  }
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  const fallbackExt = image.contentType?.split('/')[1] || 'jpg';
-  link.href = url;
-  link.download = sanitizeFilename(image.title || image.originalFilename || `photo-${image.id}.${fallbackExt}`);
-  link.click();
-  URL.revokeObjectURL(url);
 }
 
 function openImageEdit(image: PhotoImage) {
@@ -451,7 +378,6 @@ async function saveImageEdit() {
   imageEditOpen.value = false;
   message.success('图片信息已更新');
   await loadImages();
-  if (previewOpen.value) await ensurePreviewImage();
 }
 
 function openImageMove(image: PhotoImage) {
@@ -479,20 +405,24 @@ async function removeImage(image: PhotoImage, keepPreview = false) {
   await loadFolders();
   if (keepPreview) {
     if (!images.value.length) {
-      previewOpen.value = false;
       return;
     }
-    previewIndex.value = Math.min(previewIndex.value, images.value.length - 1);
-    previewScale.value = 1;
-    await ensurePreviewImage();
     return;
   }
   await loadImages();
 }
 
-async function removePreviewImage() {
-  if (!currentPreviewImage.value) return;
-  await removeImage(currentPreviewImage.value, true);
+function openPreview(index: number) {
+  const image = images.value[index];
+  if (!image?.id) return;
+  router.push({
+    path: '/my-hub/photo-album/preview',
+    query: {
+      folderId: selectedFolderId.value,
+      from: '/my-hub/photo-album',
+      id: image.id,
+    },
+  });
 }
 
 async function setAsCover(image: PhotoImage) {
@@ -664,57 +594,6 @@ onBeforeUnmount(() => {
         </FormItem>
       </Form>
     </Modal>
-
-    <Modal
-      v-model:open="previewOpen"
-      :closable="false"
-      :footer="null"
-      :width="'100vw'"
-      centered
-      class="photo-preview-modal"
-    >
-      <div class="preview-shell">
-        <div class="preview-topbar">
-          <span>{{ currentPreviewImage ? getImageDisplayName(currentPreviewImage) : '未命名图片' }}</span>
-          <small>{{ previewIndex + 1 }} / {{ images.length }}</small>
-        </div>
-        <Button class="preview-close" shape="circle" type="text" @click="previewOpen = false">×</Button>
-        <Button class="preview-nav left" shape="circle" @click="movePreview(-1)"><LeftOutlined /></Button>
-        <div class="preview-stage">
-          <Spin v-if="previewLoading" />
-          <img v-else-if="currentPreviewUrl" :alt="currentPreviewImage?.originalFilename || '图片预览'" :src="currentPreviewUrl" :style="{ transform: `scale(${previewScale})` }" />
-          <Empty v-else-if="previewFailed" description="大图加载失败"><Button @click="ensurePreviewImage">重试</Button></Empty>
-          <Empty v-else description="图片加载中" />
-        </div>
-        <Button class="preview-nav right" shape="circle" @click="movePreview(1)"><RightOutlined /></Button>
-        <div class="preview-tools">
-          <Button @click="changePreviewScale(-0.25)"><MinusOutlined /></Button>
-          <Button @click="resetPreviewScale"><UndoOutlined />{{ previewScale.toFixed(1) }}x</Button>
-          <Button @click="changePreviewScale(0.25)"><PlusOutlined /></Button>
-          <Button @click="savePreviewImage"><DownloadOutlined /></Button>
-          <Button @click="previewInfoOpen = true"><InfoCircleOutlined /></Button>
-          <Button v-if="!isMobileView" @click="currentPreviewImage && openImageEdit(currentPreviewImage)"><EditOutlined /></Button>
-          <Popconfirm title="确认删除这张图片？" @confirm="removePreviewImage"><Button danger><DeleteOutlined /></Button></Popconfirm>
-        </div>
-        <div v-if="isMobileView" class="preview-bottom-actions">
-          <Button type="text" @click="savePreviewImage"><DownloadOutlined />保存</Button>
-          <Button type="text" @click="previewInfoOpen = true"><InfoCircleOutlined />信息</Button>
-          <Button type="text" @click="currentPreviewImage && openImageEdit(currentPreviewImage)"><EditOutlined />编辑</Button>
-          <Popconfirm title="确认删除这张图片？" @confirm="removePreviewImage"><Button danger type="text"><DeleteOutlined />删除</Button></Popconfirm>
-        </div>
-      </div>
-    </Modal>
-
-    <Drawer v-model:open="previewInfoOpen" :height="isMobileView ? '58vh' : undefined" :placement="isMobileView ? 'bottom' : 'right'" title="图片信息" width="360">
-      <div v-if="currentPreviewImage" class="image-info-list">
-        <div><span>标题</span><strong>{{ getImageDisplayName(currentPreviewImage) }}</strong></div>
-        <div><span>备注</span><strong>{{ currentPreviewImage.caption || '-' }}</strong></div>
-        <div><span>原始文件名</span><strong>{{ currentPreviewImage.originalFilename || '-' }}</strong></div>
-        <div><span>大小</span><strong>{{ formatFileSize(currentPreviewImage.fileSize) }}</strong></div>
-        <div><span>上传时间</span><strong>{{ currentPreviewImage.createTime || '-' }}</strong></div>
-        <div><span>当前位置</span><strong>{{ previewIndex + 1 }} / {{ images.length }}</strong></div>
-      </div>
-    </Drawer>
 
     <Modal v-model:open="imageEditOpen" title="编辑图片信息" @ok="saveImageEdit">
       <Form layout="vertical">
@@ -961,165 +840,6 @@ onBeforeUnmount(() => {
   bottom: 76px;
 }
 
-:deep(.photo-preview-modal) {
-  top: 0;
-  max-width: 100vw;
-  padding-bottom: 0;
-}
-
-:deep(.photo-preview-modal .ant-modal-content) {
-  width: 100vw;
-  height: 100vh;
-  padding: 0;
-  overflow: hidden;
-  background: #080b12;
-  border-radius: 0;
-  box-shadow: none;
-}
-
-:deep(.photo-preview-modal .ant-modal-body) {
-  width: 100vw;
-  height: 100vh;
-  padding: 0;
-}
-
-.preview-shell {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100vw;
-  min-height: 100vh;
-  overflow: hidden;
-  background: #080b12;
-}
-
-.preview-stage {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100vh;
-  overflow: auto;
-}
-
-.preview-stage img {
-  max-width: 100%;
-  max-height: 100vh;
-  object-fit: contain;
-  transition: transform 0.12s ease;
-  transform-origin: center center;
-}
-
-.preview-topbar {
-  position: absolute;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 3;
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px 40px;
-  color: #fff;
-  background: linear-gradient(180deg, rgb(0 0 0 / 62%) 0%, rgb(0 0 0 / 0%) 100%);
-}
-
-.preview-topbar span {
-  min-width: 0;
-  overflow: hidden;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.preview-topbar small {
-  flex: 0 0 auto;
-  color: #d8dee9;
-}
-
-.preview-close {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 5;
-  width: 36px;
-  height: 36px;
-  color: #fff;
-  font-size: 28px;
-  line-height: 1;
-  background: rgb(8 11 18 / 48%);
-}
-
-.preview-close:hover {
-  color: #fff;
-  background: rgb(8 11 18 / 72%);
-}
-
-.preview-nav {
-  position: absolute;
-  top: 50%;
-  z-index: 3;
-  transform: translateY(-50%);
-}
-
-.preview-nav.left {
-  left: 12px;
-}
-
-.preview-nav.right {
-  right: 12px;
-}
-
-.preview-tools {
-  position: absolute;
-  right: 16px;
-  bottom: 16px;
-  z-index: 3;
-  display: flex;
-  gap: 8px;
-  padding: 8px;
-  background: rgb(8 11 18 / 68%);
-  border-radius: 8px;
-}
-
-.preview-bottom-actions {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 4;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 2px;
-  padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-  background: rgb(8 11 18 / 86%);
-}
-
-.preview-bottom-actions :deep(.ant-btn) {
-  height: 44px;
-  color: #fff;
-}
-
-.image-info-list {
-  display: grid;
-  gap: 14px;
-}
-
-.image-info-list div {
-  display: grid;
-  gap: 4px;
-}
-
-.image-info-list span {
-  color: #7b8494;
-}
-
-.image-info-list strong {
-  overflow-wrap: anywhere;
-  font-weight: 500;
-}
-
 @media (max-width: 768px) {
   .photo-album-page {
     padding: 8px 8px 72px;
@@ -1201,29 +921,5 @@ onBeforeUnmount(() => {
     display: none;
   }
 
-  .preview-shell,
-  .preview-stage {
-    min-height: 100vh;
-    height: 100vh;
-  }
-
-  .preview-stage img {
-    max-height: calc(100vh - 72px);
-  }
-
-  .preview-tools {
-    right: 8px;
-    bottom: 72px;
-    left: 8px;
-    justify-content: center;
-  }
-
-  .preview-tools > :deep(.ant-btn:nth-last-child(-n + 3)) {
-    display: none;
-  }
-
-  .preview-nav {
-    display: none;
-  }
 }
 </style>
