@@ -1,13 +1,20 @@
 <script lang="ts" setup>
+import type { Dayjs } from 'dayjs';
+
 import type { Task, TaskQueryParams, TaskType } from '#/api/core/todo';
 
 import { computed, onMounted, ref } from 'vue';
 
-import { EditOutlined, ReloadOutlined } from '@ant-design/icons-vue';
+import {
+  DeleteOutlined,
+  EditOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons-vue';
 import {
   Button as AButton,
   Empty as AEmpty,
   Modal as AModal,
+  Popconfirm as APopconfirm,
   RangePicker as ARangePicker,
   Select as ASelect,
   SelectOption as ASelectOption,
@@ -15,9 +22,14 @@ import {
   Textarea as ATextarea,
   message,
 } from 'ant-design-vue';
-import dayjs, { type Dayjs } from 'dayjs';
+import dayjs from 'dayjs';
 
-import { getTaskList, getTaskTypeList, updateTask } from '#/api/core/todo';
+import {
+  deleteTask,
+  getTaskList,
+  getTaskTypeList,
+  updateTask,
+} from '#/api/core/todo';
 
 type FailureReasonFilter = 'all' | 'empty' | 'filled';
 type QuickDateRange = 'month' | 'today' | 'week';
@@ -43,6 +55,7 @@ const tasks = ref<Task[]>([]);
 const taskTypes = ref<TaskType[]>([]);
 const loading = ref(false);
 const saving = ref(false);
+const deletingTaskId = ref<null | number>(null);
 const modalVisible = ref(false);
 const reviewForm = ref<ReviewForm>({ failureReason: '' });
 
@@ -187,8 +200,12 @@ function filterDefaultThemeTasks(list: Task[]) {
 
 function sortTasks(list: Task[]) {
   return [...list].sort((left, right) => {
-    const leftTime = dayjs(left.endTime || left.dueDate || left.startTime).valueOf();
-    const rightTime = dayjs(right.endTime || right.dueDate || right.startTime).valueOf();
+    const leftTime = dayjs(
+      left.endTime || left.dueDate || left.startTime,
+    ).valueOf();
+    const rightTime = dayjs(
+      right.endTime || right.dueDate || right.startTime,
+    ).valueOf();
     return rightTime - leftTime;
   });
 }
@@ -263,6 +280,24 @@ function openReviewModal(task: Task) {
     task,
   };
   modalVisible.value = true;
+}
+
+async function handleDelete(task: Task) {
+  if (deletingTaskId.value !== null) {
+    return;
+  }
+
+  deletingTaskId.value = task.id;
+  try {
+    await deleteTask({ id: task.id });
+    tasks.value = tasks.value.filter((item) => item.id !== task.id);
+    message.success('代办已删除');
+  } catch (error) {
+    console.error('删除代办失败', error);
+    message.error('删除代办失败');
+  } finally {
+    deletingTaskId.value = null;
+  }
 }
 
 async function saveFailureReason() {
@@ -384,17 +419,10 @@ async function saveFailureReason() {
     </div>
 
     <div class="review-list" :class="{ loading }">
-      <AEmpty
-        v-if="!loading && tasks.length === 0"
-        :description="emptyText"
-      />
+      <AEmpty v-if="!loading && tasks.length === 0" :description="emptyText" />
 
       <template v-else>
-        <article
-          v-for="task in tasks"
-          :key="task.id"
-          class="review-item"
-        >
+        <article v-for="task in tasks" :key="task.id" class="review-item">
           <div class="review-item-main">
             <div class="review-item-title-row">
               <h3 class="review-item-title">{{ task.content }}</h3>
@@ -410,18 +438,34 @@ async function saveFailureReason() {
               <ATag>{{ getTaskThemeLabel(task) }}</ATag>
               <span class="review-date">截止 {{ formatDate(task) }}</span>
             </div>
-            <div
-              class="failure-reason"
-              :class="{ empty: !task.failureReason }"
-            >
+            <div class="failure-reason" :class="{ empty: !task.failureReason }">
               {{ task.failureReason || '未填写失败原因' }}
             </div>
           </div>
 
-          <AButton type="primary" @click="openReviewModal(task)">
-            <EditOutlined />
-            复盘
-          </AButton>
+          <div class="review-item-actions">
+            <AButton type="primary" @click="openReviewModal(task)">
+              <EditOutlined />
+              复盘
+            </AButton>
+            <APopconfirm
+              cancel-text="取消"
+              ok-text="确定"
+              title="确定删除这条失败代办吗？"
+              @confirm="handleDelete(task)"
+            >
+              <AButton
+                danger
+                :disabled="
+                  deletingTaskId !== null && deletingTaskId !== task.id
+                "
+                :loading="deletingTaskId === task.id"
+              >
+                <DeleteOutlined />
+                删除
+              </AButton>
+            </APopconfirm>
+          </div>
         </article>
       </template>
     </div>
@@ -514,6 +558,17 @@ async function saveFailureReason() {
   align-items: center;
 }
 
+.review-item-actions {
+  display: flex;
+  min-width: 88px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.review-item-actions :deep(.ant-btn) {
+  width: 100%;
+}
+
 .review-item-title {
   margin: 0;
   color: #101828;
@@ -566,6 +621,16 @@ async function saveFailureReason() {
 
   .review-item {
     grid-template-columns: 1fr;
+  }
+
+  .review-item-actions {
+    min-width: 0;
+    flex-direction: row;
+    justify-content: flex-end;
+  }
+
+  .review-item-actions :deep(.ant-btn) {
+    width: auto;
   }
 }
 </style>
