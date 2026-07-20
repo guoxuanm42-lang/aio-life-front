@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AiAgentConfig } from '#/api/core/ai';
+import type { AiAgentConfig, AiStreamController } from '#/api/core/ai';
 import type { ChatMessage as AIChatMessage, ChatSession } from '#/api/core/llm';
 import type { Message } from '#/api/core/message';
 
@@ -10,7 +10,6 @@ import { usePreferences } from '@vben/preferences';
 import { useUserStore } from '@vben/stores';
 
 import { message as antMessage } from 'ant-design-vue';
-import { marked } from 'marked';
 
 import {
   chatWithAiApi,
@@ -32,6 +31,7 @@ import {
   markAsReadApi,
 } from '#/api/core/message';
 import { getUserBasicInfoApi } from '#/api/core/user';
+import { renderSafeMarkdown } from '#/utils/safe-markdown';
 
 import ChatSessionList from './components/ChatSessionList.vue';
 import ChatWindow from './components/ChatWindow.vue';
@@ -59,6 +59,9 @@ const menuItems = [
 ];
 
 const handleMenuClick = (key: string) => {
+  if (isStreaming.value) {
+    handleStopAiGeneration();
+  }
   activeMenu.value = key;
   if (key === 'ai-chat') {
     // Keep conversationId if already in URL, otherwise clear userId
@@ -80,6 +83,7 @@ const aiChatLoading = ref(false);
 const aiChatInput = ref('');
 const streamingContent = ref('');
 const isStreaming = ref(false);
+const activeAiStream = ref<AiStreamController>();
 const summarizeLoading = ref(false);
 const aiAgents = ref<AiAgentConfig[]>([]);
 const selectedAgentCode = ref('life_assistant');
@@ -139,6 +143,9 @@ const fetchAISessions = async () => {
 };
 
 const handleSelectSession = (conversationId: string) => {
+  if (isStreaming.value) {
+    handleStopAiGeneration();
+  }
   router.push({ query: { ...route.query, conversationId, userId: undefined } });
 };
 
@@ -579,7 +586,7 @@ const handleAISendMessage = async () => {
   aiChatLoading.value = true;
 
   try {
-    chatWithAiStreamApi(
+    const streamController = chatWithAiStreamApi(
       {
         agentCode: selectedAgentCode.value,
         conversationId: normalizeConversationId(selectedConversationId.value),
@@ -593,6 +600,7 @@ const handleAISendMessage = async () => {
         }
       },
       () => {
+        activeAiStream.value = undefined;
         isStreaming.value = false;
         aiChatLoading.value = false;
 
@@ -605,6 +613,7 @@ const handleAISendMessage = async () => {
         }
       },
       (error) => {
+        activeAiStream.value = undefined;
         console.error('Failed to send message to AI:', error);
         antMessage.error('发送消息失败，请检查大模型配置');
         const lastMsg = aiChatMessages.value[aiChatMessages.value.length - 1];
@@ -614,13 +623,27 @@ const handleAISendMessage = async () => {
         isStreaming.value = false;
         aiChatLoading.value = false;
       },
-    ).start();
+      () => {
+        activeAiStream.value = undefined;
+        isStreaming.value = false;
+        aiChatLoading.value = false;
+      },
+    );
+    activeAiStream.value = streamController;
+    void streamController.start();
   } catch (error) {
     console.error('Failed to send message to AI:', error);
     antMessage.error('发送消息失败，请检查大模型配置');
     isStreaming.value = false;
     aiChatLoading.value = false;
   }
+};
+
+const handleStopAiGeneration = () => {
+  activeAiStream.value?.abort();
+  activeAiStream.value = undefined;
+  isStreaming.value = false;
+  aiChatLoading.value = false;
 };
 
 const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
@@ -665,10 +688,7 @@ const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
 };
 
 const renderMarkdown = (content: string) => {
-  return marked.parse(content, {
-    breaks: true,
-    gfm: true,
-  }) as string;
+  return renderSafeMarkdown(content);
 };
 
 const chatMessagesContainer = ref<HTMLElement | null>(null);
@@ -719,6 +739,8 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  activeAiStream.value?.abort();
+  activeAiStream.value = undefined;
   document.removeEventListener('click', closeAiMessageContextMenu);
 });
 </script>
@@ -808,11 +830,11 @@ onUnmounted(() => {
         v-if="
           !isMobile || selectedUserId || (isAIChat && selectedConversationId)
         "
-        class="flex flex-1 flex-col bg-white min-h-0"
+        class="flex min-h-0 flex-1 flex-col bg-white"
       >
         <div
           v-if="isAIChat && selectedConversationId"
-          class="flex flex-1 flex-col min-h-0"
+          class="flex min-h-0 flex-1 flex-col"
         >
           <div
             class="flex items-center justify-between border-b border-gray-100 px-4 py-3"
@@ -903,11 +925,14 @@ onUnmounted(() => {
                     : 'bg-gray-100 text-gray-800'
                 "
               >
+                <!-- AI Markdown is sanitized by renderSafeMarkdown before v-html rendering. -->
+                <!-- eslint-disable vue/no-v-html -->
                 <div
                   v-if="msg.role !== 'user' && msg.content"
                   v-html="renderMarkdown(msg.content)"
                   class="prose prose-sm max-w-none"
                 ></div>
+                <!-- eslint-enable vue/no-v-html -->
                 <div
                   v-else-if="msg.role !== 'user' && !msg.content"
                   class="flex items-center gap-1.5 px-1 py-1"
@@ -951,19 +976,21 @@ onUnmounted(() => {
                 :disabled="isStreaming || enabledAiAgents.length === 0"
               />
               <button
-                class="rounded-lg bg-blue-500 px-4 py-2 text-white transition-colors hover:bg-blue-600 disabled:opacity-50"
-                @click="handleAISendMessage"
+                class="rounded-lg px-4 py-2 text-white transition-colors disabled:opacity-50"
+                :class="
+                  isStreaming
+                    ? 'bg-red-500 hover:bg-red-600'
+                    : 'bg-blue-500 hover:bg-blue-600'
+                "
+                @click="
+                  isStreaming ? handleStopAiGeneration() : handleAISendMessage()
+                "
                 :disabled="
-                  aiChatLoading ||
-                  !aiChatInput.trim() ||
-                  isStreaming ||
-                  enabledAiAgents.length === 0
+                  !isStreaming &&
+                  (!aiChatInput.trim() || enabledAiAgents.length === 0)
                 "
               >
-                <span
-                  v-if="aiChatLoading"
-                  class="i-ant-design:loading-3-quarters-outlined animate-spin"
-                ></span>
+                <span v-if="isStreaming">停止生成</span>
                 <span v-else>发送</span>
               </button>
             </div>

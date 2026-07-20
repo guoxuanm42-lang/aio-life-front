@@ -2,6 +2,8 @@ import { useAccessStore } from '@vben/stores';
 
 import { requestClient } from '#/api/request';
 
+import { createServerSentEventParser } from './ai-stream';
+
 export interface AiAgentConfig {
   id?: number;
   userId?: number;
@@ -79,6 +81,20 @@ export interface AiMemoryQuery {
   memoryType?: string;
 }
 
+export interface AiStreamController {
+  abort: () => void;
+  start: () => Promise<void>;
+}
+
+interface AiTokenEvent {
+  content: string;
+}
+
+interface AiErrorEvent {
+  code: string;
+  message: string;
+}
+
 export async function getAiAgentsApi() {
   return requestClient.get<AiAgentConfig[]>('/ai/agents');
 }
@@ -94,10 +110,7 @@ export async function saveAiAgentApi(
   return requestClient.post<AiAgentConfig>(`/ai/agents/${code}`, data);
 }
 
-export async function updateAiAgentStatusApi(
-  code: string,
-  enabled: boolean,
-) {
+export async function updateAiAgentStatusApi(code: string, enabled: boolean) {
   return requestClient.put<AiAgentConfig>(`/ai/agents/${code}/status`, {
     enabled,
   });
@@ -140,9 +153,13 @@ export function chatWithAiStreamApi(
   onData?: (token: string) => void,
   onDone?: () => void,
   onError?: (error: string) => void,
-) {
+  onCancelled?: () => void,
+): AiStreamController {
+  const abortController = new AbortController();
+
   return {
-    start: () => {
+    abort: () => abortController.abort(),
+    start: async () => {
       const accessStore = useAccessStore();
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
@@ -152,93 +169,75 @@ export function chatWithAiStreamApi(
         headers.Authorization = `Bearer ${accessStore.accessToken}`;
       }
 
-      fetch('/api/ai/chat/stream', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data),
-      })
-        .then(async (response) => {
-          if (!response.ok) {
-            throw new Error('Network response was not ok');
-          }
+      try {
+        const response = await fetch('/api/ai/chat/stream', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(data),
+          signal: abortController.signal,
+        });
 
-          const reader = response.body?.getReader();
-          const decoder = new TextDecoder();
-          if (!reader) {
-            throw new Error('No reader available');
-          }
+        if (!response.ok) {
+          throw new Error(
+            `AI stream request failed with status ${response.status}`,
+          );
+        }
 
-          let done = false;
-          let buffer = '';
+        const reader = response.body?.getReader();
+        if (!reader) {
+          throw new Error('AI stream response body is unavailable');
+        }
 
-          while (!done) {
-            const { value, done: readerDone } = await reader.read();
-            done = readerDone;
-
-            if (value) {
-              buffer += decoder.decode(value, { stream: true });
-
-              while (true) {
-                const doneIndex = buffer.indexOf('[DONE]');
-                const errorIndex = buffer.indexOf('[ERROR] ');
-
-                if (doneIndex !== -1) {
-                  const beforeDone = buffer.slice(0, doneIndex);
-                  const cleanBeforeDone = beforeDone
-                    .replaceAll('data:', '')
-                    .trim();
-                  if (cleanBeforeDone) {
-                    onData?.(cleanBeforeDone);
-                  }
-                  onDone?.();
-                  return;
+        const decoder = new TextDecoder();
+        let terminalEventReceived = false;
+        const parser = createServerSentEventParser(
+          ({ event, data: eventData }) => {
+            switch (event) {
+              case 'done': {
+                terminalEventReceived = true;
+                onDone?.();
+                break;
+              }
+              case 'error': {
+                terminalEventReceived = true;
+                const payload = JSON.parse(eventData) as AiErrorEvent;
+                onError?.(payload.message || 'AI 生成失败，请稍后重试');
+                break;
+              }
+              case 'token': {
+                const payload = JSON.parse(eventData) as AiTokenEvent;
+                if (typeof payload.content !== 'string') {
+                  throw new TypeError('Invalid AI token event');
                 }
-
-                if (errorIndex !== -1) {
-                  const beforeError = buffer.slice(0, errorIndex);
-                  const cleanBeforeError = beforeError
-                    .replaceAll('data:', '')
-                    .trim();
-                  if (cleanBeforeError) {
-                    onData?.(cleanBeforeError);
-                  }
-                  const errorMsg = buffer.slice(errorIndex + 8);
-                  onError?.(errorMsg.replaceAll('data:', '').trim());
-                  return;
-                }
-
-                const nextDataIndex = buffer.indexOf('data:', 5);
-                if (nextDataIndex === -1) {
-                  break;
-                }
-
-                const chunk = buffer.slice(0, nextDataIndex);
-                const cleanChunk = chunk.replaceAll('data:', '').trim();
-                if (cleanChunk) {
-                  onData?.(cleanChunk);
-                }
-
-                buffer = buffer.slice(nextDataIndex);
+                onData?.(payload.content);
+                break;
               }
             }
-          }
+          },
+        );
 
-          if (buffer.trim()) {
-            const cleanBuffer = buffer.replaceAll('data:', '').trim();
-            if (
-              cleanBuffer &&
-              cleanBuffer !== '[DONE]' &&
-              !cleanBuffer.startsWith('[ERROR] ')
-            ) {
-              onData?.(cleanBuffer);
-            }
-          }
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) parser.feed(decoder.decode(value, { stream: true }));
+          if (terminalEventReceived) break;
+        }
 
-          onDone?.();
-        })
-        .catch((error) => {
-          onError?.(error.message);
-        });
+        parser.feed(decoder.decode());
+        parser.end();
+
+        if (terminalEventReceived) {
+          await reader.cancel();
+        } else {
+          throw new Error('AI stream connection closed unexpectedly');
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          onCancelled?.();
+          return;
+        }
+        onError?.(error instanceof Error ? error.message : '未知流式请求错误');
+      }
     },
   };
 }
