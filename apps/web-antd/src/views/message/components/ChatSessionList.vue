@@ -90,10 +90,6 @@ const saveEdit = (conversationId: string) => {
   }
   editingId.value = null;
 };
-
-const cancelEdit = () => {
-  editingId.value = null;
-};
 </script>
 
 <template>
@@ -177,6 +173,7 @@ const cancelEdit = () => {
         class="flex flex-col items-center justify-center py-10 text-gray-400/80"
       >
         <p class="text-xs">暂无会话历史</p>
+        <slot name="empty-action"></slot>
       </div>
     </div>
 

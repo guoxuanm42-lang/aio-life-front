@@ -97,7 +97,8 @@ function createRequestClient(baseURL: string, options?: RequestClientOptions) {
       // 忽略特定接口的报错
       if (
         error?.config?.url?.includes('/dashboard/card') ||
-        error?.config?.url?.includes('/message/unread-count')
+        error?.config?.url?.includes('/message/unread-count') ||
+        error?.config?.url?.includes('/ai/activity-summary/generate')
       ) {
         return;
       }

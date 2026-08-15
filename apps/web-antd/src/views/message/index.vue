@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import type { AiAgentConfig, AiStreamController } from '#/api/core/ai';
-import type { ChatMessage as AIChatMessage, ChatSession } from '#/api/core/llm';
+import type {
+  ActivitySummaryPeriod,
+  ChatMessage as AIChatMessage,
+  ChatSession,
+} from '#/api/core/llm';
 import type { Message } from '#/api/core/message';
 
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
@@ -11,17 +15,13 @@ import { useUserStore } from '@vben/stores';
 
 import { message as antMessage } from 'ant-design-vue';
 
-import {
-  chatWithAiApi,
-  chatWithAiStreamApi,
-  getAiAgentsApi,
-} from '#/api/core/ai';
+import { chatWithAiStreamApi, getAiAgentsApi } from '#/api/core/ai';
 import {
   createChatSessionApi,
   deleteChatSessionApi,
+  generateActivitySummaryApi,
   getChatHistoryApi,
   getChatSessionsApi,
-  summarizeTimeRecordsApi,
   updateChatSessionApi,
 } from '#/api/core/llm';
 import {
@@ -32,7 +32,9 @@ import {
 } from '#/api/core/message';
 import { getUserBasicInfoApi } from '#/api/core/user';
 import { renderSafeMarkdown } from '#/utils/safe-markdown';
+import { createUuid } from '#/utils/uuid';
 
+import ActivitySummaryAction from './components/ActivitySummaryAction.vue';
 import ChatSessionList from './components/ChatSessionList.vue';
 import ChatWindow from './components/ChatWindow.vue';
 import ConversationList from './components/ConversationList.vue';
@@ -85,6 +87,27 @@ const streamingContent = ref('');
 const isStreaming = ref(false);
 const activeAiStream = ref<AiStreamController>();
 const summarizeLoading = ref(false);
+const SUMMARY_PERIOD_STORAGE_KEY = 'aio-life:activity-summary-period';
+
+const isActivitySummaryPeriod = (
+  value: null | string,
+): value is ActivitySummaryPeriod =>
+  value === 'week' || value === 'month' || value === 'year';
+
+const getStoredSummaryPeriod = (): ActivitySummaryPeriod => {
+  const storedPeriod = window.localStorage.getItem(SUMMARY_PERIOD_STORAGE_KEY);
+  return isActivitySummaryPeriod(storedPeriod) ? storedPeriod : 'week';
+};
+
+const summaryPeriod = ref<ActivitySummaryPeriod>(getStoredSummaryPeriod());
+const pendingSummaryRequest = ref<
+  | undefined
+  | {
+      conversationId: string;
+      idempotencyKey: string;
+      period: ActivitySummaryPeriod;
+    }
+>();
 const aiAgents = ref<AiAgentConfig[]>([]);
 const selectedAgentCode = ref('life_assistant');
 
@@ -96,11 +119,17 @@ const selectedAgent = computed(() =>
   aiAgents.value.find((agent) => agent.code === selectedAgentCode.value),
 );
 
-const normalizeConversationId = (conversationId?: string) => {
-  if (!conversationId) return undefined;
-  const numericId = Number(conversationId);
-  return Number.isFinite(numericId) ? numericId : conversationId;
-};
+const canRetryActivitySummary = computed(() => {
+  const pending = pendingSummaryRequest.value;
+  return Boolean(
+    pending &&
+    pending.period === summaryPeriod.value &&
+    pending.conversationId === selectedConversationId.value,
+  );
+});
+
+const summaryPeriodLabel = (period: ActivitySummaryPeriod) =>
+  ({ month: '本月', week: '本周', year: '本年' })[period];
 
 const resolveInitialAgentCode = (agents: AiAgentConfig[]) => {
   const lifeAssistant = agents.find(
@@ -130,6 +159,12 @@ const fetchAIAgents = async () => {
 const fetchAISessions = async () => {
   try {
     aiSessions.value = await getChatSessionsApi();
+    const activeSession = aiSessions.value.find(
+      (session) => session.id === selectedConversationId.value,
+    );
+    if (activeSession?.agentCode) {
+      selectedAgentCode.value = activeSession.agentCode;
+    }
     if (
       aiSessions.value.length > 0 &&
       !selectedConversationId.value &&
@@ -162,7 +197,10 @@ const fetchAIChatHistory = async (conversationId: string) => {
 
 const handleCreateSession = async () => {
   try {
-    const newSession = await createChatSessionApi('新会话');
+    const newSession = await createChatSessionApi(
+      '新会话',
+      selectedAgentCode.value,
+    );
     aiSessions.value.unshift(newSession);
     handleSelectSession(newSession.id);
   } catch (error) {
@@ -212,16 +250,35 @@ watch(
   { immediate: true },
 );
 
+watch(summaryPeriod, (period) => {
+  window.localStorage.setItem(SUMMARY_PERIOD_STORAGE_KEY, period);
+  if (pendingSummaryRequest.value?.period !== period) {
+    pendingSummaryRequest.value = undefined;
+  }
+});
+
 watch(
   () => route.query.conversationId,
   async (newId) => {
     if (newId) {
       selectedConversationId.value = String(newId);
       activeMenu.value = 'ai-chat';
+      const session = aiSessions.value.find(
+        (item) => item.id === String(newId),
+      );
+      if (session?.agentCode) {
+        selectedAgentCode.value = session.agentCode;
+      }
       await fetchAIChatHistory(String(newId));
     } else {
       selectedConversationId.value = undefined;
       aiChatMessages.value = [];
+    }
+    if (
+      pendingSummaryRequest.value &&
+      pendingSummaryRequest.value.conversationId !== String(newId ?? '')
+    ) {
+      pendingSummaryRequest.value = undefined;
     }
   },
   { immediate: true },
@@ -548,6 +605,7 @@ const handleAISendMessage = async () => {
     try {
       const newSession = await createChatSessionApi(
         content.slice(0, 20) || '新会话',
+        selectedAgentCode.value,
       );
       aiSessions.value.unshift(newSession);
       selectedConversationId.value = newSession.id;
@@ -589,7 +647,7 @@ const handleAISendMessage = async () => {
     const streamController = chatWithAiStreamApi(
       {
         agentCode: selectedAgentCode.value,
-        conversationId: normalizeConversationId(selectedConversationId.value),
+        conversationId: selectedConversationId.value,
         message: content,
       },
       (token) => {
@@ -646,42 +704,72 @@ const handleStopAiGeneration = () => {
   aiChatLoading.value = false;
 };
 
-const handleSummarizeTimeRecords = async (type: 'today' | 'week') => {
+const handleSelectSummaryPeriod = (period: ActivitySummaryPeriod) => {
+  summaryPeriod.value = period;
+};
+
+const getRequestErrorMessage = (error: unknown) => {
+  const responseResult = (
+    error as { response?: { data?: { result?: unknown } } }
+  )?.response?.data?.result;
+  return typeof responseResult === 'string' && responseResult.trim()
+    ? responseResult
+    : '生成活动总结失败，请稍后重试';
+};
+
+const handleGenerateActivitySummary = async () => {
+  if (summarizeLoading.value) return;
+
   try {
     summarizeLoading.value = true;
 
-    // If no session selected, create one first
+    const initialConversationId = selectedConversationId.value;
+    const reusableRequest = pendingSummaryRequest.value;
+    const idempotencyKey =
+      initialConversationId &&
+      reusableRequest?.period === summaryPeriod.value &&
+      reusableRequest.conversationId === initialConversationId
+        ? reusableRequest.idempotencyKey
+        : createUuid();
+
     if (!selectedConversationId.value) {
       const newSession = await createChatSessionApi(
-        `${type === 'today' ? '今日' : '本周'}时迹总结`,
+        `${summaryPeriodLabel(summaryPeriod.value)}活动总结`,
+        selectedAgentCode.value,
       );
       aiSessions.value.unshift(newSession);
       selectedConversationId.value = newSession.id;
       handleSelectSession(newSession.id);
     }
 
-    const summary = await summarizeTimeRecordsApi(type);
-
-    const summaryMessage: AIChatMessage = {
-      id: Date.now().toString(),
-      userId: Number(myId.value),
-      conversationId: selectedConversationId.value,
-      role: 'assistant',
-      content: summary,
-      modelName: 'AI Summary',
-      createTime: new Date().toISOString(),
+    const targetConversationId = selectedConversationId.value;
+    if (!targetConversationId) {
+      throw new Error('创建活动总结会话失败');
+    }
+    pendingSummaryRequest.value = {
+      conversationId: targetConversationId,
+      idempotencyKey,
+      period: summaryPeriod.value,
     };
-    aiChatMessages.value.push(summaryMessage);
 
-    // Also save this summary to the database as a message
-    await chatWithAiApi({
-      agentCode: selectedAgentCode.value,
-      conversationId: normalizeConversationId(selectedConversationId.value),
-      message: `请记录以下总结：\n${summary}`,
+    const result = await generateActivitySummaryApi({
+      period: summaryPeriod.value,
+      conversationId: targetConversationId,
+      idempotencyKey,
     });
+    pendingSummaryRequest.value = undefined;
+
+    if (!result.userMessageId || !result.assistantMessageId) {
+      antMessage.info(`${summaryPeriodLabel(result.period)}还没有可总结的活动`);
+      return;
+    }
+    const responseConversationId = String(result.conversationId);
+    if (selectedConversationId.value === responseConversationId) {
+      await fetchAIChatHistory(responseConversationId);
+    }
   } catch (error) {
-    console.error('Failed to summarize time records:', error);
-    antMessage.error('总结时迹记录失败，请检查大模型配置');
+    console.error('Failed to generate activity summary:', error);
+    antMessage.error(getRequestErrorMessage(error));
   } finally {
     summarizeLoading.value = false;
   }
@@ -816,7 +904,35 @@ onUnmounted(() => {
           @create="handleCreateSession"
           @delete="handleDeleteSession"
           @update-title="handleUpdateSessionTitle"
-        />
+        >
+          <template #empty-action>
+            <div v-if="isMobile" class="mt-4 flex flex-col items-center gap-3">
+              <select
+                v-model="selectedAgentCode"
+                class="h-8 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700"
+                :disabled="enabledAiAgents.length === 0"
+                aria-label="选择活动总结助手"
+              >
+                <option
+                  v-for="agent in enabledAiAgents"
+                  :key="agent.code"
+                  :value="agent.code"
+                >
+                  {{ agent.name || agent.code }}
+                </option>
+              </select>
+              <ActivitySummaryAction
+                :disabled="enabledAiAgents.length === 0"
+                :loading="summarizeLoading"
+                mobile
+                :period="summaryPeriod"
+                :retry="canRetryActivitySummary"
+                @generate="handleGenerateActivitySummary"
+                @select="handleSelectSummaryPeriod"
+              />
+            </div>
+          </template>
+        </ChatSessionList>
         <ConversationList
           v-else
           :conversations="conversations"
@@ -870,7 +986,12 @@ onUnmounted(() => {
               <select
                 v-model="selectedAgentCode"
                 class="h-8 rounded-lg border border-gray-300 bg-white px-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-                :disabled="isStreaming || enabledAiAgents.length === 0"
+                :disabled="
+                  Boolean(selectedConversationId) ||
+                  isStreaming ||
+                  enabledAiAgents.length === 0
+                "
+                title="当前会话已绑定此 AI Agent"
               >
                 <option
                   v-for="agent in enabledAiAgents"
@@ -880,28 +1001,15 @@ onUnmounted(() => {
                   {{ agent.name || agent.code }}
                 </option>
               </select>
-              <button
-                class="rounded-lg bg-green-100 px-3 py-1 text-sm text-green-800 transition-colors hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-50"
-                @click="handleSummarizeTimeRecords('today')"
-                :disabled="summarizeLoading || isStreaming"
-              >
-                <span
-                  v-if="summarizeLoading"
-                  class="i-ant-design:loading-3-quarters-outlined mr-1 animate-spin"
-                ></span>
-                总结今日
-              </button>
-              <button
-                class="rounded-lg bg-green-100 px-3 py-1 text-sm text-green-800 transition-colors hover:bg-green-200 disabled:cursor-not-allowed disabled:opacity-50"
-                @click="handleSummarizeTimeRecords('week')"
-                :disabled="summarizeLoading || isStreaming"
-              >
-                <span
-                  v-if="summarizeLoading"
-                  class="i-ant-design:loading-3-quarters-outlined mr-1 animate-spin"
-                ></span>
-                总结本周
-              </button>
+              <ActivitySummaryAction
+                :disabled="isStreaming || enabledAiAgents.length === 0"
+                :loading="summarizeLoading"
+                :mobile="isMobile"
+                :period="summaryPeriod"
+                :retry="canRetryActivitySummary"
+                @generate="handleGenerateActivitySummary"
+                @select="handleSelectSummaryPeriod"
+              />
             </div>
           </div>
 
@@ -1018,9 +1126,41 @@ onUnmounted(() => {
           class="flex h-full flex-col items-center justify-center bg-gray-50/30 text-gray-400"
         >
           <div
-            class="i-ant-design:message-outlined mb-4 text-6xl opacity-20"
+            class="mb-4 text-6xl opacity-20"
+            :class="
+              isAIChat
+                ? 'i-ant-design:robot-outlined'
+                : 'i-ant-design:message-outlined'
+            "
           ></div>
-          <p>选择一个会话开始聊天</p>
+          <template v-if="isAIChat">
+            <p>选择会话，或者直接生成一份活动总结</p>
+            <div class="mt-5 flex items-center gap-2">
+              <select
+                v-model="selectedAgentCode"
+                class="h-8 rounded-lg border border-gray-200 bg-white px-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                :disabled="enabledAiAgents.length === 0"
+                aria-label="选择活动总结助手"
+              >
+                <option
+                  v-for="agent in enabledAiAgents"
+                  :key="agent.code"
+                  :value="agent.code"
+                >
+                  {{ agent.name || agent.code }}
+                </option>
+              </select>
+              <ActivitySummaryAction
+                :disabled="enabledAiAgents.length === 0"
+                :loading="summarizeLoading"
+                :period="summaryPeriod"
+                :retry="canRetryActivitySummary"
+                @generate="handleGenerateActivitySummary"
+                @select="handleSelectSummaryPeriod"
+              />
+            </div>
+          </template>
+          <p v-else>选择一个会话开始聊天</p>
         </div>
       </div>
     </div>

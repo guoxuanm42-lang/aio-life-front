@@ -17,6 +17,7 @@ export interface ChatSession {
   id: string;
   userId: number;
   title: string;
+  agentCode?: string;
   createTime: string;
   updateTime: string;
 }
@@ -28,6 +29,8 @@ export interface ChatMessage {
   role: 'assistant' | 'user';
   content: string;
   modelName: string;
+  sourceType?: string;
+  idempotencyKey?: string;
   createTime: string;
 }
 
@@ -67,16 +70,41 @@ export async function chatWithLLMApi(
   });
 }
 
-export async function summarizeTimeRecordsApi(type: 'today' | 'week') {
-  return requestClient.post<string>('/llm/summarize/time-records', { type });
+export type ActivitySummaryPeriod = 'month' | 'week' | 'year';
+
+export interface ActivitySummaryGenerateRequest {
+  period: ActivitySummaryPeriod;
+  conversationId: string;
+  idempotencyKey: string;
+}
+
+export interface ActivitySummaryGenerateResponse {
+  conversationId: string;
+  userMessageId?: string;
+  assistantMessageId?: string;
+  period: ActivitySummaryPeriod;
+  userMessage: string;
+  content: string;
+  modelName?: string;
+  agentCode?: string;
+  agentName?: string;
+}
+
+export async function generateActivitySummaryApi(
+  data: ActivitySummaryGenerateRequest,
+) {
+  return requestClient.post<ActivitySummaryGenerateResponse>(
+    '/ai/activity-summary/generate',
+    data,
+  );
 }
 
 export async function getChatSessionsApi() {
   return requestClient.get<ChatSession[]>('/llm/sessions');
 }
 
-export async function createChatSessionApi(title: string) {
-  return requestClient.post<ChatSession>('/llm/sessions', { title });
+export async function createChatSessionApi(title: string, agentCode?: string) {
+  return requestClient.post<ChatSession>('/llm/sessions', { title, agentCode });
 }
 
 export async function updateChatSessionApi(id: string, title: string) {
