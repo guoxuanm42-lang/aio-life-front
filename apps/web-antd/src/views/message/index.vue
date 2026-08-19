@@ -2,6 +2,7 @@
 import type { AiAgentConfig, AiStreamController } from '#/api/core/ai';
 import type {
   ActivitySummaryPeriod,
+  ActivitySummaryStreamController,
   ChatMessage as AIChatMessage,
   ChatSession,
 } from '#/api/core/llm';
@@ -19,7 +20,7 @@ import { chatWithAiStreamApi, getAiAgentsApi } from '#/api/core/ai';
 import {
   createChatSessionApi,
   deleteChatSessionApi,
-  generateActivitySummaryApi,
+  generateActivitySummaryStreamApi,
   getChatHistoryApi,
   getChatSessionsApi,
   updateChatSessionApi,
@@ -34,7 +35,20 @@ import { getUserBasicInfoApi } from '#/api/core/user';
 import { renderSafeMarkdown } from '#/utils/safe-markdown';
 import { createUuid } from '#/utils/uuid';
 
+import type { ActivitySummaryProgressTrace } from './activity-summary-progress';
+
+import {
+  applyActivitySummaryProgress,
+  completeActivitySummaryTrace,
+  createActivitySummaryTrace,
+  persistActivitySummaryTraces,
+  removeConversationSummaryTraces,
+  restoreActivitySummaryTraces,
+  terminateActivitySummaryTrace,
+} from './activity-summary-progress';
 import ActivitySummaryAction from './components/ActivitySummaryAction.vue';
+import ActivitySummaryProgress from './components/ActivitySummaryProgress.vue';
+import ActivitySummaryReport from './components/ActivitySummaryReport.vue';
 import ChatSessionList from './components/ChatSessionList.vue';
 import ChatWindow from './components/ChatWindow.vue';
 import ConversationList from './components/ConversationList.vue';
@@ -87,7 +101,40 @@ const streamingContent = ref('');
 const isStreaming = ref(false);
 const activeAiStream = ref<AiStreamController>();
 const summarizeLoading = ref(false);
+const activeSummaryStream = ref<ActivitySummaryStreamController>();
 const SUMMARY_PERIOD_STORAGE_KEY = 'aio-life:activity-summary-period';
+const summaryTraces = ref<ActivitySummaryProgressTrace[]>([]);
+const activeSummaryTraceKey = ref<string>();
+const restoredSummaryTraceUserId = ref('');
+
+const summaryProgress = computed(() =>
+  summaryTraces.value.find(
+    (trace) => trace.idempotencyKey === activeSummaryTraceKey.value,
+  ),
+);
+
+const summaryStorageUserId = computed(() => {
+  const info = userStore.userInfo as any;
+  return String(info?.userId || info?.id || '');
+});
+
+const setSummaryTrace = (trace: ActivitySummaryProgressTrace) => {
+  const index = summaryTraces.value.findIndex(
+    (item) => item.idempotencyKey === trace.idempotencyKey,
+  );
+  if (index < 0) {
+    summaryTraces.value = [...summaryTraces.value, trace];
+    return;
+  }
+  summaryTraces.value = summaryTraces.value.map((item, itemIndex) =>
+    itemIndex === index ? trace : item,
+  );
+};
+
+const toggleSummaryTrace = (trace?: ActivitySummaryProgressTrace) => {
+  if (!trace) return;
+  setSummaryTrace({ ...trace, collapsed: !trace.collapsed });
+};
 
 const isActivitySummaryPeriod = (
   value: null | string,
@@ -108,6 +155,42 @@ const pendingSummaryRequest = ref<
       period: ActivitySummaryPeriod;
     }
 >();
+
+watch(
+  summaryStorageUserId,
+  (userId) => {
+    if (!userId || restoredSummaryTraceUserId.value === userId) return;
+    const restoredTraces = restoreActivitySummaryTraces(userId);
+    summaryTraces.value = restoredTraces;
+    const resumableTrace = [...restoredTraces]
+      .reverse()
+      .find(
+        (trace) => trace.status === 'disconnected' || trace.status === 'failed',
+      );
+    activeSummaryTraceKey.value = resumableTrace?.idempotencyKey;
+    pendingSummaryRequest.value = resumableTrace
+      ? {
+          conversationId: resumableTrace.conversationId,
+          idempotencyKey: resumableTrace.idempotencyKey,
+          period: resumableTrace.period,
+        }
+      : undefined;
+    restoredSummaryTraceUserId.value = userId;
+  },
+  { immediate: true },
+);
+
+watch(
+  summaryTraces,
+  (traces) => {
+    const userId = summaryStorageUserId.value;
+    if (userId && restoredSummaryTraceUserId.value === userId) {
+      persistActivitySummaryTraces(userId, traces);
+    }
+  },
+  { deep: true },
+);
+
 const aiAgents = ref<AiAgentConfig[]>([]);
 const selectedAgentCode = ref('life_assistant');
 
@@ -123,10 +206,19 @@ const canRetryActivitySummary = computed(() => {
   const pending = pendingSummaryRequest.value;
   return Boolean(
     pending &&
+    summaryProgress.value?.status === 'failed' &&
+    summaryProgress.value.retryable === true &&
     pending.period === summaryPeriod.value &&
     pending.conversationId === selectedConversationId.value,
   );
 });
+
+const activitySummaryGenerationBlocked = computed(
+  () =>
+    summarizeLoading.value ||
+    summaryProgress.value?.status === 'running' ||
+    summaryProgress.value?.status === 'disconnected',
+);
 
 const summaryPeriodLabel = (period: ActivitySummaryPeriod) =>
   ({ month: '本月', week: '本周', year: '本年' })[period];
@@ -212,6 +304,17 @@ const handleDeleteSession = async (conversationId: string) => {
   try {
     await deleteChatSessionApi(conversationId);
     aiSessions.value = aiSessions.value.filter((s) => s.id !== conversationId);
+    summaryTraces.value = removeConversationSummaryTraces(
+      summaryTraces.value,
+      conversationId,
+    );
+    if (summaryProgress.value?.conversationId === conversationId) {
+      activeSummaryStream.value?.abort();
+      activeSummaryStream.value = undefined;
+      summarizeLoading.value = false;
+      activeSummaryTraceKey.value = undefined;
+      pendingSummaryRequest.value = undefined;
+    }
     if (selectedConversationId.value === conversationId) {
       if (aiSessions.value.length > 0) {
         handleSelectSession(aiSessions.value[0]?.id as string);
@@ -252,9 +355,6 @@ watch(
 
 watch(summaryPeriod, (period) => {
   window.localStorage.setItem(SUMMARY_PERIOD_STORAGE_KEY, period);
-  if (pendingSummaryRequest.value?.period !== period) {
-    pendingSummaryRequest.value = undefined;
-  }
 });
 
 watch(
@@ -273,12 +373,6 @@ watch(
     } else {
       selectedConversationId.value = undefined;
       aiChatMessages.value = [];
-    }
-    if (
-      pendingSummaryRequest.value &&
-      pendingSummaryRequest.value.conversationId !== String(newId ?? '')
-    ) {
-      pendingSummaryRequest.value = undefined;
     }
   },
   { immediate: true },
@@ -708,25 +802,51 @@ const handleSelectSummaryPeriod = (period: ActivitySummaryPeriod) => {
   summaryPeriod.value = period;
 };
 
-const getRequestErrorMessage = (error: unknown) => {
-  const responseResult = (
-    error as { response?: { data?: { result?: unknown } } }
-  )?.response?.data?.result;
-  return typeof responseResult === 'string' && responseResult.trim()
-    ? responseResult
-    : '生成活动总结失败，请稍后重试';
-};
+const isStructuredActivityReport = (message: AIChatMessage) =>
+  message.role === 'assistant' &&
+  message.sourceType === 'activity_summary' &&
+  Boolean(message.activitySummary);
+
+const summaryTraceMatchesMessage = (
+  trace: ActivitySummaryProgressTrace,
+  message: AIChatMessage,
+) =>
+  isStructuredActivityReport(message) &&
+  (trace.assistantMessageId === message.id ||
+    (Boolean(message.idempotencyKey) &&
+      trace.idempotencyKey === message.idempotencyKey));
+
+const summaryTraceForMessage = (message: AIChatMessage) =>
+  summaryTraces.value.find((trace) =>
+    summaryTraceMatchesMessage(trace, message),
+  );
+
+const visibleUnboundSummaryTraces = computed(() =>
+  summaryTraces.value
+    .filter(
+      (trace) =>
+        trace.conversationId === selectedConversationId.value &&
+        !aiChatMessages.value.some((message) =>
+          summaryTraceMatchesMessage(trace, message),
+        ),
+    )
+    .sort((left, right) => left.startedAt - right.startedAt),
+);
 
 const handleGenerateActivitySummary = async () => {
   if (summarizeLoading.value) return;
+  if (summaryProgress.value?.status === 'disconnected') {
+    antMessage.warning('请先刷新会话，确认后台报告状态');
+    return;
+  }
 
   try {
-    summarizeLoading.value = true;
-
     const initialConversationId = selectedConversationId.value;
     const reusableRequest = pendingSummaryRequest.value;
     const idempotencyKey =
       initialConversationId &&
+      summaryProgress.value?.status === 'failed' &&
+      summaryProgress.value.retryable === true &&
       reusableRequest?.period === summaryPeriod.value &&
       reusableRequest.conversationId === initialConversationId
         ? reusableRequest.idempotencyKey
@@ -751,28 +871,154 @@ const handleGenerateActivitySummary = async () => {
       idempotencyKey,
       period: summaryPeriod.value,
     };
-
-    const result = await generateActivitySummaryApi({
-      period: summaryPeriod.value,
+    const requestPeriod = summaryPeriod.value;
+    const initialTrace = createActivitySummaryTrace({
       conversationId: targetConversationId,
       idempotencyKey,
+      period: requestPeriod,
     });
-    pendingSummaryRequest.value = undefined;
+    setSummaryTrace(initialTrace);
+    activeSummaryTraceKey.value = idempotencyKey;
+    summarizeLoading.value = true;
 
-    if (!result.userMessageId || !result.assistantMessageId) {
-      antMessage.info(`${summaryPeriodLabel(result.period)}还没有可总结的活动`);
-      return;
-    }
-    const responseConversationId = String(result.conversationId);
-    if (selectedConversationId.value === responseConversationId) {
-      await fetchAIChatHistory(responseConversationId);
-    }
+    const isCurrentRequest = () =>
+      activeSummaryTraceKey.value === idempotencyKey;
+    const streamController = generateActivitySummaryStreamApi(
+      {
+        period: requestPeriod,
+        conversationId: targetConversationId,
+        idempotencyKey,
+      },
+      (progress) => {
+        const currentTrace = summaryProgress.value;
+        if (!isCurrentRequest() || !currentTrace) return;
+        setSummaryTrace(applyActivitySummaryProgress(currentTrace, progress));
+      },
+      (result) => {
+        const currentTrace = summaryProgress.value;
+        if (!isCurrentRequest() || !currentTrace) return;
+        activeSummaryStream.value = undefined;
+        summarizeLoading.value = false;
+        pendingSummaryRequest.value = undefined;
+        setSummaryTrace(completeActivitySummaryTrace(currentTrace, result));
+        activeSummaryTraceKey.value = undefined;
+        if (!result.userMessageId || !result.assistantMessageId) {
+          antMessage.info(
+            `${summaryPeriodLabel(result.period)}还没有可总结的活动`,
+          );
+          return;
+        }
+        const responseConversationId = String(result.conversationId);
+        if (selectedConversationId.value === responseConversationId) {
+          void fetchAIChatHistory(responseConversationId).catch((error) => {
+            console.error(
+              'Failed to refresh generated activity report:',
+              error,
+            );
+            antMessage.error('报告已生成，但刷新会话失败，请手动刷新');
+          });
+        }
+      },
+      (streamError) => {
+        const currentTrace = summaryProgress.value;
+        if (!isCurrentRequest() || !currentTrace) return;
+        activeSummaryStream.value = undefined;
+        summarizeLoading.value = false;
+        setSummaryTrace(
+          terminateActivitySummaryTrace(currentTrace, {
+            errorMessage: streamError.message,
+            retryable: streamError.retryable,
+            status: 'failed',
+          }),
+        );
+      },
+      (disconnectMessage) => {
+        const currentTrace = summaryProgress.value;
+        if (!isCurrentRequest() || !currentTrace) return;
+        activeSummaryStream.value = undefined;
+        summarizeLoading.value = false;
+        setSummaryTrace(
+          terminateActivitySummaryTrace(currentTrace, {
+            errorMessage: disconnectMessage,
+            status: 'disconnected',
+          }),
+        );
+      },
+    );
+    activeSummaryStream.value = streamController;
+    void streamController.start();
   } catch (error) {
     console.error('Failed to generate activity summary:', error);
-    antMessage.error(getRequestErrorMessage(error));
-  } finally {
     summarizeLoading.value = false;
+    const currentTrace = summaryProgress.value;
+    if (currentTrace?.status === 'running') {
+      setSummaryTrace(
+        terminateActivitySummaryTrace(currentTrace, {
+          errorMessage: '生成活动总结失败，请稍后重试',
+          retryable: true,
+          status: 'failed',
+        }),
+      );
+    }
+    antMessage.error('生成活动总结失败，请稍后重试');
   }
+};
+
+const handleRetryActivitySummary = async (
+  trace: ActivitySummaryProgressTrace | undefined = summaryProgress.value,
+) => {
+  if (!trace) return;
+  if (trace.status !== 'failed' || !trace.retryable) return;
+  pendingSummaryRequest.value = {
+    conversationId: trace.conversationId,
+    idempotencyKey: trace.idempotencyKey,
+    period: trace.period,
+  };
+  activeSummaryTraceKey.value = trace.idempotencyKey;
+  const pending = pendingSummaryRequest.value;
+  summaryPeriod.value = pending.period;
+  await handleGenerateActivitySummary();
+};
+
+const handleRefreshActivitySummary = async (
+  trace: ActivitySummaryProgressTrace | undefined = summaryProgress.value,
+) => {
+  if (!trace) return;
+  await fetchAIChatHistory(trace.conversationId);
+  const reportMessage = aiChatMessages.value.find(
+    (item) =>
+      item.role === 'assistant' &&
+      item.sourceType === 'activity_summary' &&
+      item.idempotencyKey === trace.idempotencyKey,
+  );
+  if (reportMessage) {
+    setSummaryTrace({
+      ...trace,
+      assistantMessageId: reportMessage.id,
+      collapsed: true,
+      completedAt: Date.now(),
+      label: '报告已生成',
+      percent: 100,
+      stage: 'COMPLETED',
+      status: 'completed',
+    });
+    if (activeSummaryTraceKey.value === trace.idempotencyKey) {
+      activeSummaryTraceKey.value = undefined;
+      pendingSummaryRequest.value = undefined;
+    }
+    antMessage.success('活动报告已生成');
+  } else {
+    antMessage.info('报告仍可能在后台生成，请稍后再刷新');
+  }
+};
+
+const handleRegenerateActivitySummary = async (
+  period: ActivitySummaryPeriod,
+) => {
+  summaryPeriod.value = period;
+  pendingSummaryRequest.value = undefined;
+  activeSummaryTraceKey.value = undefined;
+  await handleGenerateActivitySummary();
 };
 
 const renderMarkdown = (content: string) => {
@@ -784,6 +1030,19 @@ const chatMessagesContainer = ref<HTMLElement | null>(null);
 watch(
   aiChatMessages,
   async () => {
+    await nextTick();
+    if (chatMessagesContainer.value) {
+      chatMessagesContainer.value.scrollTop =
+        chatMessagesContainer.value.scrollHeight;
+    }
+  },
+  { deep: true },
+);
+
+watch(
+  visibleUnboundSummaryTraces,
+  async () => {
+    if (visibleUnboundSummaryTraces.value.length === 0) return;
     await nextTick();
     if (chatMessagesContainer.value) {
       chatMessagesContainer.value.scrollTop =
@@ -829,6 +1088,8 @@ onMounted(() => {
 onUnmounted(() => {
   activeAiStream.value?.abort();
   activeAiStream.value = undefined;
+  activeSummaryStream.value?.abort();
+  activeSummaryStream.value = undefined;
   document.removeEventListener('click', closeAiMessageContextMenu);
 });
 </script>
@@ -922,7 +1183,10 @@ onUnmounted(() => {
                 </option>
               </select>
               <ActivitySummaryAction
-                :disabled="enabledAiAgents.length === 0"
+                :disabled="
+                  activitySummaryGenerationBlocked ||
+                  enabledAiAgents.length === 0
+                "
                 :loading="summarizeLoading"
                 mobile
                 :period="summaryPeriod"
@@ -1002,7 +1266,11 @@ onUnmounted(() => {
                 </option>
               </select>
               <ActivitySummaryAction
-                :disabled="isStreaming || enabledAiAgents.length === 0"
+                :disabled="
+                  isStreaming ||
+                  activitySummaryGenerationBlocked ||
+                  enabledAiAgents.length === 0
+                "
                 :loading="summarizeLoading"
                 :mobile="isMobile"
                 :period="summaryPeriod"
@@ -1022,21 +1290,50 @@ onUnmounted(() => {
               v-for="msg in aiChatMessages"
               :key="msg.id"
               class="flex"
-              :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+              :class="
+                isStructuredActivityReport(msg)
+                  ? 'justify-center'
+                  : msg.role === 'user'
+                    ? 'justify-end'
+                    : 'justify-start'
+              "
               @contextmenu="handleAiMessageContextMenu($event, msg)"
             >
               <div
-                class="max-w-[70%] rounded-lg p-3"
                 :class="
-                  msg.role === 'user'
-                    ? 'bg-blue-100 text-gray-800'
-                    : 'bg-gray-100 text-gray-800'
+                  isStructuredActivityReport(msg)
+                    ? 'w-full max-w-[1080px]'
+                    : [
+                        'max-w-[70%] rounded-lg p-3',
+                        msg.role === 'user'
+                          ? 'bg-blue-100 text-gray-800'
+                          : 'bg-gray-100 text-gray-800',
+                      ]
                 "
               >
+                <ActivitySummaryProgress
+                  v-if="summaryTraceForMessage(msg)"
+                  class="mb-4"
+                  :trace="summaryTraceForMessage(msg)!"
+                  @refresh="
+                    handleRefreshActivitySummary(summaryTraceForMessage(msg))
+                  "
+                  @retry="
+                    handleRetryActivitySummary(summaryTraceForMessage(msg))
+                  "
+                  @toggle="toggleSummaryTrace(summaryTraceForMessage(msg))"
+                />
+                <ActivitySummaryReport
+                  v-if="msg.activitySummary && isStructuredActivityReport(msg)"
+                  :content="msg.content"
+                  :loading="summarizeLoading"
+                  :summary="msg.activitySummary"
+                  @regenerate="handleRegenerateActivitySummary"
+                />
                 <!-- AI Markdown is sanitized by renderSafeMarkdown before v-html rendering. -->
                 <!-- eslint-disable vue/no-v-html -->
                 <div
-                  v-if="msg.role !== 'user' && msg.content"
+                  v-else-if="msg.role !== 'user' && msg.content"
                   v-html="renderMarkdown(msg.content)"
                   class="prose prose-sm max-w-none"
                 ></div>
@@ -1056,13 +1353,27 @@ onUnmounted(() => {
                   ></div>
                 </div>
                 <p v-else>{{ msg.content }}</p>
-                <p class="mt-1 text-xs text-gray-500">
+                <p
+                  v-if="!isStructuredActivityReport(msg)"
+                  class="mt-1 text-xs text-gray-500"
+                >
                   {{ new Date(msg.createTime).toLocaleTimeString() }}
                 </p>
               </div>
             </div>
+            <ActivitySummaryProgress
+              v-for="trace in visibleUnboundSummaryTraces"
+              :key="trace.idempotencyKey"
+              :trace="trace"
+              @refresh="handleRefreshActivitySummary(trace)"
+              @retry="handleRetryActivitySummary(trace)"
+              @toggle="toggleSummaryTrace(trace)"
+            />
             <div
-              v-if="aiChatMessages.length === 0"
+              v-if="
+                aiChatMessages.length === 0 &&
+                visibleUnboundSummaryTraces.length === 0
+              "
               class="flex h-full flex-col items-center justify-center text-gray-400"
             >
               <div
@@ -1151,7 +1462,10 @@ onUnmounted(() => {
                 </option>
               </select>
               <ActivitySummaryAction
-                :disabled="enabledAiAgents.length === 0"
+                :disabled="
+                  activitySummaryGenerationBlocked ||
+                  enabledAiAgents.length === 0
+                "
                 :loading="summarizeLoading"
                 :period="summaryPeriod"
                 :retry="canRetryActivitySummary"

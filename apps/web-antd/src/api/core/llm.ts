@@ -2,6 +2,8 @@ import { useAccessStore } from '@vben/stores';
 
 import { requestClient } from '#/api/request';
 
+import { createServerSentEventParser } from './ai-stream';
+
 export interface LLMKey {
   id: string;
   userId: number;
@@ -31,6 +33,7 @@ export interface ChatMessage {
   modelName: string;
   sourceType?: string;
   idempotencyKey?: string;
+  activitySummary?: ActivitySummaryContext;
   createTime: string;
 }
 
@@ -72,6 +75,70 @@ export async function chatWithLLMApi(
 
 export type ActivitySummaryPeriod = 'month' | 'week' | 'year';
 
+export interface ActivitySummaryCountItem {
+  key?: string;
+  name: string;
+  count: number;
+}
+
+export interface ActivitySummaryContext {
+  period: ActivitySummaryPeriod;
+  startTime: string;
+  endTime: string;
+  timeRecord?: {
+    categoryDurations: Array<{
+      categoryId?: string;
+      categoryName: string;
+      durationMinutes: number;
+      percentage: number;
+    }>;
+    mainActivities: Array<{
+      categoryName: string;
+      date: string;
+      durationMinutes: number;
+      title: string;
+    }>;
+    recordCount: number;
+    totalMinutes: number;
+  };
+  thought?: {
+    newCount: number;
+    themeDistribution: ActivitySummaryCountItem[];
+    titles: string[];
+    typeDistribution: ActivitySummaryCountItem[];
+  };
+  food?: { dishNames: string[]; newCount: number };
+  todo?: { contents: string[]; newCount: number };
+  problem?: {
+    categoryDistribution: ActivitySummaryCountItem[];
+    difficultyDistribution: ActivitySummaryCountItem[];
+    newCount: number;
+    titles: string[];
+  };
+  note?: { newCount: number; titles: string[] };
+  album?: { folderNames: string[]; newFolderCount: number };
+  article?: {
+    categoryDistribution: ActivitySummaryCountItem[];
+    newCount: number;
+    newTitles: string[];
+    updatedCount: number;
+    updatedTitles: string[];
+  };
+  mcp?: {
+    averageDurationMs: number;
+    failedCalls: number;
+    successCalls: number;
+    toolRanking: Array<{
+      averageDurationMs: number;
+      callCount: number;
+      failedCount: number;
+      successCount: number;
+      toolName: string;
+    }>;
+    totalCalls: number;
+  };
+}
+
 export interface ActivitySummaryGenerateRequest {
   period: ActivitySummaryPeriod;
   conversationId: string;
@@ -85,9 +152,34 @@ export interface ActivitySummaryGenerateResponse {
   period: ActivitySummaryPeriod;
   userMessage: string;
   content: string;
+  activitySummary?: ActivitySummaryContext;
   modelName?: string;
   agentCode?: string;
   agentName?: string;
+}
+
+export type ActivitySummaryProgressStage =
+  | 'COLLECTING'
+  | 'COMPLETED'
+  | 'GENERATING'
+  | 'PREPARING'
+  | 'SAVING';
+
+export interface ActivitySummaryProgressEvent {
+  label: string;
+  percent: number;
+  stage: ActivitySummaryProgressStage;
+}
+
+export interface ActivitySummaryStreamError {
+  code: string;
+  message: string;
+  retryable: boolean;
+}
+
+export interface ActivitySummaryStreamController {
+  abort: () => void;
+  start: () => Promise<void>;
 }
 
 export async function generateActivitySummaryApi(
@@ -97,6 +189,102 @@ export async function generateActivitySummaryApi(
     '/ai/activity-summary/generate',
     data,
   );
+}
+
+export function generateActivitySummaryStreamApi(
+  data: ActivitySummaryGenerateRequest,
+  onProgress?: (progress: ActivitySummaryProgressEvent) => void,
+  onDone?: (response: ActivitySummaryGenerateResponse) => void,
+  onError?: (error: ActivitySummaryStreamError) => void,
+  onDisconnected?: (message: string) => void,
+  onCancelled?: () => void,
+): ActivitySummaryStreamController {
+  const abortController = new AbortController();
+
+  return {
+    abort: () => abortController.abort(),
+    start: async () => {
+      const accessStore = useAccessStore();
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (accessStore.accessToken) {
+        headers.Authorization = `Bearer ${accessStore.accessToken}`;
+      }
+
+      try {
+        const response = await fetch(
+          '/api/ai/activity-summary/generate/stream',
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify(data),
+            signal: abortController.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`活动报告连接失败（${response.status}）`);
+        }
+
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error('活动报告进度响应不可用');
+
+        const decoder = new TextDecoder();
+        let terminalEventReceived = false;
+        const parser = createServerSentEventParser(
+          ({ event, data: payload }) => {
+            switch (event) {
+              case 'done': {
+                terminalEventReceived = true;
+                onDone?.(
+                  JSON.parse(payload) as ActivitySummaryGenerateResponse,
+                );
+
+                break;
+              }
+              case 'error': {
+                terminalEventReceived = true;
+                onError?.(JSON.parse(payload) as ActivitySummaryStreamError);
+
+                break;
+              }
+              case 'progress': {
+                onProgress?.(
+                  JSON.parse(payload) as ActivitySummaryProgressEvent,
+                );
+
+                break;
+              }
+              // No default
+            }
+          },
+        );
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          if (value) parser.feed(decoder.decode(value, { stream: true }));
+          if (terminalEventReceived) break;
+        }
+        parser.feed(decoder.decode());
+        parser.end();
+
+        if (terminalEventReceived) {
+          await reader.cancel();
+        } else {
+          throw new Error('生成进度连接意外中断');
+        }
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          onCancelled?.();
+          return;
+        }
+        onDisconnected?.(
+          error instanceof Error ? error.message : '生成进度连接意外中断',
+        );
+      }
+    },
+  };
 }
 
 export async function getChatSessionsApi() {

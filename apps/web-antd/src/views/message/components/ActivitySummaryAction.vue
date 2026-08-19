@@ -18,18 +18,45 @@ const emit = defineEmits<{
   select: [period: ActivitySummaryPeriod];
 }>();
 
-const options: Array<{
-  description: string;
-  label: string;
-  period: ActivitySummaryPeriod;
-}> = [
-  { period: 'week', label: '本周复盘', description: '本周一至现在' },
-  { period: 'month', label: '本月总结', description: '本月一日至现在' },
-  { period: 'year', label: '本年回顾', description: '本年一月一日至现在' },
-];
+const formatMenuDate = (date: Date) =>
+  `${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+
+const options = computed<
+  Array<{
+    description: string;
+    label: string;
+    period: ActivitySummaryPeriod;
+  }>
+>(() => {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const yearStart = new Date(now.getFullYear(), 0, 1);
+  const end = formatMenuDate(now);
+  return [
+    {
+      period: 'week',
+      label: '本周复盘',
+      description: `${formatMenuDate(weekStart)} — ${end}`,
+    },
+    {
+      period: 'month',
+      label: '本月总结',
+      description: `${formatMenuDate(monthStart)} — ${end}`,
+    },
+    {
+      period: 'year',
+      label: '本年回顾',
+      description: `${formatMenuDate(yearStart)} — ${end}`,
+    },
+  ];
+});
 
 const selectedOption = computed(
-  () => options.find((option) => option.period === props.period) ?? options[0]!,
+  () =>
+    options.value.find((option) => option.period === props.period) ??
+    options.value[0]!,
 );
 
 const buttonLabel = computed(() => {
@@ -74,22 +101,27 @@ const selectPeriod = (period: ActivitySummaryPeriod) => {
         <span class="i-ant-design:down-outlined text-xs"></span>
       </button>
       <template #overlay>
-        <Menu class="min-w-56">
+        <Menu
+          :selected-keys="[period]"
+          class="w-[260px] rounded-xl p-1.5 shadow-xl"
+        >
           <MenuItem
             v-for="option in options"
             :key="option.period"
+            class="!mb-1 !h-auto !rounded-lg !px-3 !py-2 last:!mb-0"
             @click="selectPeriod(option.period)"
           >
-            <div class="flex items-center gap-3 py-0.5">
-              <span class="w-4 text-indigo-500">
-                {{ option.period === period ? '✓' : '' }}
-              </span>
-              <div>
+            <div class="flex items-center justify-between gap-3">
+              <div class="min-w-0">
                 <div class="font-medium text-gray-800">{{ option.label }}</div>
-                <div class="text-xs text-gray-400">
+                <div class="mt-0.5 text-xs text-gray-400">
                   {{ option.description }}
                 </div>
               </div>
+              <span
+                v-if="option.period === period"
+                class="i-ant-design:check-outlined shrink-0 text-base text-indigo-500"
+              ></span>
             </div>
           </MenuItem>
         </Menu>
